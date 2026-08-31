@@ -32,10 +32,11 @@ Already done and committed: repository, `@escapement/core` event catalogue,
 `@escapement/config` recipe schema, the Postgres contract under Prisma 8 with
 its migration applied, the Next.js board shell, the decision records, and the
 log's write side — `append` / `read` / `readAll` with optimistic concurrency
-([#1](https://github.com/steven-zhc/escapement/issues/1)).
+(#1) — and the subscriber, which reconnects and resumes without gap or duplicate
+(#2, [experiment 002](experiments/002-subscriber-survives-a-kill.md)).
 
-What remains is the reading machinery: the subscriber (#2), the reducers (#3),
-the projection runner (#4), and a command that says what is broken (#5).
+What remains is what turns a log into state: the reducers (#3), the projection
+runner (#4), and a command that says what is broken (#5).
 
 **Exit criterion.** `esc doctor` is green, an event round-trips, and a projection
 can be dropped and rebuilt from the log with an identical result.

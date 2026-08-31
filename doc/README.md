@@ -29,15 +29,17 @@ Three kinds of thing live here, and the distinction matters.
 | | | |
 |---|---|---|
 | [001](experiments/001-cold-review-issue-58.md) | Does a cold reviewer catch what four other checks missed? | yes, plus two nobody had found |
+| [002](experiments/002-subscriber-survives-a-kill.md) | Does the subscriber survive its connection being killed? | yes, no gap and no duplicate |
 
 ## Open
 
 - **Where to start.** [Phase 0](roadmap.md#phase-0--system-scaffold). The
   database is up ([#6](https://github.com/steven-zhc/escapement/issues/6)) and
   the log can be written and read
-  ([#1](https://github.com/steven-zhc/escapement/issues/1)), so
-  [#2](https://github.com/steven-zhc/escapement/issues/2) — subscribe over
-  `LISTEN/NOTIFY` — is next.
+  ([#1](https://github.com/steven-zhc/escapement/issues/1)) and subscribed to
+  ([#2](https://github.com/steven-zhc/escapement/issues/2)), so
+  [#3](https://github.com/steven-zhc/escapement/issues/3) — the aggregate
+  reducers — is next.
 - **`seq` is not gapless.** A Postgres sequence claims a value when the `INSERT`
   runs and publishes it when the transaction commits, so under concurrent
   writers a subscriber can see `seq` 6 while 5 is still in flight, and a

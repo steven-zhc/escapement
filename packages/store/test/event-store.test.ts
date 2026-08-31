@@ -12,7 +12,6 @@
  * the append-only rule to do it, which is a global `ALTER TABLE` — do not run
  * this against a database a conductor is writing to.
  */
-import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   ConcurrencyError,
@@ -22,7 +21,7 @@ import {
   type EventStore,
   UnknownEventTypeError,
 } from "../src/index.ts";
-import { directDatabaseUrl } from "../src/env.ts";
+import { cleanupStreams, discovered, streamId } from "./support.ts";
 
 /** Every SQLSTATE in an error's `cause` chain. */
 function sqlStates(err: unknown): string[] {
@@ -35,28 +34,6 @@ function sqlStates(err: unknown): string[] {
   }
   return found;
 }
-
-/** Streams created by this run, removed in `afterAll`. */
-const created = new Set<string>();
-
-function streamId(): string {
-  const id = `wi-test-${crypto.randomUUID().slice(0, 8)}`;
-  created.add(id);
-  return id;
-}
-
-const discovered = (title: string) => ({
-  type: "WorkItemDiscovered",
-  actor: "conductor",
-  data: {
-    project: "escapement",
-    source: "manual" as const,
-    externalRef: "test",
-    title,
-    kind: "tech-debt" as const,
-    labels: [],
-  },
-});
 
 let a: Db;
 let b: Db;
@@ -74,21 +51,7 @@ beforeAll(() => {
 afterAll(async () => {
   await a.close();
   await b.close();
-
-  if (created.size === 0) return;
-  // The append-only rules block DELETE, which is the point of them. Test rows
-  // were never real events, so drop them the only way left — and re-enable the
-  // rule even if the delete throws, because leaving a live database without its
-  // append-only guarantee is far worse than a failing test.
-  const c = new pg.Client({ connectionString: directDatabaseUrl() });
-  await c.connect();
-  try {
-    await c.query("alter table events disable rule escapement_events_no_delete");
-    await c.query("delete from events where stream_id = any($1::text[])", [[...created]]);
-  } finally {
-    await c.query("alter table events enable rule escapement_events_no_delete");
-    await c.end();
-  }
+  await cleanupStreams();
 });
 
 describe("append and read", () => {
