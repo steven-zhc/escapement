@@ -12,7 +12,9 @@
  * intersection (doc/decisions/0007-dual-runtime.md); the extras are bonus signal
  * and the system works without them.
  */
+import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { stateDir } from "./worktree.ts";
 
@@ -35,8 +37,34 @@ export interface HookWiring {
   env: Record<string, string>;
 }
 
+/** macOS caps `sun_path` at 104 bytes; Linux at 108. Neither reports why. */
+export const SUN_PATH_MAX = 104;
+
+/**
+ * Where a run's hook socket lives.
+ *
+ * **Not under `home`.** The first version put it there and `listen` failed with
+ * a bare `EINVAL: invalid argument` — the path was 106 bytes, and nothing in the
+ * error said so. Shortening the *name* was not enough either: the limit is on
+ * the whole path, and `home` can be arbitrarily deep.
+ *
+ * So a socket goes in the temp directory, which is what ephemeral runtime state
+ * is for — `home` holds mirrors and worktrees, which are durable and want to be
+ * somewhere predictable. The name is a digest of the home *and* the run id, so
+ * two conductors with different state directories cannot collide.
+ */
 export function socketPathFor(runId: string, home = stateDir()): string {
-  return join(home, "sockets", `${runId}.sock`);
+  const short = createHash("sha256").update(`${home}\u0000${runId}`).digest("hex").slice(0, 12);
+  const path = join(tmpdir(), "escapement", `${short}.sock`);
+
+  if (Buffer.byteLength(path) >= SUN_PATH_MAX) {
+    // Say which limit and how far over. `EINVAL` on its own costs an hour.
+    throw new Error(
+      `the hook socket path is ${Buffer.byteLength(path)} bytes and the limit is ${SUN_PATH_MAX}: ${path}. ` +
+        "Set TMPDIR to something shorter.",
+    );
+  }
+  return path;
 }
 
 export function settingsPathFor(runId: string, home = stateDir()): string {

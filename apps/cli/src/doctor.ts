@@ -357,8 +357,8 @@ const DEFERRED: { name: string; detail: string }[] = [
   {
     name: "hook: fail closed",
     detail:
-      "esc-hook exists and its fail-closed path is tested, but the conductor does not run it at " +
-      "startup yet — that belongs with the daemon (#17, #27)",
+      "esc run --once proves it before dispatching anything; running it at conductor startup " +
+      "belongs with the daemon (#27)",
   },
   { name: "github: installation and labels", detail: "per repository, and no project is registered yet — esc add checks it (#9)" },
 ];

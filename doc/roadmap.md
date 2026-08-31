@@ -72,6 +72,15 @@ the two must not both hold `agent:wip` on the same issue — Phase 1 runs agains
 **Exit criterion.** A real admin issue is merged into `develop` by Escapement,
 and the board shows it in Landed with its receipt.
 
+**Status: the machinery is built and #7–#17 are closed; the exit criterion is
+not met.** `esc run --once` takes an issue from discovery to a merge, and an
+end-to-end test does exactly that against a real git remote, the real compiled
+hook on a real socket, real gates, the real merge lane and the real board — with
+GitHub itself as the only stand-in. What is missing is a **GitHub App**, which a
+person has to create, give a private key, and install on the repository. Until
+then nothing has run against `nextloom-ai-admin` and the criterion is a claim
+rather than a fact.
+
 ## Phase 2 — Take over admin
 
 **Goal.** Everything that turns one supervised run into an unattended system: the

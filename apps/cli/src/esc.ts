@@ -22,6 +22,7 @@ import type { Tier } from "@escapement/core";
 import { queueProjection } from "@escapement/conductor";
 import { add } from "./add.ts";
 import { formatReport, runDoctor } from "./doctor.ts";
+import { run as runOnceCommand } from "./run.ts";
 import { status } from "./status.ts";
 
 /** Every projection the runner knows how to advance, by `checkpoints.name`. */
@@ -36,6 +37,8 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
     --base <branch>             default: the repository's own default branch
     --tier open|guarded|sandboxed
     --require <gate,gate>       gates the recipe may not remove
+  esc run --once <project> --issue <n>
+                                one nominated issue, discovery through merge
   esc status [project]          what is runnable, and what is holding the rest
     --all                       include items that have left the queue
   esc doctor                    check everything that can be checked
@@ -155,6 +158,21 @@ async function main(argv: string[]): Promise<number> {
   switch (command) {
     case "add":
       return addCommand(rest);
+    case "run": {
+      const { flags } = parseFlags(rest);
+      const positional = rest.filter((a) => !a.startsWith("--") && a !== flags["issue"]);
+      const project = positional.find((p) => p !== "--once") ?? flags["project"];
+      const issue = Number(flags["issue"]);
+      if (!("once" in flags)) {
+        console.error("only `esc run --once` exists; unattended running is Phase 2 (#27)");
+        return 2;
+      }
+      if (!project || !Number.isInteger(issue)) {
+        console.error("esc run --once <project> --issue <n>");
+        return 2;
+      }
+      return runOnceCommand({ project, issue });
+    }
     case "status": {
       const { positional, flags } = parseFlags(rest);
       return status({ project: positional[0], all: "all" in flags });

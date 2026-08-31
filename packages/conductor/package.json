@@ -3,13 +3,22 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./board": "./src/board.ts",
+    "./projects": "./src/projects.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
   "dependencies": {
     "@escapement/config": "workspace:*",
     "@escapement/core": "workspace:*",
     "@escapement/env": "workspace:*",
+    "@escapement/gates": "workspace:*",
     "@escapement/github": "workspace:*",
+    "@escapement/runtime": "workspace:*",
     "@escapement/store": "workspace:*",
     "pg": "^8.16.3"
   },

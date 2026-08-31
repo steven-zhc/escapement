@@ -23,6 +23,8 @@ import {
   type HookServer,
   renderSettings,
   smokeTestFailClosed,
+  socketPathFor,
+  SUN_PATH_MAX,
   writeHookWiring,
 } from "../src/index.ts";
 
@@ -307,5 +309,33 @@ describe("hook wiring", () => {
     ]);
     // The extras are bonus signal; the adapter contract is the intersection.
     expect(Object.keys((all as { hooks: object }).hooks)).toContain("PreCompact");
+  });
+});
+
+describe("socket paths", () => {
+  /**
+   * macOS caps a unix socket path at 104 bytes and fails with a bare
+   * `EINVAL: invalid argument` when it is exceeded. A UUID run id under a temp
+   * directory is already over.
+   */
+  it("stays inside the sun_path limit however deep the state directory is", () => {
+    // The state directory can be arbitrarily deep — a temp directory in a test
+    // already is. The socket does not live there, which is the point.
+    const longHome = join(
+      "/private/var/folders/y7/b4lkp2c90p165_gygx2txt100000gn/T",
+      "esc-runonce-80F6pP",
+      "home",
+    );
+    const path = socketPathFor(`run-${crypto.randomUUID()}`, longHome);
+
+    expect(Buffer.byteLength(path)).toBeLessThan(SUN_PATH_MAX);
+    expect(path.startsWith(longHome)).toBe(false);
+  });
+
+  it("is stable for a run, distinct between runs, and distinct between homes", () => {
+    expect(socketPathFor("run-a", "/tmp/a")).toBe(socketPathFor("run-a", "/tmp/a"));
+    expect(socketPathFor("run-a", "/tmp/a")).not.toBe(socketPathFor("run-b", "/tmp/a"));
+    // Two conductors with different state directories must not collide.
+    expect(socketPathFor("run-a", "/tmp/a")).not.toBe(socketPathFor("run-a", "/tmp/b"));
   });
 });

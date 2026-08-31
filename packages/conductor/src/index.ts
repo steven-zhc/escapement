@@ -70,6 +70,7 @@ export {
   settingsPathFor,
   smokeTestFailClosed,
   socketPathFor,
+  SUN_PATH_MAX,
   writeHookWiring,
   type HookWiring,
   type RenderOptions,
@@ -87,3 +88,4 @@ export {
   type BoardColumnId,
   type BoardGate,
 } from "./board.ts";
+export { runOnce, type RunOnceOptions, type RunOnceResult } from "./run-once.ts";

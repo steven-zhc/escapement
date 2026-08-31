@@ -158,9 +158,21 @@ export async function integrate(options: IntegrateOptions): Promise<IntegrateRes
     const mirror = `${home}/repos/${options.project}.git`;
     const cwd = worktreePath(home, options.project, `integrator-${options.base.replace(/\//g, ".")}`);
 
-    // The integrator's own worktree, from the mirror Escapement owns. The
-    // operator's checkout is not read, written, or consulted.
-    await git(["fetch", "--prune", "origin", "+refs/heads/*:refs/heads/*"], { ...run, cwd: mirror });
+    // Only the two refs this merge is about, rather than `+refs/heads/*`.
+    // A wildcard fetch refuses to update any branch checked out in *some other*
+    // worktree of the same mirror — which the agent's is, holding exactly this
+    // branch. Narrowing it removes the whole class of collision rather than the
+    // one instance.
+    await git(
+      [
+        "fetch",
+        "--prune",
+        "origin",
+        `+refs/heads/${options.base}:refs/heads/${options.base}`,
+        `+refs/heads/${options.branch}:refs/heads/${options.branch}`,
+      ],
+      { ...run, cwd: mirror },
+    );
     await git(["worktree", "add", "--force", "-B", `integrate/${options.base}`, cwd, options.base], {
       ...run,
       cwd: mirror,
@@ -234,7 +246,10 @@ export async function integrate(options: IntegrateOptions): Promise<IntegrateRes
       await git(["push", "origin", `HEAD:refs/heads/${options.base}`], { ...run, cwd });
       // The mirror is Escapement's own copy of the truth; leaving it stale would
       // make the next integration compute against a base that has moved.
-      await git(["fetch", "--prune", "origin", "+refs/heads/*:refs/heads/*"], { ...run, cwd: mirror });
+      await git(["fetch", "origin", `+refs/heads/${options.base}:refs/heads/${options.base}`], {
+        ...run,
+        cwd: mirror,
+      });
 
       return await succeed(mergeCommit);
     } finally {

@@ -1,5 +1,5 @@
 import { loadBoard, type BoardCard } from "@/lib/board";
-import { loadProjects } from "@escapement/conductor";
+import { loadProjects } from "@escapement/conductor/projects";
 
 /**
  * The board is not a status page. It is where the backlog gets worked, and the

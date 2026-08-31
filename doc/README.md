@@ -36,13 +36,15 @@ Three kinds of thing live here, and the distinction matters.
 
 ## Open
 
-- **Where to start.** [Phase 0](roadmap.md#phase-0--system-scaffold) is done:
-  `esc doctor` is green, an event round-trips, and `guard_trips` rebuilds from
-  the log to the same table the incremental path produced. Next is
-  [Phase 1](roadmap.md#phase-1--minimum-runnable-unit), beginning with
-  [#7](https://github.com/steven-zhc/escapement/issues/7) — the GitHub App client
-  and `esc add`. Nothing in Phase 1 exists yet: no conductor, no gates, no
-  runtime adapter.
+- **Where to start.** Phase 0 is done and Phase 1's eleven issues are closed —
+  but **Phase 1's exit criterion is not met, and it needs you.** Everything from
+  discovery to merge runs end to end against a real git remote, the real hook,
+  real gates and the real merge lane; the one stand-in is GitHub. Creating a
+  **GitHub App**, giving it the four permissions in `.env.example`, and
+  installing it on `nextloom-ai-admin` is a human step. After that:
+  `pnpm --filter @escapement/hook build`, `esc add steven-zhc/nextloom-ai-admin`,
+  then `esc run --once nextloom-ai-admin --issue <n>` on a ticket the old loop
+  has not touched.
 - **Six of `esc doctor`'s checks are not implemented.** They print as `skip` with
   the issue that fills them in — recipe, repository, environment allowlist, hook
   fail-closed, GitHub auth — rather than being omitted. A check you cannot see is

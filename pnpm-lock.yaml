@@ -66,6 +66,9 @@ importers:
       '@escapement/github':
         specifier: workspace:*
         version: link:../../packages/github
+      '@escapement/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@escapement/store':
         specifier: workspace:*
         version: link:../../packages/store
@@ -97,9 +100,15 @@ importers:
       '@escapement/env':
         specifier: workspace:*
         version: link:../env
+      '@escapement/gates':
+        specifier: workspace:*
+        version: link:../gates
       '@escapement/github':
         specifier: workspace:*
         version: link:../github
+      '@escapement/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@escapement/store':
         specifier: workspace:*
         version: link:../store

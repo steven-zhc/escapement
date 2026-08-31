@@ -16,6 +16,7 @@
     "@escapement/core": "workspace:*",
     "@escapement/env": "workspace:*",
     "@escapement/github": "workspace:*",
+    "@escapement/runtime": "workspace:*",
     "@escapement/store": "workspace:*",
     "pg": "^8.16.3"
   },

@@ -9,7 +9,7 @@
  * the only consumer and a projection's shape follows its reader. Changing it
  * costs a `TRUNCATE` and a replay, not a migration.
  */
-import { type BoardCard as ProjectionCard, readBoard } from "@escapement/conductor";
+import { type BoardCard as ProjectionCard, readBoard } from "@escapement/conductor/board";
 import type { RefusalReason, Tier } from "@escapement/core";
 
 export type ColumnId = "queued" | "running" | "gates" | "waiting" | "landed";
