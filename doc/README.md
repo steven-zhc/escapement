@@ -37,15 +37,22 @@ Three kinds of thing live here, and the distinction matters.
   database is up ([#6](https://github.com/steven-zhc/escapement/issues/6)) and
   the log can be written and read
   ([#1](https://github.com/steven-zhc/escapement/issues/1)) and subscribed to
-  ([#2](https://github.com/steven-zhc/escapement/issues/2)), so
-  [#3](https://github.com/steven-zhc/escapement/issues/3) — the aggregate
-  reducers — is next.
+  ([#2](https://github.com/steven-zhc/escapement/issues/2)) and reduced to state
+  ([#3](https://github.com/steven-zhc/escapement/issues/3)), so
+  [#4](https://github.com/steven-zhc/escapement/issues/4) — the projection runner
+  — is next.
 - **`seq` is not gapless.** A Postgres sequence claims a value when the `INSERT`
   runs and publishes it when the transaction commits, so under concurrent
   writers a subscriber can see `seq` 6 while 5 is still in flight, and a
   checkpoint advanced to 6 skips 5 forever. It cannot bite while the conductor
   is the single writer. [#4](https://github.com/steven-zhc/escapement/issues/4)
   has to solve it rather than assume it away; the note is in `readAll`.
+- **Forward compatibility stops at the store.** The reducers ignore an event
+  type they do not know, so an older projection survives a newer conductor. The
+  store does not — it throws `UnknownEventTypeError` on read, so in practice it
+  refuses the event first. That is deliberate for now (a type nobody models is
+  more likely a bug than a newer writer), but it means the tolerance is only real
+  once the two agree.
 - **`tier: sandboxed`.** Containerising the whole toolchain is its own piece of
   work; `guarded` is what the first project runs at. See
   [0007](decisions/0007-dual-runtime.md).

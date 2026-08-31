@@ -35,8 +35,12 @@ log's write side — `append` / `read` / `readAll` with optimistic concurrency
 (#1) — and the subscriber, which reconnects and resumes without gap or duplicate
 (#2, [experiment 002](experiments/002-subscriber-survives-a-kill.md)).
 
-What remains is what turns a log into state: the reducers (#3), the projection
-runner (#4), and a command that says what is broken (#5).
+Since then: the three aggregate reducers, pure and zero-I/O (#3) — the old
+loop's least testable code, the six branches of `integrate()`, is now a function
+you can call with a list.
+
+What remains is the projection runner (#4) and a command that says what is
+broken (#5).
 
 **Exit criterion.** `esc doctor` is green, an event round-trips, and a projection
 can be dropped and rebuilt from the log with an identical result.

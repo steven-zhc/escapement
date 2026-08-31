@@ -15,11 +15,13 @@
 import {
   Actor,
   type Envelope,
+  MissingUpcasterError,
   SCHEMA_VER,
   StreamId,
   type ToAppend,
   isEventType,
   parsePayload,
+  parseStoredPayload,
 } from "@escapement/core";
 import { type Db, db } from "./db.ts";
 import type { CodecTypes } from "./prisma/contract.d.ts";
@@ -83,13 +85,15 @@ export class UnknownEventTypeError extends Error {
 }
 
 /**
- * A stored payload is in a shape this build cannot read.
+ * A stored payload is in a shape this build cannot read, and no chain of
+ * upcasters reaches it — either the payload is older than the oldest upcaster,
+ * or it was written by a newer build than this one, which is not recoverable at
+ * all.
  *
- * Nothing can produce this yet — every type is at `schemaVer` 1 and there are no
- * upcasters. It exists because the alternative to failing loudly is handing a
+ * Nothing can produce it yet: every type is at `schemaVer` 1, so every chain has
+ * length zero. It exists because the alternative to failing loudly is handing a
  * v2 payload to a v1 zod schema, which is how a year of history gets
- * misinterpreted quietly. When the first upcaster is written it goes here, in
- * front of `parsePayload`.
+ * misinterpreted quietly. Upcasters live in `@escapement/core`'s registry.
  */
 export class SchemaVersionUnsupportedError extends Error {
   override readonly name = "SchemaVersionUnsupportedError";
@@ -149,20 +153,28 @@ function isVersionConflict(err: unknown): boolean {
 
 function toEnvelope(row: EventRow): Envelope {
   if (!isEventType(row.type)) throw new UnknownEventTypeError(row.type, "read");
-  const supported = SCHEMA_VER[row.type];
-  if (row.schemaVer !== supported) {
-    throw new SchemaVersionUnsupportedError(row.type, row.schemaVer, supported, row.seq);
+
+  let data: unknown;
+  try {
+    // Upcast, then validate. Validated on the way out as well as in: the store
+    // never hands out unvalidated data, because a projection reading a malformed
+    // payload would be wrong silently — the whole failure mode this system
+    // exists to end.
+    data = parseStoredPayload(row.type, row.schemaVer, row.data);
+  } catch (err) {
+    if (err instanceof MissingUpcasterError) {
+      throw new SchemaVersionUnsupportedError(row.type, row.schemaVer, SCHEMA_VER[row.type], row.seq);
+    }
+    throw err;
   }
+
   return {
     seq: row.seq,
     streamId: row.streamId,
     version: row.version,
     type: row.type,
     schemaVer: row.schemaVer,
-    // Validated on the way out as well as in. The store never hands out
-    // unvalidated data — a projection reading a malformed payload would be
-    // wrong silently, which is the whole failure mode this system exists to end.
-    data: parsePayload(row.type, row.data),
+    data,
     actor: row.actor,
     causation: row.causation,
     at: parseTimestamptz(row.at),

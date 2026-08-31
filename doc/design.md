@@ -142,6 +142,21 @@ Every arrow is an event. Every arrow that used to produce silence — the six
 reason: `conflict`, `dirty-base`, `unpushed-base`, `pending-migration`,
 `gate-failed`, `no-commits`, `lane-busy`.
 
+**That diagram spans all three aggregates, and no single reducer produces it.**
+A work item's own stream carries discovery, claims, blocks and the landing;
+gating and approval are Run events, and the merge lane is Integration. Composing
+them is the board projection's job. Two consequences worth stating rather than
+discovering:
+
+- **`Prioritized` has no event.** The catalogue has no `WorkItemPrioritized`, so
+  Backlog and Ready are one state today — `reduceWorkItem` calls it `backlog`.
+  Priority is a label on the recipe's `priority` list, read at queue time. If
+  ordering ever needs to be *decided* rather than derived, that becomes an event
+  and this arrow becomes real.
+- **A verdict is stale, not revoked.** `gatesOn(run)` returns only the verdicts
+  whose `onSha` matches the current head, so a force-push invalidates approval by
+  arithmetic rather than by anything remembering to undo it.
+
 The full catalogue is [`packages/core/src/events.ts`](../packages/core/src/events.ts),
 which is the authority. Notable additions over what the old loop could express:
 
