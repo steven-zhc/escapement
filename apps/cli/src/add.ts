@@ -107,6 +107,7 @@ export async function add(options: AddOptions, log = console.log): Promise<numbe
       actor: "conductor",
       data: parsePayload("ProjectConfigured", {
         project: repo,
+        owner,
         configHash: resolved.configHash,
         fromSha,
       }),

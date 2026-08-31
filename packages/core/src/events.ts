@@ -212,9 +212,18 @@ export const ProjectPolicySet = z.object({
   reason: z.string(),
 });
 
-/** The recipe as resolved from origin/<base>, hashed so replays can be compared. */
+/**
+ * The recipe as resolved from origin/<base>, hashed so replays can be compared.
+ *
+ * `owner` is **schemaVer 2**. Version 1 recorded only the repository name, which
+ * turned out not to be enough to reach GitHub again afterwards — `esc status`
+ * could not resolve a recipe for a project it had itself registered. It is
+ * nullable because events written before the field existed genuinely did not
+ * record it, and inventing an owner for them would be worse than saying so.
+ */
 export const ProjectConfigured = z.object({
   project: z.string(),
+  owner: z.string().nullable(),
   configHash: z.string(),
   fromSha: z.string(),
 });
@@ -264,9 +273,17 @@ export const EVENTS = {
 export type EventType = keyof typeof EVENTS;
 export type PayloadOf<T extends EventType> = z.infer<(typeof EVENTS)[T]>;
 
-/** Current payload shape per type. Bump one and add an upcaster; never edit in place. */
+/**
+ * Current payload shape per type. Everything starts at 1; a type that has moved
+ * on is listed here, and the same commit adds its upcaster in `upcast.ts`.
+ */
+const BUMPED: Partial<Record<EventType, number>> = {
+  // 2: added `owner`. See ProjectConfigured above.
+  ProjectConfigured: 2,
+};
+
 export const SCHEMA_VER: Record<EventType, number> = Object.fromEntries(
-  (Object.keys(EVENTS) as EventType[]).map((k) => [k, 1]),
+  (Object.keys(EVENTS) as EventType[]).map((k) => [k, BUMPED[k] ?? 1]),
 ) as Record<EventType, number>;
 
 export function isEventType(t: string): t is EventType {

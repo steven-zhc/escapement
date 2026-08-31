@@ -1,17 +1,11 @@
 {
-  "name": "@escapement/cli",
+  "name": "@escapement/conductor",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": {
-    "esc": "./src/esc.ts"
-  },
-  "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
-  },
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
   "dependencies": {
-    "@escapement/conductor": "workspace:*",
     "@escapement/config": "workspace:*",
     "@escapement/core": "workspace:*",
     "@escapement/env": "workspace:*",

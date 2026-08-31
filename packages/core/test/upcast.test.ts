@@ -1,12 +1,11 @@
 /**
- * The upcasting hook, exercised against a registry the test builds itself.
+ * The upcasting hook.
  *
- * There is no real upcaster to test: every type is at `schemaVer` 1, so every
- * chain in `UPCASTERS` has length zero. Inventing a fake bump in the shipped
- * catalogue to make a test look better would put a lie in the one file that
- * costs a migration to get wrong. So the mechanism is exercised with a local
- * registry, and the shipped one is asserted to be empty — which is the honest
- * statement of where this stands.
+ * The invariant that matters is not "the registry is empty" — it was, until a
+ * real field had to be added — but that **every type past version 1 has an
+ * unbroken chain of steps from 1 up to its current version**. A bump without its
+ * upcaster is the failure worth guarding: it makes every historical row of that
+ * type unreadable, and it does so at the moment someone replays a year of them.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -24,9 +23,44 @@ describe("upcast", () => {
     expect(upcast("RunContextExhausted", 1, data)).toBe(data);
   });
 
-  it("ships with an empty registry, because every type is at version 1", () => {
-    expect(Object.keys(UPCASTERS)).toEqual([]);
-    expect(new Set(Object.values(SCHEMA_VER))).toEqual(new Set([1]));
+  it("has an unbroken chain of steps for every type past version 1", () => {
+    const bumped = (Object.keys(SCHEMA_VER) as (keyof typeof SCHEMA_VER)[]).filter(
+      (type) => SCHEMA_VER[type] > 1,
+    );
+
+    for (const type of bumped) {
+      for (let from = 1; from < SCHEMA_VER[type]; from++) {
+        expect(
+          UPCASTERS[type]?.[from],
+          `${type} is at schemaVer ${SCHEMA_VER[type]} with no upcaster from ${from}`,
+        ).toBeTypeOf("function");
+      }
+    }
+  });
+
+  it("has no upcaster for a type that never moved", () => {
+    // A step for a type still at version 1 is dead code that will be trusted.
+    for (const type of Object.keys(UPCASTERS) as (keyof typeof SCHEMA_VER)[]) {
+      expect(SCHEMA_VER[type]).toBeGreaterThan(1);
+    }
+  });
+
+  /**
+   * The first real bump. `ProjectConfigured` v1 recorded the repository name but
+   * not its owner, so `esc status` could not resolve a recipe for a project it
+   * had itself registered.
+   */
+  it("fills in the owner ProjectConfigured v1 did not record, as null", () => {
+    const v1 = { project: "nextloom-ai-admin", configHash: "abc", fromSha: "def" };
+    const upcasted = parseStoredPayload("ProjectConfigured", 1, v1);
+
+    // Null, not a guess. A v1 event genuinely did not record one.
+    expect(upcasted).toEqual({ ...v1, owner: null });
+  });
+
+  it("leaves a v2 ProjectConfigured alone", () => {
+    const v2 = { project: "p", owner: "steven-zhc", configHash: "abc", fromSha: "def" };
+    expect(parseStoredPayload("ProjectConfigured", 2, v2)).toEqual(v2);
   });
 
   it("refuses a payload written by a newer build", () => {

@@ -27,10 +27,19 @@ export type Upcaster = (data: unknown) => unknown;
 export type UpcastRegistry = Partial<Record<EventType, Record<number, Upcaster>>>;
 
 /**
- * Empty, and correct. Add a step here in the same commit that bumps that type's
- * `SCHEMA_VER`, never separately.
+ * Add a step here in the same commit that bumps that type's `SCHEMA_VER`, never
+ * separately.
  */
-export const UPCASTERS: UpcastRegistry = {};
+export const UPCASTERS: UpcastRegistry = {
+  ProjectConfigured: {
+    /**
+     * 1 → 2: `owner` was added because the repository name alone was not enough
+     * to reach GitHub again. A v1 event did not record one, and null says that
+     * rather than guessing — every other field is untouched.
+     */
+    1: (data) => ({ ...(data as object), owner: null }),
+  },
+};
 
 export class MissingUpcasterError extends Error {
   override readonly name = "MissingUpcasterError";

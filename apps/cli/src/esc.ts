@@ -19,12 +19,15 @@ import {
   type Projection,
 } from "@escapement/store";
 import type { Tier } from "@escapement/core";
+import { queueProjection } from "@escapement/conductor";
 import { add } from "./add.ts";
 import { formatReport, runDoctor } from "./doctor.ts";
+import { status } from "./status.ts";
 
 /** Every projection the runner knows how to advance, by `checkpoints.name`. */
 const PROJECTIONS: Record<string, Projection> = {
   [guardTripsProjection.name]: guardTripsProjection,
+  [queueProjection.name]: queueProjection,
 };
 
 const USAGE = `esc — event-sourced scheduler for autonomous code agents
@@ -33,6 +36,8 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
     --base <branch>             default: the repository's own default branch
     --tier open|guarded|sandboxed
     --require <gate,gate>       gates the recipe may not remove
+  esc status [project]          what is runnable, and what is holding the rest
+    --all                       include items that have left the queue
   esc doctor                    check everything that can be checked
   esc projection lag            how far each projection is behind the log
   esc projection rebuild <name> truncate, reset the checkpoint, replay
@@ -150,6 +155,10 @@ async function main(argv: string[]): Promise<number> {
   switch (command) {
     case "add":
       return addCommand(rest);
+    case "status": {
+      const { positional, flags } = parseFlags(rest);
+      return status({ project: positional[0], all: "all" in flags });
+    }
     case "doctor":
       return doctor();
     case "projection":
