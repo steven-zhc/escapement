@@ -18,7 +18,7 @@
  * See doc/decisions/0005-config-in-target-repo.md.
  */
 import { z } from "zod";
-import { WorkKind, RuntimeId } from "@escapement/core";
+import { Tier, WorkKind, RuntimeId } from "@escapement/core";
 
 export const GateSpec = z.discriminatedUnion("kind", [
   z.object({
@@ -78,6 +78,12 @@ export const Recipe = z.object({
 
   runtime: z.object({
     agent: RuntimeId.default("claude-code"),
+    /**
+     * Containment this project *asks* for. Policy sets the floor, so this can
+     * only ever be used to raise it — a recipe asking for less than the policy's
+     * tier is rejected by name. Omitted means "whatever policy says".
+     */
+    tier: Tier.optional(),
     prompt: z.string().optional(),
     limits: z
       .object({ turns: z.number().int().positive().default(300), wall: z.string().default("2h") })

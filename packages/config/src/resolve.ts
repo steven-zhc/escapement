@@ -16,6 +16,8 @@
  */
 import { createHash } from "node:crypto";
 import { parse as parseYaml } from "yaml";
+import { type Policy, assertAllowedByPolicy, effectiveTier } from "./policy.ts";
+import { applyPreset } from "./presets.ts";
 import { Recipe } from "./recipe.ts";
 
 /** Where a project's recipe lives, by convention and without exception. */
@@ -63,6 +65,13 @@ export interface ResolvedRecipe {
   ref: string;
   /** The raw file, kept so a diff against a later version is possible. */
   source: string;
+  /**
+   * The tier this run will execute at — the stricter of the recipe's request and
+   * the policy's floor. Null when no policy was supplied.
+   */
+  tier: ReturnType<typeof effectiveTier> | null;
+  /** Which preset it extended, if any. Provenance; not part of the hash. */
+  preset: string | null;
 }
 
 /** Stable JSON: keys sorted at every level, so the hash does not depend on order. */
@@ -86,7 +95,16 @@ export function hashRecipe(recipe: Recipe): string {
  * an unreadable recipe is to stop, and a project that cannot be configured must
  * not be silently run with a default.
  */
-export async function resolveRecipe(read: ReadAtRef, ref: string): Promise<ResolvedRecipe> {
+export async function resolveRecipe(
+  read: ReadAtRef,
+  ref: string,
+  /**
+   * When given, the recipe is checked against it and rejected if it would
+   * weaken the run. Omitted at `esc add` time, where the policy is being
+   * written rather than enforced.
+   */
+  policy?: Policy,
+): Promise<ResolvedRecipe> {
   const source = await read(RECIPE_PATH, ref);
   if (source === null) throw new RecipeMissingError(ref);
 
@@ -97,7 +115,16 @@ export async function resolveRecipe(read: ReadAtRef, ref: string): Promise<Resol
     throw new RecipeInvalidError(ref, [`could not be parsed as YAML: ${(err as Error).message}`]);
   }
 
-  const parsed = Recipe.safeParse(raw);
+  // Preset first, then validation: a preset can satisfy a required field the
+  // recipe omits, which is the point of having one.
+  let applied;
+  try {
+    applied = applyPreset(raw);
+  } catch (err) {
+    throw new RecipeInvalidError(ref, [`extends: ${(err as Error).message}`]);
+  }
+
+  const parsed = Recipe.safeParse(applied.recipe);
   if (!parsed.success) {
     throw new RecipeInvalidError(
       ref,
@@ -105,5 +132,16 @@ export async function resolveRecipe(read: ReadAtRef, ref: string): Promise<Resol
     );
   }
 
-  return { recipe: parsed.data, configHash: hashRecipe(parsed.data), ref, source };
+  // The resolved form is what gets hashed and what gets judged, so the preset is
+  // inside the hash and a preset change is a configuration change.
+  if (policy) assertAllowedByPolicy(parsed.data, policy);
+
+  return {
+    recipe: parsed.data,
+    configHash: hashRecipe(parsed.data),
+    ref,
+    source,
+    tier: policy ? effectiveTier(parsed.data, policy) : null,
+    preset: applied.preset,
+  };
 }
