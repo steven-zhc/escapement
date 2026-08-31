@@ -1,4 +1,13 @@
 export {
+  claimWorkItem,
+  DEFAULT_LEASE_MS,
+  releaseWorkItem,
+  type Claim,
+  type ClaimOptions,
+  type ClaimRefusal,
+  type ClaimResult,
+} from "./claim.ts";
+export {
   considerIssue,
   discover,
   FOREIGN_LABEL_PREFIX,
@@ -23,3 +32,18 @@ export {
   projectStream,
   PROJECT_STREAM_PREFIX,
 } from "./projects.ts";
+export {
+  DEFAULT_PRODUCTION_PATTERNS,
+  ensureMirror,
+  filterEnv,
+  git,
+  ProductionValueError,
+  provisionWorktree,
+  removeWorktree,
+  renderEnvFile,
+  stateDir,
+  worktreePath,
+  type FilteredEnv,
+  type ProvisionOptions,
+  type Worktree,
+} from "./worktree.ts";
