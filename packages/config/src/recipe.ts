@@ -91,3 +91,19 @@ export const Recipe = z.object({
   }),
 });
 export type Recipe = z.infer<typeof Recipe>;
+
+/**
+ * `15m`, `2h`, `90s` → milliseconds.
+ *
+ * The recipe writes durations the way a person says them; everything that
+ * consumes one needs a number. Throws on anything else rather than defaulting —
+ * a gate that silently got a 0ms timeout would fail every run for a reason
+ * nobody could see.
+ */
+export function parseDuration(text: string): number {
+  const m = /^(\d+(?:\.\d+)?)\s*(ms|s|m|h)$/.exec(text.trim());
+  if (!m) throw new Error(`"${text}" is not a duration like 30s, 15m or 2h`);
+  const n = Number(m[1]);
+  const unit = m[2] as "ms" | "s" | "m" | "h";
+  return n * { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 }[unit];
+}
