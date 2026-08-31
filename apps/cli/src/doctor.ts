@@ -34,6 +34,12 @@ export interface CheckResult {
   status: CheckStatus;
   /** What it found — never just a tick. */
   detail: string;
+  /**
+   * True for a check that is *not implemented yet*, as opposed to one skipped
+   * because something earlier failed. Every one of these names the issue that
+   * will fill it in; a skip with no forward pointer is a skip nobody chases.
+   */
+  deferred?: boolean;
 }
 
 /**
@@ -348,7 +354,12 @@ const DEFERRED: { name: string; detail: string }[] = [
   { name: "recipe vs policy conflict", detail: "no project has a policy yet — esc add writes the first one (#9)" },
   { name: "repository, base branch, submodules", detail: "needs a registered project and its worktree (#10)" },
   { name: "environment allowlist and production tripwire", detail: "needs the recipe's env block (#8)" },
-  { name: "hook: fail closed", detail: "the esc-hook binary and conductor socket do not exist (#11, #12)" },
+  {
+    name: "hook: fail closed",
+    detail:
+      "esc-hook exists and its fail-closed path is tested, but the conductor does not run it at " +
+      "startup yet — that belongs with the daemon (#17, #27)",
+  },
   { name: "github: installation and labels", detail: "per repository, and no project is registered yet — esc add checks it (#9)" },
 ];
 
@@ -391,7 +402,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
   }
 
   results.push(githubCredentials());
-  for (const d of DEFERRED) results.push({ ...d, status: "skip" });
+  for (const d of DEFERRED) results.push({ ...d, status: "skip", deferred: true });
 
   return {
     results,

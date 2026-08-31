@@ -47,3 +47,30 @@ export {
   type ProvisionOptions,
   type Worktree,
 } from "./worktree.ts";
+export {
+  evaluate,
+  hostLooksProduction,
+  redact,
+  RULES,
+  type GuardPolicy,
+  type GuardVerdict,
+  type ToolCall,
+} from "./guard.ts";
+export {
+  createHookServer,
+  type HookName,
+  type HookServer,
+  type HookServerOptions,
+  type RegisteredRun,
+} from "./hook-socket.ts";
+export {
+  CLAUDE_ONLY_HOOKS,
+  INTERSECTION_HOOKS,
+  renderSettings,
+  settingsPathFor,
+  smokeTestFailClosed,
+  socketPathFor,
+  writeHookWiring,
+  type HookWiring,
+  type RenderOptions,
+} from "./hook-config.ts";

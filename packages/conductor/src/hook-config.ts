@@ -1,0 +1,126 @@
+/**
+ * The hook wiring, rendered by the conductor **outside the worktree**.
+ *
+ * That location is the point. `settings.json` inside the repository would be a
+ * file the agent can edit, and an agent that can edit its own hook configuration
+ * has no hook configuration. Claude Code takes `--settings <path>`, so the file
+ * lives beside the socket in Escapement's own state directory, and the worktree
+ * never contains it.
+ *
+ * What is rendered is the five hooks both runtimes have plus Claude Code's extra
+ * four, all pointing at the same binary. The adapter contract is the
+ * intersection (doc/decisions/0007-dual-runtime.md); the extras are bonus signal
+ * and the system works without them.
+ */
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { stateDir } from "./worktree.ts";
+
+/** The five both runtimes have, then Claude Code's extras. */
+export const INTERSECTION_HOOKS = [
+  "SessionStart",
+  "UserPromptSubmit",
+  "PreToolUse",
+  "PostToolUse",
+  "Stop",
+] as const;
+
+export const CLAUDE_ONLY_HOOKS = ["SessionEnd", "PreCompact", "Notification"] as const;
+
+export interface HookWiring {
+  /** `--settings` for `claude -p`. Outside the worktree, always. */
+  settingsPath: string;
+  socketPath: string;
+  /** Environment the runtime child needs so the hook can find the conductor. */
+  env: Record<string, string>;
+}
+
+export function socketPathFor(runId: string, home = stateDir()): string {
+  return join(home, "sockets", `${runId}.sock`);
+}
+
+export function settingsPathFor(runId: string, home = stateDir()): string {
+  return join(home, "runs", runId, "settings.json");
+}
+
+export interface RenderOptions {
+  runId: string;
+  /** Absolute path to the compiled `esc-hook`. */
+  hookBinary: string;
+  home?: string;
+  /** Claude Code's extras. Off for a runtime that does not have them. */
+  includeClaudeOnly?: boolean;
+}
+
+/**
+ * Claude Code's settings shape: a matcher per hook with a list of commands.
+ *
+ * `matcher: "*"` on `PreToolUse` is deliberate — every tool call goes through
+ * the guard, and a matcher that lists tools is a list that will fall behind the
+ * runtime's.
+ */
+export function renderSettings(options: RenderOptions): unknown {
+  const command = options.hookBinary;
+  const entry = () => [{ matcher: "*", hooks: [{ type: "command", command }] }];
+
+  const hooks: Record<string, unknown> = {};
+  for (const name of INTERSECTION_HOOKS) hooks[name] = entry();
+  if (options.includeClaudeOnly !== false) {
+    for (const name of CLAUDE_ONLY_HOOKS) hooks[name] = entry();
+  }
+  return { hooks };
+}
+
+export async function writeHookWiring(options: RenderOptions): Promise<HookWiring> {
+  const home = options.home ?? stateDir();
+  const settingsPath = settingsPathFor(options.runId, home);
+  const socketPath = socketPathFor(options.runId, home);
+
+  await mkdir(dirname(settingsPath), { recursive: true });
+  await writeFile(settingsPath, `${JSON.stringify(renderSettings(options), null, 2)}\n`, {
+    mode: 0o600,
+  });
+
+  return {
+    settingsPath,
+    socketPath,
+    env: {
+      ESC_HOOK_SOCKET: socketPath,
+      ESC_RUN_ID: options.runId,
+    },
+  };
+}
+
+/**
+ * Proves the hook denies when the conductor is not there.
+ *
+ * The old loop refused to start when `test-guard.sh` failed, and that instinct
+ * was right: a guard that fails *open* is worse than no guard, because it is
+ * trusted. This runs the real binary against a socket path that does not exist
+ * and requires exit 2. The conductor calls it before dispatching anything.
+ */
+export async function smokeTestFailClosed(
+  hookBinary: string,
+  run: (
+    bin: string,
+    env: Record<string, string>,
+    stdin: string,
+  ) => Promise<{ code: number | null; stderr: string }>,
+): Promise<{ ok: boolean; detail: string }> {
+  const nowhere = join(stateDir(), "sockets", `smoke-${Date.now()}.sock`);
+  const { code, stderr } = await run(
+    hookBinary,
+    { ESC_HOOK_SOCKET: nowhere, ESC_RUN_ID: "run-smoke" },
+    JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "ls" } }),
+  );
+
+  if (code === 2) {
+    return { ok: true, detail: `denied with exit 2 when the socket was absent: ${stderr.trim()}` };
+  }
+  return {
+    ok: false,
+    detail:
+      `esc-hook exited ${code} with no conductor listening — it must exit 2. ` +
+      "A guard that fails open is worse than no guard.",
+  };
+}

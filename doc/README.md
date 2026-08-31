@@ -31,6 +31,7 @@ Three kinds of thing live here, and the distinction matters.
 | [001](experiments/001-cold-review-issue-58.md) | Does a cold reviewer catch what four other checks missed? | yes, plus two nobody had found |
 | [002](experiments/002-subscriber-survives-a-kill.md) | Does the subscriber survive its connection being killed? | yes, no gap and no duplicate |
 | [003](experiments/003-doctor-catches-a-pooler.md) | Does `esc doctor` actually catch a transaction pooler? | yes, including the flagless case |
+| [004](experiments/004-hook-latency.md) | Is `esc-hook` fast enough to sit in front of every tool call? | 19.0ms p95 against a 20ms budget |
 
 ## Open
 

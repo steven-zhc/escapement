@@ -223,6 +223,19 @@ describe("filterEnv", () => {
    * production database, and a tripwire that cries wolf trains people to pass
    * an override flag — the worst outcome for one.
    */
+  it("does not trip on a host whose name merely contains the word", () => {
+    // `reproducible` contains `prod`; matching host segments is what saves it.
+    expect(() =>
+      filterEnv(["DATABASE_URL"], {
+        DATABASE_URL: "postgresql://u:p@reproducible.dev.example.com:5432/app",
+      }),
+    ).not.toThrow();
+    // And a real one still trips, with or without a dash.
+    expect(() =>
+      filterEnv(["DATABASE_URL"], { DATABASE_URL: "postgresql://u:p@prod-db.example.com/app" }),
+    ).toThrow(ProductionValueError);
+  });
+
   it("does not trip on a password that happens to contain the word", () => {
     expect(() =>
       filterEnv(["DATABASE_URL"], {

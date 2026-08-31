@@ -20,4 +20,9 @@ next-env.d.ts
 worktrees/
 logs/
 
+# Bun writes compile artefacts as dotfiles in the working directory, so a
+# `git add -A` sweeps them in: six of these, 55MB deduplicated, were committed
+# once before this line existed.
+*.bun-build
+
 .DS_Store

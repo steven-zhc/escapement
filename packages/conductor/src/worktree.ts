@@ -23,6 +23,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { hostLooksProduction } from "./guard.ts";
 
 const exec = promisify(execFile);
 
@@ -86,9 +87,11 @@ export class ProductionValueError extends Error {
  * these are a built-in default a caller can override. Adding the field is a
  * schema bump that belongs with the policy gate (#19) rather than here.
  *
- * Matched against the *host* of a URL-shaped value only. Matching the whole
- * string would trip on a password that happens to contain "prod", which trains
- * people to pass an override flag — the worst outcome for a tripwire.
+ * Matched against the *host* of a URL-shaped value, by segment. Matching the
+ * whole string trips on a password containing "prod"; matching the host by
+ * substring trips on `reproducible.dev.example.com`. Either way a tripwire that
+ * cries wolf trains people to pass an override flag, which is the worst outcome
+ * for one. See `hostLooksProduction`.
  */
 export const DEFAULT_PRODUCTION_PATTERNS = ["prod", "production"];
 
@@ -118,7 +121,7 @@ export function filterEnv(
     }
     const host = hostOf(value);
     if (host) {
-      const hit = patterns.find((p) => host.toLowerCase().includes(p.toLowerCase()));
+      const hit = hostLooksProduction(host, patterns);
       if (hit) throw new ProductionValueError(name, hit);
     }
     values[name] = value;

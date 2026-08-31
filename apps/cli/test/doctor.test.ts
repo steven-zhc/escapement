@@ -91,7 +91,15 @@ describe("esc doctor — reporting", () => {
     // A check you cannot see is a check you will forget you never had.
     expect(skipped).toContain("hook: fail closed");
     expect(skipped).toContain("github: installation and labels");
-    expect(find(report.results, "hook: fail closed").detail).toMatch(/#11|#12/);
+    // Every check that is *not implemented yet* names the issue that will fill
+    // it in. A skip with no forward pointer is a skip nobody chases — and this
+    // is asserted on the deferred flag rather than on "skip", because a check
+    // skipped for a reason (the environment failed first) is a different thing.
+    const deferred = report.results.filter((r) => r.deferred);
+    expect(deferred.length).toBeGreaterThan(0);
+    for (const r of deferred) {
+      expect(r.detail, `${r.name} does not name an issue`).toMatch(/#\d+/);
+    }
   });
 
   it("says how many failed, and every check says what it found", async () => {
