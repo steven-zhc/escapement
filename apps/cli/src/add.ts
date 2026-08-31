@@ -1,0 +1,123 @@
+/**
+ * `esc add <owner>/<repo>` — the whole of onboarding.
+ *
+ * Give it a repository slug and permissions; it does the rest. What it does
+ * *not* do is take a configuration file: the recipe belongs to the managed
+ * repository and is read from its base branch, and the policy is Escapement's
+ * and lives in Escapement's own log. That split is
+ * doc/decisions/0005-config-in-target-repo.md, and it is why this command needs
+ * so few arguments.
+ *
+ * The order matters. Permissions are checked *before* anything is written, so a
+ * half-onboarded project is not a state that exists. The failure this guards
+ * against is specific: a fine-grained PAT that covered the admin repository's
+ * submodule but not the repository itself produced a day of 403s on CI, and
+ * nothing anywhere said "wrong scope".
+ */
+import { RECIPE_PATH, resolveRecipe } from "@escapement/config";
+import { type Tier, parsePayload } from "@escapement/core";
+import {
+  NotInstalledError,
+  createGitHubClient,
+  installationForRepo,
+  parseSlug,
+  permissionGaps,
+} from "@escapement/github";
+import { githubApp } from "@escapement/env";
+import { eventStore } from "@escapement/store";
+
+export interface AddOptions {
+  slug: string;
+  /** Defaults to the repository's own default branch. */
+  base?: string;
+  /** Containment floor. `guarded` is what the first project runs at (0007). */
+  tier?: Tier;
+  /** Gates the recipe may not remove. Empty until a human decides otherwise. */
+  require?: string[];
+  approvers?: string[];
+  concurrent?: number;
+}
+
+/** A project's own stream. Policy and configuration live here, not in the repo. */
+export function projectStream(project: string): string {
+  return `prj-${project}`;
+}
+
+export async function add(options: AddOptions, log = console.log): Promise<number> {
+  const { owner, repo } = parseSlug(options.slug);
+  const auth = githubApp();
+
+  // 1. Is the App installed here at all? This is the question a PAT cannot be
+  //    asked, and the reason 0006 chose an App.
+  let installation;
+  try {
+    installation = await installationForRepo(auth, owner, repo);
+  } catch (err) {
+    if (err instanceof NotInstalledError) {
+      log(err.message);
+      return 1;
+    }
+    throw err;
+  }
+  log(`installation ${installation.id} on ${installation.account} (${installation.repositorySelection})`);
+
+  // 2. Does it grant what Escapement actually needs? Named individually, with
+  //    what each one is for — a gap here becomes a 403 in the middle of a merge.
+  const gaps = permissionGaps(installation);
+  if (gaps.length > 0) {
+    log("the installation is missing permissions:");
+    for (const g of gaps) log(`  ${g.name}: have ${g.have}, need ${g.need} — ${g.why}`);
+    log("Fix them in the App's settings, then re-run.");
+    return 1;
+  }
+  log("permissions: issues, contents, pull requests write; metadata read");
+
+  const client = await createGitHubClient({ auth, owner, repo, installation });
+  const base = options.base ?? (await client.defaultBranch());
+
+  // 3. The recipe, read from the base branch. Never from anywhere else.
+  const resolved = await resolveRecipe((path, ref) => client.fileAt(path, ref), base);
+  const fromSha = await client.refSha(base);
+  log(`recipe: ${RECIPE_PATH} at ${base}@${fromSha.slice(0, 7)} — hash ${resolved.configHash.slice(0, 12)}`);
+  log(`  ${resolved.recipe.gates.length} gate(s): ${resolved.recipe.gates.map((g) => g.name).join(", ")}`);
+  log(`  runtime ${resolved.recipe.runtime.agent}, kinds ${resolved.recipe.source.kinds.join(" > ")}`);
+
+  // 4. Policy. Escapement's, not the repository's — a recipe may add strictness
+  //    and can never remove it.
+  const tier: Tier = options.tier ?? "guarded";
+  const policy = {
+    project: repo,
+    tier,
+    requiredGates: options.require ?? [],
+    approvers: options.approvers ?? [],
+    // Concurrency stays at one deliberately. The old loop landed seven tickets
+    // in a night while the review backlog grew by fourteen; throughput was never
+    // the constraint. Raising it before the board draws the queue down would
+    // make the problem worse, faster.
+    concurrent: options.concurrent ?? 1,
+    by: "human:esc-add",
+    reason: `onboarded ${owner}/${repo}`,
+  };
+
+  const stream = projectStream(repo);
+  const existing = await eventStore.read(stream);
+  await eventStore.append(stream, existing.length === 0 ? 0 : existing[existing.length - 1]!.version, [
+    {
+      type: "ProjectConfigured",
+      actor: "conductor",
+      data: parsePayload("ProjectConfigured", {
+        project: repo,
+        configHash: resolved.configHash,
+        fromSha,
+      }),
+    },
+    { type: "ProjectPolicySet", actor: "human:esc-add", data: parsePayload("ProjectPolicySet", policy) },
+  ]);
+
+  log(
+    existing.length === 0
+      ? `added ${repo} — policy tier=${tier}, required gates ${policy.requiredGates.join(", ") || "(none)"}, concurrency ${policy.concurrent}`
+      : `updated ${repo} — its ${existing.length} earlier event(s) are still on the record`,
+  );
+  return 0;
+}

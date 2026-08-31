@@ -21,7 +21,10 @@
  * that will fill them in, rather than omitted — a check you cannot see is a
  * check you will forget you never had.
  */
+import { githubApp, hasGitHubApp } from "@escapement/env";
+import { REQUIRED_PERMISSIONS } from "@escapement/github";
 import { projectionLag } from "@escapement/store";
+import { createPublicKey } from "node:crypto";
 import pg from "pg";
 
 export type CheckStatus = "ok" | "fail" | "skip";
@@ -303,13 +306,50 @@ async function projections(url: string): Promise<CheckResult> {
  * happens to be implemented is how a missing check becomes invisible — which is
  * the exact failure mode of the system this replaces.
  */
+/**
+ * The App's credentials, without contacting GitHub.
+ *
+ * Whether an installation actually grants the four permissions is a per-repository
+ * question, and `esc add` answers it before it writes anything. What can be
+ * answered here is the one that costs an hour to diagnose otherwise: is a key
+ * configured at all, and is it a key.
+ */
+function githubCredentials(): CheckResult {
+  const name = "github: app credentials";
+  if (!hasGitHubApp()) {
+    return {
+      name,
+      status: "skip",
+      detail:
+        "GITHUB_APP_ID and a private key are not set — no repository can be onboarded yet. " +
+        "See doc/decisions/0006-github-app.md.",
+    };
+  }
+  try {
+    const app = githubApp();
+    // Parsing it proves it is a key rather than a path typo or a truncated
+    // paste, and does so without the key going anywhere.
+    createPublicKey(app.privateKey);
+    return {
+      name,
+      status: "ok",
+      detail:
+        `app ${app.appId}, key from ${app.keySource} · ` +
+        `requires ${REQUIRED_PERMISSIONS.map((p) => `${p.name}:${p.level}`).join(", ")} ` +
+        "(verified per repository by esc add)",
+    };
+  } catch (err) {
+    return { name, status: "fail", detail: (err as Error).message };
+  }
+}
+
 const DEFERRED: { name: string; detail: string }[] = [
-  { name: "recipe: schema", detail: "no project is onboarded yet — needs esc add (#7) and recipe resolution (#8)" },
-  { name: "recipe vs policy conflict", detail: "policy is a ProjectPolicySet event nothing writes yet (#8)" },
-  { name: "repository, base branch, submodules", detail: "needs the GitHub App client and esc add (#7)" },
+  { name: "recipe: schema", detail: "no project is onboarded yet — run esc add <owner>/<repo> (#9)" },
+  { name: "recipe vs policy conflict", detail: "no project has a policy yet — esc add writes the first one (#9)" },
+  { name: "repository, base branch, submodules", detail: "needs a registered project and its worktree (#10)" },
   { name: "environment allowlist and production tripwire", detail: "needs the recipe's env block (#8)" },
   { name: "hook: fail closed", detail: "the esc-hook binary and conductor socket do not exist (#11, #12)" },
-  { name: "github: auth and labels", detail: "needs the GitHub App client (#7)" },
+  { name: "github: installation and labels", detail: "per repository, and no project is registered yet — esc add checks it (#9)" },
 ];
 
 export interface DoctorReport {
@@ -350,6 +390,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
     });
   }
 
+  results.push(githubCredentials());
   for (const d of DEFERRED) results.push({ ...d, status: "skip" });
 
   return {

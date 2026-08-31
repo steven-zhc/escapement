@@ -18,6 +18,8 @@ import {
   projectionLag,
   type Projection,
 } from "@escapement/store";
+import type { Tier } from "@escapement/core";
+import { add } from "./add.ts";
 import { formatReport, runDoctor } from "./doctor.ts";
 
 /** Every projection the runner knows how to advance, by `checkpoints.name`. */
@@ -27,6 +29,10 @@ const PROJECTIONS: Record<string, Projection> = {
 
 const USAGE = `esc — event-sourced scheduler for autonomous code agents
 
+  esc add <owner>/<repo>        onboard a repository the App is installed on
+    --base <branch>             default: the repository's own default branch
+    --tier open|guarded|sandboxed
+    --require <gate,gate>       gates the recipe may not remove
   esc doctor                    check everything that can be checked
   esc projection lag            how far each projection is behind the log
   esc projection rebuild <name> truncate, reset the checkpoint, replay
@@ -56,6 +62,44 @@ async function doctor(): Promise<number> {
   // Non-zero on any failure, so this can gate a restart. A deferred check is not
   // a failure; a missing one would be.
   return report.failed === 0 ? 0 : 1;
+}
+
+/** `--flag value` pairs plus positionals. Enough for three commands. */
+function parseFlags(args: string[]): { positional: string[]; flags: Record<string, string> } {
+  const positional: string[] = [];
+  const flags: Record<string, string> = {};
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a.startsWith("--")) {
+      flags[a.slice(2)] = args[i + 1] ?? "";
+      i++;
+    } else {
+      positional.push(a);
+    }
+  }
+  return { positional, flags };
+}
+
+async function addCommand(args: string[]): Promise<number> {
+  const { positional, flags } = parseFlags(args);
+  const slug = positional[0];
+  if (!slug) {
+    console.error("esc add <owner>/<repo>");
+    return 2;
+  }
+  const raw = flags["tier"];
+  if (raw !== undefined && raw !== "open" && raw !== "guarded" && raw !== "sandboxed") {
+    console.error(`--tier must be open, guarded or sandboxed (got "${raw}")`);
+    return 2;
+  }
+  const tier: Tier | undefined = raw;
+  return add({
+    slug,
+    base: flags["base"],
+    tier,
+    require: flags["require"] ? flags["require"].split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+    approvers: flags["approver"] ? [flags["approver"]] : undefined,
+  });
 }
 
 async function projectionCommand(args: string[]): Promise<number> {
@@ -104,6 +148,8 @@ async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
 
   switch (command) {
+    case "add":
+      return addCommand(rest);
     case "doctor":
       return doctor();
     case "projection":

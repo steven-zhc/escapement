@@ -81,12 +81,16 @@ describe("esc doctor — environment", () => {
 
 describe("esc doctor — reporting", () => {
   it("lists the checks that cannot run yet, rather than omitting them", async () => {
+    // With no GITHUB_APP_ID in this environment, the credentials check is itself
+    // a skip rather than a failure — not being onboarded is a legitimate state.
     const report = await runDoctor(env({}));
     const skipped = report.results.filter((r) => r.status === "skip").map((r) => r.name);
 
+    expect(skipped).toContain("github: app credentials");
+
     // A check you cannot see is a check you will forget you never had.
     expect(skipped).toContain("hook: fail closed");
-    expect(skipped).toContain("github: auth and labels");
+    expect(skipped).toContain("github: installation and labels");
     expect(find(report.results, "hook: fail closed").detail).toMatch(/#11|#12/);
   });
 
