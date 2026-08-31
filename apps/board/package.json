@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@escapement/conductor": "workspace:*",
     "@escapement/core": "workspace:*",
     "@escapement/store": "workspace:*",
     "next": "16.3.3",

@@ -80,3 +80,10 @@ export {
   type IntegrateOptions,
   type IntegrateResult,
 } from "./integrate.ts";
+export {
+  boardProjection,
+  readBoard,
+  type BoardCard,
+  type BoardColumnId,
+  type BoardGate,
+} from "./board.ts";

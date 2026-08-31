@@ -103,3 +103,79 @@ body {
 .empty {
   padding: 14px 4px; font-size: 12px; color: var(--muted); line-height: 1.6;
 }
+
+/* --- cards ---------------------------------------------------------------
+   Everything below renders a real row of the `board` projection. The card is
+   meant to be workable without leaving it; the diff and the approve / reject
+   controls that finish that promise are #21 and #22. */
+
+.card {
+  background: var(--surface, #16181d);
+  border: 1px solid var(--line, #262a33);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.card-h { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.kind {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line, #262a33);
+  color: var(--dim, #8b93a1);
+}
+.kind.bug { color: #f2a2a2; border-color: #5c3335; }
+.kind.feature { color: #a2c8f2; border-color: #2f4a63; }
+.ref { margin-left: auto; color: var(--dim, #8b93a1); font-variant-numeric: tabular-nums; }
+.title { margin: 0; font-size: 13px; line-height: 1.35; }
+
+.facts, .gates { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.facts li {
+  font-size: 11px;
+  color: var(--dim, #8b93a1);
+  border: 1px solid var(--line, #262a33);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-variant-numeric: tabular-nums;
+}
+/* Guard trips and compactions are warnings, not decoration: they were the two
+   things the old loop generated constantly and never showed anyone. */
+.facts li.warn { color: #e8c07d; border-color: #5c4a2a; }
+
+.diff { margin: 0; font-size: 11px; color: var(--dim, #8b93a1); font-variant-numeric: tabular-nums; }
+.diff .add { color: #7fc98a; }
+.diff .del { color: #e08b8b; }
+.diff .sha { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.gate {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line, #262a33);
+  color: var(--dim, #8b93a1);
+}
+.gate.passed { color: #7fc98a; border-color: #2f5c39; }
+.gate.failed { color: #e08b8b; border-color: #5c3335; }
+.gate.waived { color: #e8c07d; border-color: #5c4a2a; }
+.gate.running { color: #a2c8f2; border-color: #2f4a63; }
+/* A verdict about a commit that is no longer the head. Nothing revoked it — a
+   force-push simply made it about a different diff. */
+.gate.stale { opacity: 0.45; text-decoration: line-through; }
+
+.question { margin: 0; font-size: 12px; color: #e8c07d; }
+.refusal {
+  margin: 0;
+  font-size: 11px;
+  color: #e08b8b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.merge, .regressions {
+  margin: 0;
+  font-size: 11px;
+  color: var(--dim, #8b93a1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.regressions { color: #e08b8b; }

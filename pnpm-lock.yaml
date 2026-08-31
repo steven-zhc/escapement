@@ -17,6 +17,9 @@ importers:
 
   apps/board:
     dependencies:
+      '@escapement/conductor':
+        specifier: workspace:*
+        version: link:../../packages/conductor
       '@escapement/core':
         specifier: workspace:*
         version: link:../../packages/core
