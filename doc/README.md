@@ -4,6 +4,7 @@ Three kinds of thing live here, and the distinction matters.
 
 | | |
 |---|---|
+| [`roadmap.md`](roadmap.md) | Six phases, each with an exit criterion that is a fact. The backlog, with issue numbers. |
 | [`design.md`](design.md) | How the system is meant to work, as a whole. Rewritten as it changes. |
 | [`decisions/`](decisions/) | One decision per file, with its context and its consequences. **Append-only in spirit** — a decision that turns out wrong gets a new file that supersedes it, not an edit. |
 | [`experiments/`](experiments/) | Things actually run against real data, with their results. A design claim backed by one of these is worth more than one backed by argument. |
@@ -29,6 +30,9 @@ Three kinds of thing live here, and the distinction matters.
 
 ## Open
 
+- **Where to start.** [Phase 0](roadmap.md#phase-0--system-scaffold) —
+  [#6](https://github.com/steven-zhc/escapement/issues/6) first, since it unblocks
+  the rest.
 - **The database.** `DATABASE_URL` is the one outstanding item. Everything in
   `packages/core` and `packages/config` is zero-I/O and can be finished without it.
 - **`tier: sandboxed`.** Containerising the whole toolchain is its own piece of
