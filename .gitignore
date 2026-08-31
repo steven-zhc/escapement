@@ -2,6 +2,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Next.js
+.next/
+next-env.d.ts
+
 # Secrets. The event store URL and the GitHub App key never enter git.
 .env
 .env.*

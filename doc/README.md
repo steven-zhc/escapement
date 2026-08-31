@@ -19,6 +19,7 @@ Three kinds of thing live here, and the distinction matters.
 | [0005](decisions/0005-config-in-target-repo.md) | Configuration lives in the managed repository | accepted |
 | [0006](decisions/0006-github-app.md) | A GitHub App, not a personal access token | accepted |
 | [0007](decisions/0007-dual-runtime.md) | Two runtime interfaces, one implementation | accepted |
+| [0008](decisions/0008-nextjs-board.md) | Next.js for the board, SSE for live updates | accepted |
 
 ## Experiments
 

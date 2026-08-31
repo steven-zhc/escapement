@@ -249,7 +249,7 @@ escapement/
 │   ├── conductor/   scheduler, dispatch, gate pipeline, integrator, hook socket
 │   └── hook/        the only hot path — Bun single file, no dependencies
 ├── apps/
-│   ├── board/       Next.js, projections + SSE
+│   ├── board/       Next.js 16, App Router — projections + SSE  ← scaffolded
 │   └── cli/         esc doctor / status / policy / replay
 ├── prompts/         ticket.md · cold-review.md   (versioned, recorded in events)
 └── doc/
