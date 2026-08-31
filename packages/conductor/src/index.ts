@@ -74,3 +74,9 @@ export {
   type HookWiring,
   type RenderOptions,
 } from "./hook-config.ts";
+export {
+  integrate,
+  integrationStream,
+  type IntegrateOptions,
+  type IntegrateResult,
+} from "./integrate.ts";
