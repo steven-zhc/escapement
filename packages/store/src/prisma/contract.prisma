@@ -1,0 +1,84 @@
+// use prisma-next
+//
+// The write model, and only the write model.
+//
+// Projections (board, queue, waiting_on_human, run_receipts, guard_trips,
+// regressions, github_mirror) are deliberately absent. They are derived, their
+// shape will change, and rebuilding one is TRUNCATE + reset checkpoint +
+// replay. Declaring them before anything queries them would invent a migration
+// burden for tables nobody reads.
+//
+// See doc/decisions/0003-postgres-event-store.md and 0004-prisma.md.
+
+/// Append-only. Rows are never updated and never deleted — a correction is a
+/// new event, not an edit. Every question the old loop could not answer is a
+/// query against this table.
+model Event {
+  /// Global order. Projections advance through this; it is the only cursor.
+  seq       BigInt @id @default(autoincrement())
+
+  /// wi-nextloom-ai-admin-117 · run-01JX… · int-nextloom-ai-admin-develop
+  streamId  String @map("stream_id")
+
+  /// Position within the stream, from 1. Paired with streamId in the unique
+  /// index below, this is the whole of the concurrency control: an append at an
+  /// expected version either lands or violates the constraint, and the loser
+  /// re-reads and retries. No lock directory, and nothing to unwind after a
+  /// `kill -9` — an expired lease needs no cleanup, because the absence of a
+  /// heartbeat event *is* the expiry.
+  version   Int
+
+  /// Event name from @escapement/core. Text rather than an enum so adding an
+  /// event type is not a migration.
+  type      String
+
+  /// Which shape `data` is in; read-time upcasting keys off it. Present from
+  /// the first row on purpose — the cost of adding it later comes due exactly
+  /// when there is a year of history worth replaying.
+  schemaVer Int    @default(1) @map("schema_ver")
+
+  data      Json
+
+  /// conductor · agent:<runId> · human:<id> · github
+  actor     String
+
+  /// The event that caused this one. Walking it backwards answers "why did
+  /// this happen", which the old loop's three separate logs could not.
+  causation BigInt?
+
+  at        TimestamptzString @default(now())
+
+  @@unique([streamId, version])
+  @@index([streamId, seq])
+  @@index([type, seq])
+  @@index([at])
+  @@map("events")
+}
+
+/// How far each projection has consumed the log. Deleting a row and truncating
+/// that projection's table is a full rebuild.
+model Checkpoint {
+  name      String @id
+  lastSeq   BigInt @default(0) @map("last_seq")
+  updatedAt temporal.updatedAtString() @map("updated_at")
+
+  @@map("checkpoints")
+}
+
+/// Side effects that must survive a crash: GitHub labels and comments, macOS
+/// notifications. The old loop called `gh` inline, so a failed call vanished
+/// with no record and no retry. Here the event lands first and delivery is a
+/// separate, retryable concern.
+model Outbox {
+  id          String  @id @default(uuid())
+  causedBy    BigInt  @map("caused_by")
+  kind        String
+  payload     Json
+  attempts    Int     @default(0)
+  lastError   String? @map("last_error")
+  deliveredAt TimestamptzString? @map("delivered_at")
+  createdAt   TimestamptzString  @default(now()) @map("created_at")
+
+  @@index([deliveredAt, createdAt])
+  @@map("outbox")
+}

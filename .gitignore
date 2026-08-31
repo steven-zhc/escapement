@@ -1,0 +1,19 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Secrets. The event store URL and the GitHub App key never enter git.
+.env
+.env.*
+!.env.example
+
+# Prisma 8 emits contract.json and contract.d.ts next to the schema. They are
+# committed: they are deterministic output of contract.prisma, and db.ts imports
+# contract.json at runtime, so the tree works without a build step.
+
+# Agent worktrees and run scratch, once the conductor exists.
+.runtime/
+worktrees/
+logs/
+
+.DS_Store

@@ -1,0 +1,21 @@
+{
+  "name": "escapement",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Event-sourced scheduler for autonomous code agents",
+  "packageManager": "pnpm@11.9.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "db:generate": "pnpm --filter @escapement/store db:generate",
+    "db:migrate": "pnpm --filter @escapement/store db:migrate",
+    "db:sql": "pnpm --filter @escapement/store db:sql"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,0 +1,12 @@
+packages:
+  - packages/*
+  - apps/*
+
+# pnpm blocks postinstall scripts by default. Prisma 8's CLI engine bundles
+# esbuild and workerd, both of which fetch a platform binary in postinstall;
+# msgpackr-extract is an optional native accelerator pulled in alongside.
+# These three are the only ones this tree needs.
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+  workerd: true
