@@ -38,9 +38,11 @@ Three kinds of thing live here, and the distinction matters.
   the log can be written and read
   ([#1](https://github.com/steven-zhc/escapement/issues/1)) and subscribed to
   ([#2](https://github.com/steven-zhc/escapement/issues/2)) and reduced to state
-  ([#3](https://github.com/steven-zhc/escapement/issues/3)), so
-  [#4](https://github.com/steven-zhc/escapement/issues/4) — the projection runner
-  — is next.
+  ([#3](https://github.com/steven-zhc/escapement/issues/3)) and projected with
+  checkpoints and rebuild
+  ([#4](https://github.com/steven-zhc/escapement/issues/4)), so
+  [#5](https://github.com/steven-zhc/escapement/issues/5) — `esc doctor` — is the
+  last of Phase 0.
 - **`seq` is not gapless.** A Postgres sequence claims a value when the `INSERT`
   runs and publishes it when the transaction commits, so under concurrent
   writers a subscriber can see `seq` 6 while 5 is still in flight, and a

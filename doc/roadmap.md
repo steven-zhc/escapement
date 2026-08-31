@@ -39,8 +39,12 @@ Since then: the three aggregate reducers, pure and zero-I/O (#3) — the old
 loop's least testable code, the six branches of `integrate()`, is now a function
 you can call with a list.
 
-What remains is the projection runner (#4) and a command that says what is
-broken (#5).
+Then the projection runner (#4): checkpoints advanced in the same transaction as
+the projection's own writes, `rebuild` proven to produce the same table as the
+incremental path, and `guard_trips` as the first real projection — the 132
+invisible guard blocks, finally countable.
+
+What remains is a command that says what is broken (#5).
 
 **Exit criterion.** `esc doctor` is green, an event round-trips, and a projection
 can be dropped and rebuilt from the log with an identical result.

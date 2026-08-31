@@ -33,22 +33,12 @@ import { type EventStore, eventStore } from "./event-store.ts";
 /** The channel `sql/notify.sql`'s trigger writes to. */
 export const CHANNEL = "escapement";
 
-export interface SubscribeOptions {
+interface SubscribeBase {
   /**
    * Resume point, exclusive. A checkpoint's `lastSeq`; `0n` reads the log from
    * the beginning.
    */
   fromSeq: bigint;
-
-  /**
-   * Called once per event, in `seq` order, never concurrently with itself.
-   *
-   * If it throws, the subscription **stops** and `lastSeq` is left pointing at
-   * the last event that succeeded. A projection that cannot handle an event
-   * must not silently skip it and carry on — see
-   * [#4](https://github.com/steven-zhc/escapement/issues/4).
-   */
-  onEvent: (event: Envelope) => Promise<void> | void;
 
   /** Reads go through the pooled connection. Defaults to the process-wide store. */
   store?: EventStore;
@@ -80,6 +70,25 @@ export interface SubscribeOptions {
   /** Reconnect backoff, in milliseconds. */
   backoff?: { baseMs?: number; capMs?: number };
 }
+
+/**
+ * Exactly one of these. Both are called in `seq` order and never concurrently
+ * with themselves.
+ *
+ * If either throws, the subscription **stops** and `lastSeq` is left pointing at
+ * the last event that succeeded — the failed event is retried on the next
+ * attempt rather than skipped. A projection that cannot handle an event must not
+ * quietly carry on without it.
+ *
+ * `onBatch` exists so a projection can put a whole batch and its checkpoint
+ * advance inside one transaction. Per-event, a rebuild of a long history would
+ * be one network round trip per row.
+ */
+type SubscribeHandler =
+  | { onEvent: (event: Envelope) => Promise<void> | void; onBatch?: never }
+  | { onBatch: (events: readonly Envelope[]) => Promise<void> | void; onEvent?: never };
+
+export type SubscribeOptions = SubscribeBase & SubscribeHandler;
 
 export interface Subscription {
   /** The highest seq handed to `onEvent` and returned from it. */
@@ -177,15 +186,26 @@ export function subscribe(options: SubscribeOptions): Subscription {
       for (;;) {
         again = false;
         const batch = await store.readAll(lastSeq, batchSize);
-        for (const event of batch) {
-          try {
-            await options.onEvent(event);
-          } catch (err) {
-            // Deliberately before the advance: a failed event is retried on the
-            // next attempt rather than skipped.
-            throw new HandlerFailed(event, err);
+        if (options.onBatch) {
+          if (batch.length > 0) {
+            try {
+              await options.onBatch(batch);
+            } catch (err) {
+              // Deliberately before the advance: the whole batch is retried
+              // rather than any of it skipped.
+              throw new HandlerFailed(batch[0]!, err);
+            }
+            lastSeq = batch[batch.length - 1]!.seq;
           }
-          lastSeq = event.seq;
+        } else {
+          for (const event of batch) {
+            try {
+              await options.onEvent(event);
+            } catch (err) {
+              throw new HandlerFailed(event, err);
+            }
+            lastSeq = event.seq;
+          }
         }
         // A short batch means the log is drained — unless a nudge arrived while
         // this one was in flight.

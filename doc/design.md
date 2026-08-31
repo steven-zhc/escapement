@@ -172,7 +172,15 @@ which is the authority. Notable additions over what the old loop could express:
 ### Projections
 
 Ordinary tables, advanced by a subscriber with a row in `checkpoints`. Changing
-one is `TRUNCATE` + reset + replay, which is why none are in the schema yet.
+one is `TRUNCATE` + reset + replay, which is why none are in the Prisma
+contract — a projection owns its own DDL, next to the code that reads it.
+
+**A projection's writes and its checkpoint advance are one transaction.** Split
+them and there is no third option: a crash between the two either loses a batch
+or applies it twice, depending only on which write went first. Together, the
+checkpoint is part of the projection's state and recovery is "read it, carry
+on". `apply` still has to be idempotent — a rebuild replays, and so does a
+process killed after Postgres committed but before the runner noticed.
 
 | Projection | Answers |
 |---|---|
@@ -180,7 +188,7 @@ one is `TRUNCATE` + reset + replay, which is why none are in the schema yet.
 | `queue` | what is runnable, in what order |
 | `waiting_on_human` | everything stalled on a person, oldest first |
 | `run_receipts` | cost/turns/duration p50 and p95; cost per landed item |
-| `guard_trips` | which patterns fire most — the false positives to tune |
+| `guard_trips` | which patterns fire most — the false positives to tune · **built** |
 | `regressions` | landed items with bugs filed against them |
 | `github_mirror` | labels to **write out**, never read back |
 

@@ -91,13 +91,13 @@ export async function cleanupStreams(): Promise<void> {
 
 /** Polls until `predicate` holds, or fails with what it last saw. */
 export async function waitFor(
-  predicate: () => boolean,
+  predicate: () => boolean | Promise<boolean>,
   describe: () => string,
   timeoutMs = 20_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (predicate()) return;
+    if (await predicate()) return;
     await new Promise((r) => setTimeout(r, 50));
   }
   throw new Error(`timed out after ${timeoutMs}ms waiting: ${describe()}`);
