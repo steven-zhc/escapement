@@ -72,6 +72,8 @@ export async function currentRecipe(
   client: GitHubClient,
   base?: string,
 ): Promise<ResolvedRecipe> {
-  const ref = base ?? (await client.defaultBranch());
+  // Recorded base first; GitHub's default branch only when a project predates
+  // it being recorded.
+  const ref = base ?? state.base ?? (await client.defaultBranch());
   return resolveRecipe((path, r) => client.fileAt(path, r), ref, policyOf(state));
 }

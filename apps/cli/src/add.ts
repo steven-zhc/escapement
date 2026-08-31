@@ -108,6 +108,9 @@ export async function add(options: AddOptions, log = console.log): Promise<numbe
       data: parsePayload("ProjectConfigured", {
         project: repo,
         owner,
+        // Recorded, not re-derived. A run must not have to ask GitHub which
+        // branch governs it — that is a decision made here, once.
+        base,
         configHash: resolved.configHash,
         fromSha,
       }),

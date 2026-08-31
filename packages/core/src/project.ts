@@ -23,6 +23,11 @@ export interface ProjectState {
    * carried one — re-run `esc add` to record it.
    */
   owner: string | null;
+  /**
+   * The branch this project's recipe is read from and merged into. Null for a
+   * project registered before it was recorded — re-run `esc add` to record it.
+   */
+  base: string | null;
 
   /** The containment floor. A recipe may raise it and never lower it. */
   tier: Tier;
@@ -45,6 +50,7 @@ export interface ProjectState {
 export const emptyProject: ProjectState = {
   project: null,
   owner: null,
+  base: null,
   // Not `open`: an unconfigured project must not read as the least contained
   // one. `guarded` is what the first project runs at (doc/decisions/0007).
   tier: "guarded",
@@ -85,6 +91,7 @@ export function applyProject(state: ProjectState, event: Envelope): ProjectState
         ...at,
         project: d.project,
         owner: d.owner ?? state.owner,
+        base: d.base ?? state.base,
         configHash: d.configHash,
         fromSha: d.fromSha,
       };

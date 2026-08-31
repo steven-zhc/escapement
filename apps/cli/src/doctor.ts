@@ -320,9 +320,9 @@ async function projections(url: string): Promise<CheckResult> {
  * answered here is the one that costs an hour to diagnose otherwise: is a key
  * configured at all, and is it a key.
  */
-function githubCredentials(): CheckResult {
+function githubCredentials(env: NodeJS.ProcessEnv): CheckResult {
   const name = "github: app credentials";
-  if (!hasGitHubApp()) {
+  if (!hasGitHubApp(env)) {
     return {
       name,
       status: "skip",
@@ -332,7 +332,7 @@ function githubCredentials(): CheckResult {
     };
   }
   try {
-    const app = githubApp();
+    const app = githubApp(env);
     // Parsing it proves it is a key rather than a path typo or a truncated
     // paste, and does so without the key going anywhere.
     createPublicKey(app.privateKey);
@@ -401,7 +401,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
     });
   }
 
-  results.push(githubCredentials());
+  results.push(githubCredentials(env));
   for (const d of DEFERRED) results.push({ ...d, status: "skip", deferred: true });
 
   return {

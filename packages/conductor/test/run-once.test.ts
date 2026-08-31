@@ -65,6 +65,10 @@ runtime: { agent: claude-code, limits: { turns: 10, wall: 2m } }
 const project: ProjectState = {
   project: PROJECT,
   owner: "steven-zhc",
+  // Recorded at onboarding. The fake client's default branch is `develop` too,
+  // so this test would pass either way — which is exactly why the real repo
+  // (whose default is a feature branch) is the one that found the bug.
+  base: "develop",
   tier: "guarded",
   requiredGates: ["build"],
   approvers: [],
@@ -285,6 +289,33 @@ git -c user.name=agent -c user.email=a@example.invalid commit -qm 'wrong change'
     const log = await exec("git", ["log", "--oneline", "develop"], { cwd: originPath });
     expect(log.stdout).not.toContain("wrong change");
   }, 240_000);
+
+  /**
+   * `nextloom-ai-admin`'s default branch is a feature branch, not `develop`.
+   * Falling back to it would read a run's rules from one branch while merging
+   * into another — the confusion 0005 exists to prevent.
+   */
+  it("reads the recipe from the recorded base, not the default branch", async () => {
+    let askedFor: string[] = [];
+    const result = await runOnce({
+      ...options(await agentThat("true")),
+      issue: 121,
+      client: fakeClient({
+        // GitHub says the default is something else entirely.
+        defaultBranch: async () => "feature/062-user-suggested-skills",
+        fileAt: async (path, ref) => {
+          askedFor.push(ref);
+          return path === ".escapement/config.yaml" && ref === "develop" ? RECIPE : null;
+        },
+      }),
+    });
+
+    // It asked `develop` — the recorded base — and never the default branch.
+    expect(askedFor).toContain("develop");
+    expect(askedFor).not.toContain("feature/062-user-suggested-skills");
+    // It got past the recipe stage, which is all this case is about.
+    if (!result.ok) expect(result.stage).not.toBe("recipe");
+  }, 120_000);
 
   it("refuses before claiming anything when the recipe cannot be read", async () => {
     const result = await runOnce({

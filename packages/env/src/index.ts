@@ -60,8 +60,8 @@ export function directDatabaseUrl(): string {
 }
 
 /** Set, or undefined. For values whose absence is a legitimate state. */
-export function optional(name: string): string | undefined {
-  return process.env[name] || undefined;
+export function optional(name: string, from: NodeJS.ProcessEnv = process.env): string | undefined {
+  return from[name] || undefined;
 }
 
 /**
@@ -104,10 +104,23 @@ export function resolvePath(path: string): string {
   return resolve(root, path);
 }
 
-export function githubApp(): GitHubAppCredentials {
-  const appId = required("GITHUB_APP_ID");
-  const path = optional("GITHUB_APP_PRIVATE_KEY_PATH");
-  const inline = optional("GITHUB_APP_PRIVATE_KEY");
+/**
+ * `from` exists so that a caller which was *handed* an environment reports on
+ * that one. `esc doctor` takes an environment as an argument and is supposed to
+ * be a function of it; reading past it to `process.env` made its report partly
+ * about the argument and partly about the machine, which showed up the moment
+ * the operator configured a real App and a test asserting "not configured"
+ * started failing for a reason that had nothing to do with the code.
+ */
+export function githubApp(from: NodeJS.ProcessEnv = process.env): GitHubAppCredentials {
+  const appId = optional("GITHUB_APP_ID", from);
+  if (!appId) {
+    throw new Error(
+      "GITHUB_APP_ID is not set. Copy .env.example to .env.local at the repo root and fill it in.",
+    );
+  }
+  const path = optional("GITHUB_APP_PRIVATE_KEY_PATH", from);
+  const inline = optional("GITHUB_APP_PRIVATE_KEY", from);
 
   if (path) {
     return { appId, privateKey: readFileSync(resolvePath(path), "utf8"), keySource: path };
@@ -123,9 +136,9 @@ export function githubApp(): GitHubAppCredentials {
 }
 
 /** Whether the App is configured at all, without throwing to find out. */
-export function hasGitHubApp(): boolean {
+export function hasGitHubApp(from: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean(
-    optional("GITHUB_APP_ID") &&
-      (optional("GITHUB_APP_PRIVATE_KEY_PATH") || optional("GITHUB_APP_PRIVATE_KEY")),
+    optional("GITHUB_APP_ID", from) &&
+      (optional("GITHUB_APP_PRIVATE_KEY_PATH", from) || optional("GITHUB_APP_PRIVATE_KEY", from)),
   );
 }

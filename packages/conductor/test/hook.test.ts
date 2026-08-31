@@ -185,16 +185,42 @@ describe("esc-hook carries the verdict", () => {
 });
 
 describe("esc-hook latency", () => {
-  async function percentiles(fn: () => Promise<unknown>, n = 120) {
-    for (let i = 0; i < 10; i++) await fn(); // warm the page cache
-    const s: number[] = [];
-    for (let i = 0; i < n; i++) {
-      const t = performance.now();
-      await fn();
-      s.push(performance.now() - t);
+  const quantile = (s: number[], q: number) =>
+    [...s].sort((a, b) => a - b)[Math.floor(s.length * q)]!;
+
+  /**
+   * Samples both variants **interleaved**, not one series after the other.
+   *
+   * The first version measured `full` for 120 iterations and then `bare` for
+   * 120, and subtracted the two p50s. That is only valid if the machine is
+   * equally busy during both halves, and during a full `pnpm test` it is not:
+   * the difference came out over 5ms in a whole-suite run and under 1ms when
+   * the file ran alone. The hook had not changed — the second half of the
+   * sample simply ran on a quieter machine.
+   *
+   * Alternating them puts any load spike into both series at once, which is
+   * what makes the *difference* mean what the assertion says it means.
+   */
+  async function paired(a: () => Promise<unknown>, b: () => Promise<unknown>, n = 120) {
+    for (let i = 0; i < 10; i++) {
+      await a();
+      await b();
     }
-    s.sort((a, b) => a - b);
-    return { p50: s[Math.floor(n * 0.5)]!, p95: s[Math.floor(n * 0.95)]! };
+    const sa: number[] = [];
+    const sb: number[] = [];
+    for (let i = 0; i < n; i++) {
+      // Order swaps every iteration so neither variant systematically pays for
+      // whatever the other one warmed.
+      for (const [fn, into] of i % 2 === 0 ? ([[a, sa], [b, sb]] as const) : ([[b, sb], [a, sa]] as const)) {
+        const t = performance.now();
+        await fn();
+        into.push(performance.now() - t);
+      }
+    }
+    return {
+      a: { p50: quantile(sa, 0.5), p95: quantile(sa, 0.95) },
+      b: { p50: quantile(sb, 0.5), p95: quantile(sb, 0.95) },
+    };
   }
 
   /**
@@ -214,9 +240,9 @@ describe("esc-hook latency", () => {
   it("adds almost nothing to the cost of starting the binary", async () => {
     const nowhere = join(root, "not-a-socket.sock");
 
-    const full = await percentiles(() => runHook(binary, env(), preToolUse("echo x")));
-    const bare = await percentiles(() =>
-      runHook(binary, { ESC_HOOK_SOCKET: nowhere, ESC_RUN_ID: runId }, preToolUse("echo x")),
+    const { a: full, b: bare } = await paired(
+      () => runHook(binary, env(), preToolUse("echo x")),
+      () => runHook(binary, { ESC_HOOK_SOCKET: nowhere, ESC_RUN_ID: runId }, preToolUse("echo x")),
     );
 
     console.log(
@@ -229,7 +255,7 @@ describe("esc-hook latency", () => {
     // binary; if this grows, something has started doing work on the hot path.
     expect(full.p50 - bare.p50).toBeLessThan(5);
 
-    // Nothing is asserted about the absolute p95. It is not ours — it is Bun's
+    // Nothing is asserted about the absolute p50 or p95. It is not ours — it is Bun's
     // startup — and it is genuinely noisy: 19.0, 23.8 and 46.7ms were all
     // observed on this machine within an hour. An assertion on it would be a
     // test that fails for reasons no change here can fix, which is how a suite

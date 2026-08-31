@@ -38,6 +38,13 @@ export const UPCASTERS: UpcastRegistry = {
      * rather than guessing — every other field is untouched.
      */
     1: (data) => ({ ...(data as object), owner: null }),
+    /**
+     * 2 → 3: `base` was added because falling back to the repository's default
+     * branch is only correct by convention, and `nextloom-ai-admin`'s default
+     * was a feature branch. A v2 event did not record one; null means "ask
+     * GitHub", which is exactly what those runs did.
+     */
+    2: (data) => ({ ...(data as object), base: null }),
   },
 };
 

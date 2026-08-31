@@ -215,15 +215,27 @@ export const ProjectPolicySet = z.object({
 /**
  * The recipe as resolved from origin/<base>, hashed so replays can be compared.
  *
- * `owner` is **schemaVer 2**. Version 1 recorded only the repository name, which
- * turned out not to be enough to reach GitHub again afterwards — `esc status`
- * could not resolve a recipe for a project it had itself registered. It is
- * nullable because events written before the field existed genuinely did not
- * record it, and inventing an owner for them would be worse than saying so.
+ * Two fields were added after the fact, and both for the same reason: what was
+ * recorded turned out not to be enough to find the recipe again.
+ *
+ * `owner` is **schemaVer 2**. Version 1 recorded only the repository name, so
+ * `esc status` could not reach GitHub for a project it had itself registered.
+ *
+ * `base` is **schemaVer 3**. Without it a run had to fall back to the
+ * repository's *default* branch to find the recipe — which is only the same
+ * branch by convention. `nextloom-ai-admin`'s default was a feature branch, so a
+ * run would have read its rules from one branch and merged into another. The
+ * base a project is governed from is a decision made once, at onboarding, and it
+ * belongs in the log rather than in whatever GitHub happens to point HEAD at.
+ *
+ * Both are nullable because events written before the field existed genuinely
+ * did not record it, and inventing a value for them would be worse than saying
+ * so.
  */
 export const ProjectConfigured = z.object({
   project: z.string(),
   owner: z.string().nullable(),
+  base: z.string().nullable(),
   configHash: z.string(),
   fromSha: z.string(),
 });
@@ -278,8 +290,8 @@ export type PayloadOf<T extends EventType> = z.infer<(typeof EVENTS)[T]>;
  * on is listed here, and the same commit adds its upcaster in `upcast.ts`.
  */
 const BUMPED: Partial<Record<EventType, number>> = {
-  // 2: added `owner`. See ProjectConfigured above.
-  ProjectConfigured: 2,
+  // 2: added `owner`. 3: added `base`. See ProjectConfigured above.
+  ProjectConfigured: 3,
 };
 
 export const SCHEMA_VER: Record<EventType, number> = Object.fromEntries(

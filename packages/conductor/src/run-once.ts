@@ -86,10 +86,14 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   // ---- 1. the recipe, from the base branch, checked against policy ----------
   let resolved: ResolvedRecipe;
   try {
-    const base = await options.client.defaultBranch();
+    // The base recorded at `esc add`, not the repository's default branch. Those
+    // are the same only by convention, and `nextloom-ai-admin`'s default is a
+    // feature branch — reading the rules from one branch while merging into
+    // another is exactly the confusion 0005 exists to prevent.
+    const from = options.project.base ?? (await options.client.defaultBranch());
     resolved = await (
       await import("@escapement/config")
-    ).resolveRecipe((p, r) => options.client.fileAt(p, r), base, policyOf(options.project));
+    ).resolveRecipe((p, r) => options.client.fileAt(p, r), from, policyOf(options.project));
   } catch (err) {
     // Refusing here is the point of 0005: an unreadable or non-compliant recipe
     // must stop the run rather than fall back to a default.

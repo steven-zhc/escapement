@@ -50,17 +50,22 @@ describe("upcast", () => {
    * not its owner, so `esc status` could not resolve a recipe for a project it
    * had itself registered.
    */
-  it("fills in the owner ProjectConfigured v1 did not record, as null", () => {
+  it("walks a v1 ProjectConfigured all the way up, filling both fields with null", () => {
     const v1 = { project: "nextloom-ai-admin", configHash: "abc", fromSha: "def" };
     const upcasted = parseStoredPayload("ProjectConfigured", 1, v1);
 
-    // Null, not a guess. A v1 event genuinely did not record one.
-    expect(upcasted).toEqual({ ...v1, owner: null });
+    // Null, not a guess. A v1 event genuinely recorded neither.
+    expect(upcasted).toEqual({ ...v1, owner: null, base: null });
   });
 
-  it("leaves a v2 ProjectConfigured alone", () => {
+  it("adds only what a v2 ProjectConfigured is missing", () => {
     const v2 = { project: "p", owner: "steven-zhc", configHash: "abc", fromSha: "def" };
-    expect(parseStoredPayload("ProjectConfigured", 2, v2)).toEqual(v2);
+    expect(parseStoredPayload("ProjectConfigured", 2, v2)).toEqual({ ...v2, base: null });
+  });
+
+  it("leaves a v3 ProjectConfigured alone", () => {
+    const v3 = { project: "p", owner: "steven-zhc", base: "develop", configHash: "a", fromSha: "d" };
+    expect(parseStoredPayload("ProjectConfigured", 3, v3)).toEqual(v3);
   });
 
   it("refuses a payload written by a newer build", () => {
