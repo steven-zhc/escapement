@@ -111,6 +111,26 @@ const ADVANCE_CHECKPOINT = `
   on conflict (name) do update
     set last_seq = excluded.last_seq, updated_at = now()`;
 
+/**
+ * Puts a row down at zero without moving an existing one.
+ *
+ * A projection with no events yet would otherwise have no checkpoint at all,
+ * and `projectionLag` cannot tell that apart from a projection nobody ever
+ * started — so `esc doctor` would report "nothing running" about something that
+ * is running fine and merely has nothing to do.
+ */
+const REGISTER_CHECKPOINT = `
+  insert into checkpoints (name, last_seq, updated_at)
+  values ($1, 0, now())
+  on conflict (name) do nothing`;
+
+/** Same, but forces an existing row back to zero. Used by `rebuild`. */
+const RESET_CHECKPOINT = `
+  insert into checkpoints (name, last_seq, updated_at)
+  values ($1, 0, now())
+  on conflict (name) do update
+    set last_seq = 0, updated_at = now()`;
+
 export interface ProjectionRunnerOptions {
   projection: Projection;
   store?: EventStore;
@@ -192,7 +212,10 @@ export function createProjectionRunner(options: ProjectionRunnerOptions): Projec
 
     async start() {
       failure = null;
-      await inTransaction((ctx) => projection.create(ctx));
+      await inTransaction(async (ctx) => {
+        await projection.create(ctx);
+        await ctx.query(REGISTER_CHECKPOINT, [projection.name]);
+      });
       await follow();
     },
 
@@ -211,9 +234,10 @@ export function createProjectionRunner(options: ProjectionRunnerOptions): Projec
       await inTransaction(async (ctx) => {
         await projection.create(ctx);
         await projection.reset(ctx);
-        // Deleting the row rather than zeroing it: absent and zero mean the same
-        // thing to `readCheckpoint`, and absent is the honest state.
-        await ctx.query("delete from checkpoints where name = $1", [projection.name]);
+        // Zeroed rather than deleted: the projection still exists and is still
+        // being run, and a missing row would make it look like one nobody had
+        // ever started.
+        await ctx.query(RESET_CHECKPOINT, [projection.name]);
       });
 
       failure = null;

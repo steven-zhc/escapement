@@ -14,7 +14,7 @@ Two sequencing constraints drive the whole shape:
 
 | | Phase | Exit criterion |
 |---|---|---|
-| 0 | System scaffold | An event round-trips through Postgres and a projection rebuilds from the log |
+| 0 | System scaffold | An event round-trips through Postgres and a projection rebuilds from the log · **done** |
 | 1 | Minimum runnable unit | One real admin ticket goes discovery → merge with `esc run --once`, supervised |
 | 2 | Take over admin | Escapement works admin unattended for a week; `agent-loop.sh` is retired |
 | 3 | Self-hosting | Escapement lands a change to its own repository, through its own gates |
@@ -44,7 +44,13 @@ the projection's own writes, `rebuild` proven to produce the same table as the
 incremental path, and `guard_trips` as the first real projection — the 132
 invisible guard blocks, finally countable.
 
-What remains is a command that says what is broken (#5).
+And `esc doctor` (#5), which is the old `preflight()` generalised: it reads and
+never writes, it proves the direct connection is genuinely session mode rather
+than merely reachable ([experiment 003](experiments/003-doctor-catches-a-pooler.md)),
+and it prints the six checks it cannot run yet as skips naming the issue that
+will fill them in.
+
+**Phase 0 is done.** `esc doctor` is green — 10 ok, 6 deferred, 0 failed.
 
 **Exit criterion.** `esc doctor` is green, an event round-trips, and a projection
 can be dropped and rebuilt from the log with an identical result.

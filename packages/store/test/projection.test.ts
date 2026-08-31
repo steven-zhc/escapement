@@ -235,9 +235,11 @@ describe("projection runner", () => {
     const rows = await direct((c) => c.query("select seq from esc_test_boom").then((r) => r.rowCount));
     expect(rows).toBe(0);
 
+    // Checkpoint intact means: still at zero. `start()` registers the row so a
+    // projection with nothing to do is distinguishable from one nobody ran, but
+    // it never advances past an event the projection refused.
     const lag = await projectionLag();
-    // Checkpoint intact means: never written. Absent and zero are the same thing.
-    expect(lag.find((p) => p.name === "esc_test_boom")).toBeUndefined();
+    expect(lag.find((p) => p.name === "esc_test_boom")?.lastSeq).toBe(0n);
     expect(written).toHaveLength(2);
   });
 

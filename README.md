@@ -16,9 +16,11 @@ making those three the same append-only log.
 
 ## Status
 
-Skeleton. The event and configuration schemas are written and typecheck; the
-store, conductor, gates, runtimes and board are not. See
-[`doc/README.md`](doc/README.md) for what is settled and what is next.
+**Phase 0 is done.** The event log can be written, read, subscribed to, reduced
+to state and projected; `esc doctor` is green. Nothing runs an agent yet — the
+conductor, the gates, the runtime adapters and the hook are all Phase 1. See
+[`doc/roadmap.md`](doc/roadmap.md) for the phases and
+[`doc/README.md`](doc/README.md) for what is settled and what is open.
 
 ## Layout
 
@@ -26,7 +28,9 @@ store, conductor, gates, runtimes and board are not. See
 |---|---|
 | `packages/core` | Event catalogue and aggregate reducers. Zero I/O, so it tests without a database. |
 | `packages/config` | The recipe schema — what a managed repository puts in its own `.escapement/config.yaml`. |
-| `packages/store` | The Postgres event store. Prisma 8 for reads and writes, `pg` for `LISTEN/NOTIFY`. |
+| `packages/store` | The Postgres event store: append, read, subscribe, and the projection runner. Prisma 8 for reads and writes, `pg` for `LISTEN/NOTIFY` and for projections. |
+| `apps/cli` | `esc` — `doctor`, and `projection lag` / `projection rebuild`. |
+| `apps/board` | Next.js shell. Real cards are Phase 1. |
 | `doc/` | The design, every decision, and the experiments that back them. |
 
 ## Getting started
@@ -69,3 +73,20 @@ a transaction pooler, which drops notifications silently.
 
 An initial migration is already planned and committed; `db:plan --name <slug>` is
 only needed after the contract changes.
+
+### Checking it
+
+```bash
+pnpm esc doctor                   # non-zero exit on any failure
+pnpm esc projection lag           # how far each projection is behind the log
+```
+
+`esc doctor` never writes to the event log — every check reads the catalogue,
+and the one exception is a `NOTIFY`, which touches no table. It holds a listener
+open, pauses long enough for a pool to churn, and notifies from a second
+connection, because a check that merely opens the direct connection passes
+against a transaction pooler and proves nothing
+([experiment 003](doc/experiments/003-doctor-catches-a-pooler.md)).
+
+Checks that depend on code Phase 1 has not written yet print as `skip`, naming
+the issue that will fill them in.

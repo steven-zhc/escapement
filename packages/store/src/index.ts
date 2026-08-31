@@ -1,3 +1,4 @@
+export { databaseUrl, directDatabaseUrl } from "./env.ts";
 export { createDb, db, type Db } from "./db.ts";
 export {
   ConcurrencyError,

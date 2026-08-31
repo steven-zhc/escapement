@@ -273,7 +273,7 @@ escapement/
 │   └── hook/        the only hot path — Bun single file, no dependencies
 ├── apps/
 │   ├── board/       Next.js 16, App Router — projections + SSE  ← scaffolded
-│   └── cli/         esc doctor / status / policy / replay
+│   └── cli/         esc doctor · esc projection                  ← doctor built
 ├── prompts/         ticket.md · cold-review.md   (versioned, recorded in events)
 └── doc/
 ```

@@ -30,19 +30,21 @@ Three kinds of thing live here, and the distinction matters.
 |---|---|---|
 | [001](experiments/001-cold-review-issue-58.md) | Does a cold reviewer catch what four other checks missed? | yes, plus two nobody had found |
 | [002](experiments/002-subscriber-survives-a-kill.md) | Does the subscriber survive its connection being killed? | yes, no gap and no duplicate |
+| [003](experiments/003-doctor-catches-a-pooler.md) | Does `esc doctor` actually catch a transaction pooler? | yes, including the flagless case |
 
 ## Open
 
-- **Where to start.** [Phase 0](roadmap.md#phase-0--system-scaffold). The
-  database is up ([#6](https://github.com/steven-zhc/escapement/issues/6)) and
-  the log can be written and read
-  ([#1](https://github.com/steven-zhc/escapement/issues/1)) and subscribed to
-  ([#2](https://github.com/steven-zhc/escapement/issues/2)) and reduced to state
-  ([#3](https://github.com/steven-zhc/escapement/issues/3)) and projected with
-  checkpoints and rebuild
-  ([#4](https://github.com/steven-zhc/escapement/issues/4)), so
-  [#5](https://github.com/steven-zhc/escapement/issues/5) — `esc doctor` — is the
-  last of Phase 0.
+- **Where to start.** [Phase 0](roadmap.md#phase-0--system-scaffold) is done:
+  `esc doctor` is green, an event round-trips, and `guard_trips` rebuilds from
+  the log to the same table the incremental path produced. Next is
+  [Phase 1](roadmap.md#phase-1--minimum-runnable-unit), beginning with
+  [#7](https://github.com/steven-zhc/escapement/issues/7) — the GitHub App client
+  and `esc add`. Nothing in Phase 1 exists yet: no conductor, no gates, no
+  runtime adapter.
+- **Six of `esc doctor`'s checks are not implemented.** They print as `skip` with
+  the issue that fills them in — recipe, repository, environment allowlist, hook
+  fail-closed, GitHub auth — rather than being omitted. A check you cannot see is
+  a check you will forget you never had.
 - **`seq` is not gapless.** A Postgres sequence claims a value when the `INSERT`
   runs and publishes it when the transaction commits, so under concurrent
   writers a subscriber can see `seq` 6 while 5 is still in flight, and a
