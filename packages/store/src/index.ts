@@ -1,21 +1,22 @@
-export { db } from "./db.js";
+export { createDb, db, type Db } from "./db.ts";
+export {
+  ConcurrencyError,
+  createEventStore,
+  eventStore,
+  SchemaVersionUnsupportedError,
+  UnknownEventTypeError,
+  type EventStore,
+} from "./event-store.ts";
+export { parseTimestamptz } from "./timestamptz.ts";
 
 /**
- * The append/read/subscribe surface is not written yet — it needs a live
- * DATABASE_URL, which is the one outstanding item (see doc/README.md).
+ * Still missing, and next:
  *
- * The shape it has to have:
+ *   subscribe(onSeq)   pg LISTEN 'escapement'  — issue #2
  *
- *   append(streamId, expectedVersion, events)  a unique violation on
- *                                              (stream_id, version) means
- *                                              another writer won; re-read and
- *                                              retry. That constraint is the
- *                                              entire concurrency control.
- *   read(streamId, fromVersion?)               ordered events for one stream
- *   readAll(fromSeq, limit)                    projection catch-up
- *   subscribe(onSeq)                           pg LISTEN 'escapement'
- *
- * `subscribe` is the one part that cannot go through Prisma: it has no
- * LISTEN/NOTIFY, so it takes a dedicated `pg` connection alongside. That split
- * is deliberate, not an oversight — see doc/decisions/0004-prisma.md.
+ * It is the one part that cannot go through Prisma, which has no LISTEN/NOTIFY,
+ * so it takes a dedicated `pg` connection alongside. That split is deliberate,
+ * not an oversight — see doc/decisions/0004-prisma.md. It must use
+ * `directDatabaseUrl()`: through a transaction pooler a cross-connection NOTIFY
+ * never arrives and never errors (doc/decisions/0009-two-connections.md).
  */

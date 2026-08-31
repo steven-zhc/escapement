@@ -1,2 +1,2 @@
-export * from "./envelope.js";
-export * from "./events.js";
+export * from "./envelope.ts";
+export * from "./events.ts";

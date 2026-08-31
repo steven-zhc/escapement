@@ -29,11 +29,13 @@ Two sequencing constraints drive the whole shape:
 projections, and a command that tells you what is broken.
 
 Already done and committed: repository, `@escapement/core` event catalogue,
-`@escapement/config` recipe schema, the Postgres contract under Prisma 8, the
-Next.js board shell, and eight decision records.
+`@escapement/config` recipe schema, the Postgres contract under Prisma 8 with
+its migration applied, the Next.js board shell, the decision records, and the
+log's write side — `append` / `read` / `readAll` with optimistic concurrency
+([#1](https://github.com/steven-zhc/escapement/issues/1)).
 
-What remains is everything that touches the database — which is why the
-connection string is the only true blocker in the project right now.
+What remains is the reading machinery: the subscriber (#2), the reducers (#3),
+the projection runner (#4), and a command that says what is broken (#5).
 
 **Exit criterion.** `esc doctor` is green, an event round-trips, and a projection
 can be dropped and rebuilt from the log with an identical result.

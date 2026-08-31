@@ -14,7 +14,8 @@
     "db:verify": "prisma db verify",
     "db:status": "prisma migration status",
     "typecheck": "tsc --noEmit",
-    "db:bootstrap": "node scripts/bootstrap.mjs"
+    "db:bootstrap": "node scripts/bootstrap.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@escapement/core": "workspace:*",
@@ -27,6 +28,7 @@
     "@types/node": "^26.4.0",
     "@types/pg": "^8.15.6",
     "prisma": "8.0.0-rc.10",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   }
 }

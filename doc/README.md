@@ -22,6 +22,7 @@ Three kinds of thing live here, and the distinction matters.
 | [0007](decisions/0007-dual-runtime.md) | Two runtime interfaces, one implementation | accepted |
 | [0008](decisions/0008-nextjs-board.md) | Next.js for the board, SSE for live updates | accepted |
 | [0009](decisions/0009-two-connections.md) | Two connection strings: pooled, and session mode | accepted |
+| [0010](decisions/0010-source-runs-unbuilt.md) | The source runs unbuilt, so it obeys strip-only rules | accepted |
 
 ## Experiments
 
@@ -31,10 +32,18 @@ Three kinds of thing live here, and the distinction matters.
 
 ## Open
 
-- **Where to start.** [Phase 0](roadmap.md#phase-0--system-scaffold). The database
-  is up ([#6](https://github.com/steven-zhc/escapement/issues/6) closed), so
-  [#1](https://github.com/steven-zhc/escapement/issues/1) — append and read — is
-  next and unblocks the rest.
+- **Where to start.** [Phase 0](roadmap.md#phase-0--system-scaffold). The
+  database is up ([#6](https://github.com/steven-zhc/escapement/issues/6)) and
+  the log can be written and read
+  ([#1](https://github.com/steven-zhc/escapement/issues/1)), so
+  [#2](https://github.com/steven-zhc/escapement/issues/2) — subscribe over
+  `LISTEN/NOTIFY` — is next.
+- **`seq` is not gapless.** A Postgres sequence claims a value when the `INSERT`
+  runs and publishes it when the transaction commits, so under concurrent
+  writers a subscriber can see `seq` 6 while 5 is still in flight, and a
+  checkpoint advanced to 6 skips 5 forever. It cannot bite while the conductor
+  is the single writer. [#4](https://github.com/steven-zhc/escapement/issues/4)
+  has to solve it rather than assume it away; the note is in `readAll`.
 - **`tier: sandboxed`.** Containerising the whole toolchain is its own piece of
   work; `guarded` is what the first project runs at. See
   [0007](decisions/0007-dual-runtime.md).
