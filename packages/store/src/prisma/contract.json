@@ -88,7 +88,7 @@
               "data": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/json@1",
+                  "codecId": "pg/jsonb@1",
                   "kind": "scalar"
                 }
               },
@@ -217,7 +217,7 @@
               "payload": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/json@1",
+                  "codecId": "pg/jsonb@1",
                   "kind": "scalar"
                 }
               }
@@ -316,8 +316,8 @@
                   "nullable": true
                 },
                 "data": {
-                  "codecId": "pg/json@1",
-                  "nativeType": "json",
+                  "codecId": "pg/jsonb@1",
+                  "nativeType": "jsonb",
                   "nullable": false
                 },
                 "schema_ver": {
@@ -443,8 +443,8 @@
                   "nullable": true
                 },
                 "payload": {
-                  "codecId": "pg/json@1",
-                  "nativeType": "json",
+                  "codecId": "pg/jsonb@1",
+                  "nativeType": "jsonb",
                   "nullable": false
                 }
               },
@@ -473,7 +473,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2fa1a674eb0e8bffb31d54a4b6135338cafb77e6d1e15e7d9d71028694eb3b49"
+    "storageHash": "23b6c85a86e41a6df7c4cf1ce29387a439ba4a31c8e4bda9615f63dcf9181684"
   },
   "execution": {
     "executionHash": "faca57d882e94e5f774bf7721dbd27c47a84fc30eb72eb7d1df92e3e47d31833",

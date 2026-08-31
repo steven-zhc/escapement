@@ -1,14 +1,14 @@
-import "dotenv/config";
 import { definePrismaConfig } from "@prisma/cli-engine";
 import { defineConfig as ormConfig } from "@prisma/orm-postgres/config";
+import "./src/env.ts";
 
 export default definePrismaConfig({
   orm: ormConfig({
     contract: "./src/prisma/contract.prisma",
-    db: {
-      // Escapement's own database — never one belonging to a managed project.
-      // It has to keep running while a managed project is being changed.
-      connection: process.env["DATABASE_URL"]!,
-    },
+    // Read, not asserted. `contract emit` and `migration plan` are offline and
+    // must work with no database configured at all; the commands that do need a
+    // connection fail on their own. The runtime path asserts it properly —
+    // see databaseUrl() in src/env.ts.
+    db: { connection: process.env["DATABASE_URL"] ?? "" },
   }),
 });

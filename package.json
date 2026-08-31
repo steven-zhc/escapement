@@ -5,14 +5,18 @@
   "type": "module",
   "description": "Event-sourced scheduler for autonomous code agents",
   "packageManager": "pnpm@11.9.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
-    "db:generate": "pnpm --filter @escapement/store db:generate",
+    "contract:emit": "pnpm --filter @escapement/store contract:emit",
+    "db:plan": "pnpm --filter @escapement/store db:plan",
+    "db:init": "pnpm --filter @escapement/store db:init",
     "db:migrate": "pnpm --filter @escapement/store db:migrate",
-    "db:sql": "pnpm --filter @escapement/store db:sql"
+    "db:verify": "pnpm --filter @escapement/store db:verify"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

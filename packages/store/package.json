@@ -3,10 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "contract:emit": "prisma contract emit",
     "db:plan": "prisma migration plan",
+    "db:init": "prisma db init",
+    "db:migrate": "prisma db migrate",
+    "db:verify": "prisma db verify",
     "db:status": "prisma migration status",
     "typecheck": "tsc --noEmit"
   },

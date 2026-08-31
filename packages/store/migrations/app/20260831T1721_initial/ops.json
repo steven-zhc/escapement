@@ -1,0 +1,334 @@
+[
+  {
+    "id": "schema.public",
+    "label": "Create schema \"public\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create schema \"public\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"public\"",
+        "params": []
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "table.checkpoints",
+    "label": "Create table \"checkpoints\"",
+    "summary": "Creates table \"checkpoints\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "checkpoints"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"checkpoints\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"checkpoints\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"checkpoints\"",
+        "sql": "CREATE TABLE \"public\".\"checkpoints\" (\n  \"last_seq\" int8 DEFAULT '0'::int8 NOT NULL,\n  \"name\" text NOT NULL,\n  \"updated_at\" timestamptz NOT NULL,\n  PRIMARY KEY (\"name\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"checkpoints\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"checkpoints\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.events",
+    "label": "Create table \"events\"",
+    "summary": "Creates table \"events\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "events"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"events\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"events\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"events\"",
+        "sql": "CREATE TABLE \"public\".\"events\" (\n  \"actor\" text NOT NULL,\n  \"at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"causation\" int8,\n  \"data\" jsonb NOT NULL,\n  \"schema_ver\" int4 DEFAULT 1 NOT NULL,\n  \"seq\" BIGSERIAL NOT NULL,\n  \"stream_id\" text NOT NULL,\n  \"type\" text NOT NULL,\n  \"version\" int4 NOT NULL,\n  PRIMARY KEY (\"seq\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"events\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"events\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.outbox",
+    "label": "Create table \"outbox\"",
+    "summary": "Creates table \"outbox\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "outbox"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"outbox\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"outbox\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"outbox\"",
+        "sql": "CREATE TABLE \"public\".\"outbox\" (\n  \"attempts\" int4 DEFAULT 0 NOT NULL,\n  \"caused_by\" int8 NOT NULL,\n  \"created_at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"delivered_at\" timestamptz,\n  \"id\" text NOT NULL,\n  \"kind\" text NOT NULL,\n  \"last_error\" text,\n  \"payload\" jsonb NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"outbox\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"outbox\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.events.events_stream_id_version_key",
+    "label": "Add unique constraint on \"events\" (stream_id, version)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "events_stream_id_version_key",
+        "table": "events"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"events_stream_id_version_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "events_stream_id_version_key",
+          "public",
+          "\"public\".\"events\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"events_stream_id_version_key\"",
+        "sql": "ALTER TABLE \"public\".\"events\" ADD CONSTRAINT \"events_stream_id_version_key\" UNIQUE (\"stream_id\", \"version\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"events_stream_id_version_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "events_stream_id_version_key",
+          "public",
+          "\"public\".\"events\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.events.events_at_idx_a7b89566",
+    "label": "Create index \"events_at_idx_a7b89566\" on \"events\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "events_at_idx_a7b89566",
+        "table": "events"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"events_at_idx_a7b89566\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"events_at_idx_a7b89566\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"events_at_idx_a7b89566\"",
+        "sql": "CREATE INDEX \"events_at_idx_a7b89566\" ON \"public\".\"events\" (\"at\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"events_at_idx_a7b89566\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"events_at_idx_a7b89566\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.events.events_stream_id_seq_idx_ce39fde2",
+    "label": "Create index \"events_stream_id_seq_idx_ce39fde2\" on \"events\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "events_stream_id_seq_idx_ce39fde2",
+        "table": "events"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"events_stream_id_seq_idx_ce39fde2\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"events_stream_id_seq_idx_ce39fde2\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"events_stream_id_seq_idx_ce39fde2\"",
+        "sql": "CREATE INDEX \"events_stream_id_seq_idx_ce39fde2\" ON \"public\".\"events\" (\"stream_id\", \"seq\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"events_stream_id_seq_idx_ce39fde2\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"events_stream_id_seq_idx_ce39fde2\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.events.events_type_seq_idx_32533e1e",
+    "label": "Create index \"events_type_seq_idx_32533e1e\" on \"events\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "events_type_seq_idx_32533e1e",
+        "table": "events"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"events_type_seq_idx_32533e1e\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"events_type_seq_idx_32533e1e\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"events_type_seq_idx_32533e1e\"",
+        "sql": "CREATE INDEX \"events_type_seq_idx_32533e1e\" ON \"public\".\"events\" (\"type\", \"seq\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"events_type_seq_idx_32533e1e\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"events_type_seq_idx_32533e1e\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.outbox.outbox_delivered_at_created_at_idx_e4092e18",
+    "label": "Create index \"outbox_delivered_at_created_at_idx_e4092e18\" on \"outbox\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "outbox_delivered_at_created_at_idx_e4092e18",
+        "table": "outbox"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"outbox_delivered_at_created_at_idx_e4092e18\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"outbox_delivered_at_created_at_idx_e4092e18\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"outbox_delivered_at_created_at_idx_e4092e18\"",
+        "sql": "CREATE INDEX \"outbox_delivered_at_created_at_idx_e4092e18\" ON \"public\".\"outbox\" (\"delivered_at\", \"created_at\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"outbox_delivered_at_created_at_idx_e4092e18\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"outbox_delivered_at_created_at_idx_e4092e18\""
+        ]
+      }
+    ]
+  }
+]

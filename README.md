@@ -33,11 +33,35 @@ store, conductor, gates, runtimes and board are not. See
 
 ```bash
 pnpm install
-cp .env.example .env          # point DATABASE_URL at Escapement's own database
-pnpm --filter @escapement/store contract:emit
+cp .env.example .env.local        # then paste the connection string
+pnpm contract:emit                # offline — no database needed
 pnpm typecheck
 ```
 
-The event store must be its own database, not one belonging to a managed
+`.env.local` lives at the repo root and is gitignored. A real environment
+variable beats it, which is what makes CI and launchd work with no file at all.
+
+The event store must be **its own database**, not one belonging to a managed
 project — Escapement has to keep running while a managed project is the thing
 being changed.
+
+### Bringing the database up
+
+Prisma 8 splits planning from applying. Planning is offline; only the second
+half needs a reachable database.
+
+```bash
+pnpm db:plan --name initial       # contract -> migrations/, offline
+pnpm db:init                      # bootstrap the database and sign it
+pnpm db:verify                    # marker and live schema match the contract
+
+psql "$DATABASE_URL" -f packages/store/sql/notify.sql
+```
+
+That last step is not optional and is not Prisma's job. Prisma models tables,
+not triggers, and `notify.sql` carries two things the schema cannot express: the
+`NOTIFY` trigger every subscriber wakes on, and the rules that make `events`
+append-only in the database rather than by convention.
+
+An initial migration is already planned and committed, so `db:plan` is only
+needed after the contract changes.

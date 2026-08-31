@@ -5,6 +5,9 @@
     "module": "preserve",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    // Prisma 8 emits contract.d.ts beside the schema and its own scaffold imports
+    // with explicit extensions; nothing here emits JS, so this is safe.
+    "allowImportingTsExtensions": true,
     "types": ["node"],
     "strict": true,
     "noUncheckedIndexedAccess": true,

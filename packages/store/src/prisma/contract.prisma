@@ -37,7 +37,7 @@ model Event {
   /// when there is a year of history worth replaying.
   schemaVer Int    @default(1) @map("schema_ver")
 
-  data      Json
+  data      Jsonb
 
   /// conductor · agent:<runId> · human:<id> · github
   actor     String
@@ -73,7 +73,7 @@ model Outbox {
   id          String  @id @default(uuid())
   causedBy    BigInt  @map("caused_by")
   kind        String
-  payload     Json
+  payload     Jsonb
   attempts    Int     @default(0)
   lastError   String? @map("last_error")
   deliveredAt TimestamptzString? @map("delivered_at")
