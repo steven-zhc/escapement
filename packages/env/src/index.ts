@@ -1,5 +1,6 @@
 import { config } from "dotenv";
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -83,13 +84,33 @@ export interface GitHubAppCredentials {
   keySource: string;
 }
 
+/**
+ * A path from configuration, made absolute.
+ *
+ * `~` is expanded, because a config file is exactly where someone writes it and
+ * nothing else expands it there: a shell does not touch a `.env` file, dotenv
+ * reads the value literally, and `path.resolve` would produce a directory
+ * *named* `~` inside the repository. The README documented `~/...` before this
+ * existed, which would have failed with a bare ENOENT naming a path nobody
+ * wrote.
+ *
+ * A relative path is relative to the repository root, not to whichever directory
+ * a command happened to start in — the same rule the environment file itself
+ * follows.
+ */
+export function resolvePath(path: string): string {
+  if (path === "~") return homedir();
+  if (path.startsWith("~/")) return resolve(homedir(), path.slice(2));
+  return resolve(root, path);
+}
+
 export function githubApp(): GitHubAppCredentials {
   const appId = required("GITHUB_APP_ID");
   const path = optional("GITHUB_APP_PRIVATE_KEY_PATH");
   const inline = optional("GITHUB_APP_PRIVATE_KEY");
 
   if (path) {
-    return { appId, privateKey: readFileSync(resolve(root, path), "utf8"), keySource: path };
+    return { appId, privateKey: readFileSync(resolvePath(path), "utf8"), keySource: path };
   }
   if (inline) {
     // Some hosts can only carry the key as one line; \n restores the PEM.
