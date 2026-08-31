@@ -41,6 +41,11 @@ pnpm typecheck
 `.env.local` lives at the repo root and is gitignored. A real environment
 variable beats it, which is what makes CI and launchd work with no file at all.
 
+**Two connection strings, one database.** `DATABASE_URL` is pooled, for ordinary
+queries; `DIRECT_DATABASE_URL` is session mode, for migrations, `LISTEN/NOTIFY`
+and advisory locks. A transaction pooler breaks all three, and breaks them
+without erroring — see [ADR 0009](doc/decisions/0009-two-connections.md).
+
 The event store must be **its own database**, not one belonging to a managed
 project — Escapement has to keep running while a managed project is the thing
 being changed.
@@ -51,17 +56,16 @@ Prisma 8 splits planning from applying. Planning is offline; only the second
 half needs a reachable database.
 
 ```bash
-pnpm db:plan --name initial       # contract -> migrations/, offline
 pnpm db:init                      # bootstrap the database and sign it
-pnpm db:verify                    # marker and live schema match the contract
-
-psql "$DATABASE_URL" -f packages/store/sql/notify.sql
+pnpm db:bootstrap                 # apply notify.sql, then prove it worked
 ```
 
-That last step is not optional and is not Prisma's job. Prisma models tables,
-not triggers, and `notify.sql` carries two things the schema cannot express: the
+`db:bootstrap` is not optional and is not Prisma's job. Prisma models tables, not
+triggers, so `notify.sql` carries the two things the schema cannot express: the
 `NOTIFY` trigger every subscriber wakes on, and the rules that make `events`
-append-only in the database rather than by convention.
+append-only in the database rather than by convention. The script then asserts
+ten properties, including a **cross-connection** NOTIFY — the check that catches
+a transaction pooler, which drops notifications silently.
 
-An initial migration is already planned and committed, so `db:plan` is only
-needed after the contract changes.
+An initial migration is already planned and committed; `db:plan --name <slug>` is
+only needed after the contract changes.

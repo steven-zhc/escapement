@@ -21,6 +21,7 @@ Three kinds of thing live here, and the distinction matters.
 | [0006](decisions/0006-github-app.md) | A GitHub App, not a personal access token | accepted |
 | [0007](decisions/0007-dual-runtime.md) | Two runtime interfaces, one implementation | accepted |
 | [0008](decisions/0008-nextjs-board.md) | Next.js for the board, SSE for live updates | accepted |
+| [0009](decisions/0009-two-connections.md) | Two connection strings: pooled, and session mode | accepted |
 
 ## Experiments
 
@@ -30,11 +31,10 @@ Three kinds of thing live here, and the distinction matters.
 
 ## Open
 
-- **Where to start.** [Phase 0](roadmap.md#phase-0--system-scaffold) —
-  [#6](https://github.com/steven-zhc/escapement/issues/6) first, since it unblocks
-  the rest.
-- **The database.** `DATABASE_URL` is the one outstanding item. Everything in
-  `packages/core` and `packages/config` is zero-I/O and can be finished without it.
+- **Where to start.** [Phase 0](roadmap.md#phase-0--system-scaffold). The database
+  is up ([#6](https://github.com/steven-zhc/escapement/issues/6) closed), so
+  [#1](https://github.com/steven-zhc/escapement/issues/1) — append and read — is
+  next and unblocks the rest.
 - **`tier: sandboxed`.** Containerising the whole toolchain is its own piece of
   work; `guarded` is what the first project runs at. See
   [0007](decisions/0007-dual-runtime.md).

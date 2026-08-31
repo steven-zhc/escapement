@@ -1,6 +1,6 @@
 # 0003 — PostgreSQL as the event store
 
-**Status** accepted · 2026-08-31
+**Status** accepted · 2026-08-31 · qualified by [0009](0009-two-connections.md)
 
 ## Context
 
@@ -17,7 +17,9 @@ PostgreSQL, for three primitives that replace three fragile pieces of bash.
 | merging inside the operator's own checkout | uncommitted work made the merge fail **silently**; the cause of ~$29 of wasted re-runs on #58/#59 | `pg_advisory_lock('merge:' || project || ':' || base)` plus a worktree the integrator owns outright |
 | calling `gh` inline | a failed call vanished, with no record and no retry | an `outbox` table: the event lands first, delivery is a separate retryable concern |
 
-And one thing SQLite cannot do at all: **`LISTEN/NOTIFY`**. With it, "event
+And one thing SQLite cannot do at all: **`LISTEN/NOTIFY`** — though not through
+a transaction pooler, which drops it silently. That cost a second connection
+string; see [0009](0009-two-connections.md). With it, "event
 driven" stops being a description and becomes a mechanism — the conductor and
 the board wake on an append rather than on a timer, and `interval` disappears
 from the configuration entirely.

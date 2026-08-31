@@ -23,13 +23,33 @@ config({
   quiet: true,
 });
 
-/** Throws with a useful message rather than handing Postgres `undefined`. */
-export function databaseUrl(): string {
-  const url = process.env["DATABASE_URL"];
-  if (!url) {
+function required(name: string): string {
+  const v = process.env[name];
+  if (!v) {
     throw new Error(
-      "DATABASE_URL is not set. Copy .env.example to .env.local at the repo root and fill it in.",
+      `${name} is not set. Copy .env.example to .env.local at the repo root and fill it in.`,
     );
   }
-  return url;
+  return v;
+}
+
+/** Pooled. Ordinary reads and writes. */
+export function databaseUrl(): string {
+  return required("DATABASE_URL");
+}
+
+/**
+ * Session mode, against the same database.
+ *
+ * Migrations, `LISTEN/NOTIFY` and session-level advisory locks all need a
+ * connection that is not handed to someone else between statements. Through a
+ * transaction pooler each of those fails **silently** — a cross-connection
+ * NOTIFY simply never arrives, which would leave the system looking merely slow
+ * rather than broken. Measured against Supabase's pooler on 2026-08-31; see
+ * doc/decisions/0009-two-connections.md.
+ *
+ * On a plain Postgres this may be the same string as `databaseUrl()`.
+ */
+export function directDatabaseUrl(): string {
+  return required("DIRECT_DATABASE_URL");
 }

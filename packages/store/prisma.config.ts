@@ -5,10 +5,10 @@ import "./src/env.ts";
 export default definePrismaConfig({
   orm: ormConfig({
     contract: "./src/prisma/contract.prisma",
-    // Read, not asserted. `contract emit` and `migration plan` are offline and
-    // must work with no database configured at all; the commands that do need a
-    // connection fail on their own. The runtime path asserts it properly —
-    // see databaseUrl() in src/env.ts.
-    db: { connection: process.env["DATABASE_URL"] ?? "" },
+    // The DIRECT url, not the pooled one: migrations hold locks across
+    // statements and transaction pooling breaks that. Read rather than
+    // asserted — `contract emit` and `migration plan` are offline and must work
+    // with no database configured. See doc/decisions/0009-two-connections.md.
+    db: { connection: process.env["DIRECT_DATABASE_URL"] ?? "" },
   }),
 });

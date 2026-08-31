@@ -13,7 +13,8 @@
     "db:migrate": "prisma db migrate",
     "db:verify": "prisma db verify",
     "db:status": "prisma migration status",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:bootstrap": "node scripts/bootstrap.mjs"
   },
   "dependencies": {
     "@escapement/core": "workspace:*",
