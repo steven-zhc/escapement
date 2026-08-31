@@ -23,6 +23,7 @@ Three kinds of thing live here, and the distinction matters.
 | [0008](decisions/0008-nextjs-board.md) | Next.js for the board, SSE for live updates | accepted |
 | [0009](decisions/0009-two-connections.md) | Two connection strings: pooled, and session mode | accepted |
 | [0010](decisions/0010-source-runs-unbuilt.md) | The source runs unbuilt, so it obeys strip-only rules | accepted |
+| [0011](decisions/0011-hook-latency-is-runtime-startup.md) | The hook's 20ms budget is Bun's startup, and is not met | accepted |
 
 ## Experiments
 
@@ -31,7 +32,7 @@ Three kinds of thing live here, and the distinction matters.
 | [001](experiments/001-cold-review-issue-58.md) | Does a cold reviewer catch what four other checks missed? | yes, plus two nobody had found |
 | [002](experiments/002-subscriber-survives-a-kill.md) | Does the subscriber survive its connection being killed? | yes, no gap and no duplicate |
 | [003](experiments/003-doctor-catches-a-pooler.md) | Does `esc doctor` actually catch a transaction pooler? | yes, including the flagless case |
-| [004](experiments/004-hook-latency.md) | Is `esc-hook` fast enough to sit in front of every tool call? | 19.0ms p95 against a 20ms budget |
+| [004](experiments/004-hook-latency.md) | Where does `esc-hook`'s latency actually go? | all of it is Bun's startup; 20ms p95 not met |
 
 ## Open
 

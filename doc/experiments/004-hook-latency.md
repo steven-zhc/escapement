@@ -1,67 +1,89 @@
-# 004 — Is `esc-hook` fast enough to sit in front of every tool call?
+# 004 — Where does `esc-hook`'s latency actually go?
 
-**Run** 2026-08-31, on the development machine · **Result** yes, at 19.0ms p95
-against a 20ms budget — with almost no margin
+**Run** 2026-08-31, on the development machine · **Result** ~16ms p50, p95
+anywhere from 19 to 47ms — and **all of it is Bun's runtime startup**. The 20ms
+p95 target is not met.
 
 ## Question
 
 [0002](../decisions/0002-typescript.md) made the hook the one exception to
 "TypeScript everywhere": a Bun-compiled single file with no dependencies,
-because `PreToolUse` runs in front of every tool call an agent makes — tens of
-thousands across a run. [#11](https://github.com/steven-zhc/escapement/issues/11)
-put a number on it: **under 20ms at the 95th percentile, measured, not assumed.**
-
-A budget nobody measures is a budget nobody has.
+because `PreToolUse` runs in front of every tool call — tens of thousands across
+a run. [#11](https://github.com/steven-zhc/escapement/issues/11) put a number on
+it: **under 20ms at the 95th percentile, measured, not assumed.**
 
 ## Method
 
-`packages/conductor/test/hook.test.ts`, the latency case. The binary is built
-with `bun build --compile` and spawned as a process, which is exactly how a
-runtime invokes it — so the sample includes everything the runtime pays for:
+Two measurements. The first is the end-to-end one #11 asks for:
+`packages/conductor/test/hook.test.ts` builds the binary with `bun build
+--compile`, spawns it 200 times against a live conductor with a registered run
+and a real guard policy, and times spawn → stdin → connect → round trip → exit.
 
-1. process spawn
-2. reading the payload from stdin
-3. connecting to the conductor's unix socket
-4. one request/response round trip, answered from memory
-5. exit
-
-Ten warm-up runs, then 200 samples, against a live conductor with a registered
-run and a real guard policy.
+The first run of it passed at 19.0ms p95. The second, minutes later on the same
+machine, gave **23.8ms**. A one-millisecond margin is not a margin, so the
+second measurement asks where the time goes: the same binary against a trivial
+socket server, compared with a bare process spawn and with Node running the same
+source.
 
 ## Result
 
 ```
-esc-hook: p50 16.3ms  p95 19.0ms  p99 20.0ms  (n=200)
+/usr/bin/true (bare process spawn)     p50  0.9ms   p95  1.1ms
+bun binary, no socket (fails fast)     p50 16.9ms   p95 22.2ms
+bun binary, full round trip            p50 15.8ms   p95 19.3ms
+node --experimental-strip-types src    p50 55.7ms   p95 59.7ms
 ```
 
-It passes. It passes by one millisecond.
+Three things follow, and the second is the one that matters.
 
-**Nearly all of that is process startup.** The conductor's side answers from
-memory — policy is resolved once when the run is registered, and an allowed call
-is a counter increment and a JSON write. The socket round trip is not what costs
-16ms; spawning a compiled binary is.
+**Spawning a process is nearly free.** 0.9ms. The cost is not `execve`.
 
-## What follows
+**The round trip is free too.** The binary that connects to a socket, sends a
+request and reads a reply is *not slower* than the one that fails immediately
+because there is no socket — the difference is inside the noise. Escapement's
+own code, the conductor's in-memory decision, and the unix socket together cost
+approximately nothing.
 
-- **The hot path has no room in it.** Anything added to `esc-hook` — a
-  configuration read, a policy evaluation, a second round trip — comes out of a
-  one-millisecond margin. The reason policy lives in the conductor is not
-  tidiness; there is no budget for it here.
-- **The p99 is already at the limit.** A slower machine, a loaded one, or a
-  larger payload would put this over. The number to watch is p99, not p95.
-- **A faster hook means a smaller runtime, not faster code.** The remaining cost
-  is `execve` plus a runtime's own startup. 0002 already notes the hook could be
-  rewritten in Go or Rust behind the same stdin/stdout contract; this is the
-  measurement that would justify it, and it is not justified yet.
+**All of it is Bun's runtime startup**: ~16ms before a line of this code runs.
+
+And Bun was the right call anyway: Node running the same source is 55.7ms, three
+and a half times worse.
+
+## Conclusion
+
+**The 20ms p95 target is not met.** It is met at the median and misses at the
+95th percentile whenever the machine is doing anything else — which, on a machine
+also running an agent, is always. Both measurements are honest; the first one
+passing was luck of timing.
+
+This does not change the design. The hook is already as thin as a hook can be,
+and the remaining cost is not ours to remove. 0002 anticipated this: *"Nothing
+prevents a future rewrite of the hook in Go or Rust; it is a few hundred lines
+behind a stdin/stdout contract."* This is the measurement that would justify it,
+and it identifies the target precisely — **startup time, not the protocol**.
+
+Recorded as [0011](../decisions/0011-hook-latency-is-runtime-startup.md).
+
+## What the test asserts now
+
+Not 20ms, because that would be a test that fails for reasons nobody can fix.
+It asserts what Escapement actually controls and can regress:
+
+- the **marginal** cost of the socket round trip over a fail-fast spawn stays
+  small — this is the number that would move if the conductor started doing work
+  on the hot path;
+- and nothing else. The real distribution is printed on every run so it stays
+  visible, but no absolute figure is gated: 19.0, 23.8 and 46.7ms p95 were all
+  observed on this machine within an hour, and a gate on a number that noisy
+  fails for reasons no change here can fix.
 
 ## Limits
 
-- One machine, unloaded, warm page cache. A CI runner or a machine already
-  running an agent will be slower, and neither has been measured.
-- macOS on Apple silicon. `execve` cost differs enough between platforms that
-  this number should not be quoted for Linux.
-- The conductor was answering one hook at a time. Real concurrency is one run
-  (`concurrent: 1`), so this matches today — but it is not a measurement of the
-  socket under load, and Phase 4 raises concurrency.
-- 200 samples is enough for a p95 and thin for a p99. The p99 above is one
-  sample.
+- One machine, macOS on Apple silicon. `execve` and runtime startup both differ
+  enough between platforms that none of these numbers should be quoted for
+  Linux.
+- Bun 1.x as installed today. A future Bun with faster startup changes the
+  conclusion entirely, and nothing here tracks that.
+- The conductor was answering one hook at a time, which matches `concurrent: 1`.
+  This is not a measurement of the socket under load.
+- 150–200 samples: enough for a p95, thin for a p99.

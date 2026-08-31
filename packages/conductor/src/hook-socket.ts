@@ -44,6 +44,10 @@ export type HookName =
 export interface RegisteredRun {
   runId: string;
   policy: GuardPolicy;
+  /** Recorded on every prompt, so "which prompt produced better work" is answerable. */
+  promptVersion: string;
+  /** Tool calls seen. Used where the runtime gives no turn number of its own. */
+  calls: number;
   /** Counted in memory, flushed as events rather than one append per call. */
   allowed: number;
   trips: number;
@@ -57,12 +61,23 @@ export interface HookServerOptions {
   store?: EventStore;
   /** Overridable so a test can watch what the server decided. */
   onDecision?: (runId: string, hook: HookName, verdict: "allow" | "deny") => void;
+  /**
+   * Called for a lifecycle hook the conductor has to act on rather than merely
+   * record — `Stop` is the moment the gate pipeline fires, and firing it needs a
+   * diff, which needs git, which does not belong on the hot path.
+   */
+  onLifecycle?: (runId: string, hook: HookName, payload: unknown) => void;
 }
 
 export interface HookServer {
   readonly socketPath: string;
   /** Teaches the server about a run. Until this, its calls are denied. */
-  register(runId: string, policy: GuardPolicy, version: number): RegisteredRun;
+  register(
+    runId: string,
+    policy: GuardPolicy,
+    version: number,
+    promptVersion?: string,
+  ): RegisteredRun;
   unregister(runId: string): RegisteredRun | undefined;
   get(runId: string): RegisteredRun | undefined;
   /** Writes the counted-in-memory facts to the log. Called at the end of a run. */
@@ -114,6 +129,46 @@ export function createHookServer(options: HookServerOptions): HookServer {
       input: request.payload?.tool_input ?? {},
     };
 
+    // The lifecycle hooks. Each maps to the event design.md §5 says it should,
+    // except `SessionStart` — its event is `RunStarted`, and the conductor
+    // writes that at dispatch because it knows the work item, the model, the
+    // base sha and the config hash, none of which the hook is told.
+    if (hook === "UserPromptSubmit") {
+      const bytes = Buffer.byteLength(request.payload?.prompt ?? "", "utf8");
+      options.onLifecycle?.(run.runId, hook, request.payload);
+      await append(run, "RunPrompted", { promptVersion: run.promptVersion, bytes }).catch(() => {
+        // Losing the record must not refuse the prompt.
+      });
+      return { allow: true };
+    }
+
+    if (hook === "PreCompact") {
+      // Compaction means the work item was scoped too large — a metric, not
+      // noise. The payload carries no turn number, so this records the
+      // conductor's own count of tool calls at the moment it happened; what the
+      // metric is *for* does not depend on which monotonic counter it is.
+      await append(run, "RunContextExhausted", { turn: run.calls }).catch(() => {});
+      options.onLifecycle?.(run.runId, hook, request.payload);
+      return { allow: true };
+    }
+
+    if (hook === "Notification") {
+      // The board lights up instead of the run burning to the wall clock.
+      const prompt = request.payload?.message ?? request.payload?.prompt ?? "waiting";
+      await append(run, "RunAwaitingInput", { prompt: prompt.slice(0, 2_000) }).catch(() => {});
+      options.onLifecycle?.(run.runId, hook, request.payload);
+      return { allow: true };
+    }
+
+    if (hook === "Stop" || hook === "SessionStart" || hook === "SessionEnd") {
+      // `Stop` is the moment the gate pipeline fires, and firing it needs a diff
+      // — git, not the hot path. `SessionEnd`'s event is `RunFinished`, which
+      // the adapter writes from the process outcome because that is where cost,
+      // turns and duration actually are.
+      options.onLifecycle?.(run.runId, hook, request.payload);
+      return { allow: true };
+    }
+
     if (hook === "PostToolUse") {
       // Observation only. Counted, never blocking — the tool already ran.
       const path = (call.input["file_path"] ?? call.input["path"]) as string | undefined;
@@ -130,6 +185,7 @@ export function createHookServer(options: HookServerOptions): HookServer {
       return { allow: true };
     }
 
+    run.calls += 1;
     const verdict = evaluate(call, run.policy);
     if (verdict.allow) {
       run.allowed += 1;
@@ -158,8 +214,17 @@ export function createHookServer(options: HookServerOptions): HookServer {
   return {
     socketPath: options.socketPath,
 
-    register(runId, policy, version) {
-      const run: RegisteredRun = { runId, policy, allowed: 0, trips: 0, touched: [], version };
+    register(runId, policy, version, promptVersion = "unknown") {
+      const run: RegisteredRun = {
+        runId,
+        policy,
+        promptVersion,
+        calls: 0,
+        allowed: 0,
+        trips: 0,
+        touched: [],
+        version,
+      };
       runs.set(runId, run);
       return run;
     },
