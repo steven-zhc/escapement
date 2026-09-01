@@ -1,0 +1,168 @@
+/**
+ * What makes the conductor run without anyone asking it to.
+ *
+ * A completion event — landed, released, blocked, refused — means a task just
+ * stopped occupying the conductor, so there may be something else to pick up.
+ * Postgres already notifies on append, so this is a subscription and not a
+ * timer, the same as everything else in the system.
+ *
+ * ## Three holes, and they are the whole of this file
+ *
+ * **Cold start.** With nothing in flight there is no completion event, so an
+ * event-driven loop never begins. It runs once at startup.
+ *
+ * **A new issue appends nothing.** The queue comes from GitHub now (0012), so
+ * somebody opening an issue produces no event and this hears nothing about it.
+ * Webhooks close that (#28); until then the startup pass is the only thing that
+ * notices, which is a real limitation and is written down rather than papered
+ * over with a poll nobody asked for.
+ *
+ * **The failure loop.** A failed run *releases* its task, a release is a
+ * completion event, and a completion event triggers the next pass — where the
+ * top of the queue is the ticket that just failed. That is an infinite loop at
+ * agent prices, and it is not hypothetical: the old harness re-ran two tickets
+ * five times for roughly $29 because nothing remembered the last attempt. The
+ * guard is `last_attempt_at` on `task_view`, applied by `readRunnable`, and it
+ * lives in the table rather than in memory precisely so that a daemon crashing
+ * on a bad ticket does not come back and spend the money again.
+ *
+ * ## One pass at a time
+ *
+ * A pass takes minutes and events arrive during it. Running a second one
+ * concurrently would race for the same claim, so an event during a pass sets a
+ * flag and the loop goes round again when it finishes — which also collapses a
+ * burst of events into one extra pass rather than one each.
+ */
+import { directDatabaseUrl } from "@escapement/env";
+import { subscribe, type Subscription } from "@escapement/store";
+import pg from "pg";
+
+/**
+ * The events that mean the conductor is free to look again.
+ *
+ * A list rather than "anything": a run appends steadily — touched files, guard
+ * trips, gate verdicts — and waking on all of them would start a pass while the
+ * previous one is mid-agent, dozens of times per run.
+ */
+export const COMPLETION_EVENTS = [
+  "WorkItemLanded",
+  "WorkItemReleased",
+  "WorkItemBlocked",
+  "WorkItemUnblocked",
+  "IntegrationSucceeded",
+  "IntegrationRefused",
+] as const;
+
+export type PassReason = "startup" | "completion";
+
+export interface WorkLoopOptions {
+  /**
+   * One pass: refresh the queue, take what is runnable, run it.
+   *
+   * Kept as a callback so this package needs no GitHub client and no runtime —
+   * the daemon hosts the loop, and the CLI knows how to build the world it runs
+   * against.
+   */
+  pass: (reason: PassReason) => Promise<void>;
+  /** Defaults to `COMPLETION_EVENTS`. */
+  triggers?: readonly string[];
+  /** Session-mode connection for the subscription. */
+  url?: string;
+  log?: (line: string) => void;
+}
+
+export interface WorkLoop {
+  /** Runs the first pass and then follows the log. */
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  /** Passes run so far. */
+  readonly passes: number;
+}
+
+export function createWorkLoop(options: WorkLoopOptions): WorkLoop {
+  const log = options.log ?? (() => {});
+  const triggers = new Set<string>(options.triggers ?? COMPLETION_EVENTS);
+
+  let subscription: Subscription | null = null;
+  let running = false;
+  let again = false;
+  let stopped = false;
+  let passes = 0;
+
+  async function pump(reason: PassReason): Promise<void> {
+    if (running) {
+      // A pass is in flight. Remember to go round again rather than starting a
+      // second one into the same queue.
+      again = true;
+      return;
+    }
+    running = true;
+    try {
+      do {
+        again = false;
+        if (stopped) break;
+        passes += 1;
+        try {
+          await options.pass(reason);
+        } catch (err) {
+          // A pass that throws must not take the loop with it: the next
+          // completion event is exactly when you want it to try again.
+          log(`pass failed: ${(err as Error).message}`);
+        }
+        reason = "completion";
+      } while (again);
+    } finally {
+      running = false;
+    }
+  }
+
+  return {
+    get passes() {
+      return passes;
+    },
+
+    async start() {
+      // From the head, not from zero. Replaying history would fire a pass for
+      // every task that has ever landed.
+      const from = await headSeq(options.url);
+
+      subscription = subscribe({
+        fromSeq: from,
+        name: "escapement-daemon",
+        ...(options.url === undefined ? {} : { url: options.url }),
+        onEvent: (event) => {
+          if (!triggers.has(event.type)) return;
+          void pump("completion");
+        },
+        onError: (error, phase) => log(`subscription ${phase}: ${String(error)}`),
+      });
+
+      // The cold start. Nothing is in flight, so nothing will tell us to begin.
+      await pump("startup");
+    },
+
+    async stop() {
+      stopped = true;
+      await subscription?.close().catch(() => {});
+      subscription = null;
+    },
+  };
+}
+
+/**
+ * The log's current end, so the subscription starts there rather than replaying.
+ *
+ * One query rather than paging the whole log: the answer is a single number and
+ * walking a hundred thousand events to find it would make starting the daemon
+ * slower the longer it has been useful.
+ */
+async function headSeq(url?: string): Promise<bigint> {
+  const client = new pg.Client({ connectionString: url ?? directDatabaseUrl() });
+  await client.connect();
+  try {
+    const r = await client.query<{ head: string }>("select coalesce(max(seq), 0)::text as head from events");
+    return BigInt(r.rows[0]?.head ?? "0");
+  } finally {
+    await client.end();
+  }
+}

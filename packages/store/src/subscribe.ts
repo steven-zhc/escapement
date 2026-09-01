@@ -171,6 +171,14 @@ export function subscribe(options: SubscribeOptions): Subscription {
   let current: pg.Client | null = null;
   let backendPid: number | null = null;
   const ready = deferred<void>();
+  /**
+   * Raised by `close()`. Exists because `pg` gives no way to abort a connect
+   * that is in flight: `end()` returns a promise that settles on an 'end' event
+   * an unestablished socket never emits, `connectionTimeoutMillis` was measured
+   * not to fire once `end()` had been called, and destroying the underlying
+   * stream did not help either. Racing is what works.
+   */
+  const closing = deferred<void>();
 
   /** Serialises draining. A nudge that arrives mid-drain sets `again` instead. */
   let draining = false;
@@ -221,7 +229,15 @@ export function subscribe(options: SubscribeOptions): Subscription {
     const ended = deferred<void>();
     let fatal: unknown = null;
 
-    const client = new pg.Client({ connectionString: url, application_name: applicationName });
+    const client = new pg.Client({
+      connectionString: url,
+      application_name: applicationName,
+      // A backstop, not the mechanism. `close()` destroys the socket to make a
+      // hanging connect fail fast; this bounds the case where nobody is
+      // closing and the network simply never answers, which would otherwise
+      // leave a subscriber wedged with no backoff and no error.
+      connectionTimeoutMillis: 15_000,
+    });
     current = client;
     // Whether this connection ever got as far as listening and draining. A
     // session that served resets the backoff; one that died connecting does not.
@@ -243,7 +259,18 @@ export function subscribe(options: SubscribeOptions): Subscription {
     });
 
     try {
-      await client.connect();
+      // Raced rather than awaited. A `close()` arriving mid-connect is
+      // otherwise invisible until the connect finishes, and it may never:
+      // `subscribe()` followed immediately by `close()` hung indefinitely, and
+      // the daemon inherited it. A daemon that cannot be stopped in its first
+      // second is one launchd has to SIGKILL, which is the ungraceful exit the
+      // advisory lock and the checkpoints exist to make unnecessary.
+      const outcome = await Promise.race([
+        client.connect().then(() => "connected" as const),
+        closing.promise.then(() => "closing" as const),
+      ]);
+      if (outcome === "closing") return { outcome: "stop", served: false };
+
       // Before the catch-up read, always. See the module header.
       await client.query(`LISTEN ${CHANNEL}`);
       const pid = await client.query<{ pid: number }>("select pg_backend_pid() as pid");
@@ -258,11 +285,10 @@ export function subscribe(options: SubscribeOptions): Subscription {
     } finally {
       current = null;
       backendPid = null;
-      try {
-        await client.end();
-      } catch {
-        // Ending a connection that is already gone is not an error worth having.
-      }
+      // Fired, never awaited: on a client that never finished connecting this
+      // settles on an event that is not coming, and awaiting it here would put
+      // the hang back one level down.
+      void client.end().catch(() => {});
     }
 
     if (fatal instanceof HandlerFailed) {
@@ -318,11 +344,9 @@ export function subscribe(options: SubscribeOptions): Subscription {
     async close() {
       closed = true;
       sleeping.resolve();
-      try {
-        await current?.end();
-      } catch {
-        // Same as above.
-      }
+      closing.resolve();
+      // Fired, never awaited — see the `finally` in `session`.
+      void current?.end().catch(() => {});
       await running;
     },
   };

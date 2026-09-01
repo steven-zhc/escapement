@@ -12,3 +12,10 @@ export {
   type DaemonStart,
   type StopReason,
 } from "./daemon.ts";
+export {
+  COMPLETION_EVENTS,
+  createWorkLoop,
+  type PassReason,
+  type WorkLoop,
+  type WorkLoopOptions,
+} from "./work-loop.ts";
