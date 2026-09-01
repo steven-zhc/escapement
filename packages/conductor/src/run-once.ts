@@ -174,13 +174,27 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
 
   // ---- 3. discover and claim ----------------------------------------------
   const found = await discover({ project, client: options.client, recipe, store, only: [options.issue] });
-  if ((await store.read(workItemId)).length === 0) {
+  const history = await store.read(workItemId);
+  if (history.length === 0) {
     const why = found.skipped.find((s) => s.ref === options.issue)?.reason ?? "not discovered";
     return { ok: false, workItemId, runId: null, stage: "discover", detail: why };
   }
 
+  // Carried onto the claim, because the claim is now the only place a title
+  // enters the log (0012). Taken from the stream that was just read rather than
+  // from a second API call — and when discovery goes (#41) the queue row
+  // supplies the same two fields to the same argument.
+  const ticketMeta = history.find((e) => e.type === "WorkItemDiscovered")?.data as
+    | { title?: string; kind?: string }
+    | undefined;
+
   const runId = `run-${crypto.randomUUID()}`;
-  const claim = await claimWorkItem(workItemId, { runId, store });
+  const claim = await claimWorkItem(workItemId, {
+    runId,
+    store,
+    title: ticketMeta?.title ?? null,
+    kind: ticketMeta?.kind ?? null,
+  });
   if (!claim.ok) {
     return {
       ok: false,

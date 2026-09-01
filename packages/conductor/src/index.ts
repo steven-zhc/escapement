@@ -91,6 +91,16 @@ export {
   type BoardColumnId,
   type BoardGate,
 } from "./board.ts";
+export {
+  DEFAULT_RETENTION_DAYS,
+  TASK_VIEW_TABLE,
+  readTasks,
+  syncQueued,
+  taskViewProjection,
+  type ReadTasksOptions,
+  type TaskCard,
+  type TaskState,
+} from "./task-view.ts";
 export { renderPrompt, runOnce, type RunOnceOptions, type RunOnceResult } from "./run-once.ts";
 export {
   runQueue,

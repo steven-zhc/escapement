@@ -67,7 +67,7 @@ async function seed(): Promise<void> {
   // 2 — running, with a run that tripped the guard and compacted.
   await store.append(wi(2), 0, [
     discovered(2, "a race in the importer"),
-    { type: "WorkItemClaimed", actor: "conductor", data: { runId: run(2), worker: "w", leaseUntilMs: Date.now() + 60_000 } },
+    { type: "WorkItemClaimed", actor: "conductor", data: { runId: run(2), worker: "w", leaseUntilMs: Date.now() + 60_000, title: null, kind: null } },
   ]);
   await store.append(run(2), 0, [
     {
@@ -92,7 +92,7 @@ async function seed(): Promise<void> {
   // 3 — gating, with a stale verdict from before a force-push.
   await store.append(wi(3), 0, [
     discovered(3, "gates in progress", "feature"),
-    { type: "WorkItemClaimed", actor: "conductor", data: { runId: run(3), worker: "w", leaseUntilMs: Date.now() + 60_000 } },
+    { type: "WorkItemClaimed", actor: "conductor", data: { runId: run(3), worker: "w", leaseUntilMs: Date.now() + 60_000, title: null, kind: null } },
   ]);
   await store.append(run(3), 0, [
     {

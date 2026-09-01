@@ -46,6 +46,15 @@ export const UPCASTERS: UpcastRegistry = {
      */
     2: (data) => ({ ...(data as object), base: null }),
   },
+  WorkItemClaimed: {
+    /**
+     * 1 → 2: `title` and `kind` were added when the queue left the log (0012).
+     * A v1 claim recorded neither, and null says so — the upcaster is handed a
+     * payload and not a stream id, so it could not recover them even in
+     * principle. The projection falls back to the issue number.
+     */
+    1: (data) => ({ ...(data as object), title: null, kind: null }),
+  },
 };
 
 export class MissingUpcasterError extends Error {

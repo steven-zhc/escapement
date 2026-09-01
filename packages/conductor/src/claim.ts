@@ -25,6 +25,16 @@ export interface ClaimOptions {
   runId: string;
   /** Who holds it — host and pid, so a stuck lease can be traced to a process. */
   worker?: string;
+  /**
+   * What the task is, if the caller knows.
+   *
+   * Recorded on the claim because the queue left the log (0012): this is now
+   * the only place a title enters it, and without one a rebuilt projection has
+   * nothing to show for work that has already merged — GitHub only lists what
+   * is still open. Null is honest when the caller genuinely does not know.
+   */
+  title?: string | null;
+  kind?: string | null;
   leaseMs?: number;
   store?: EventStore;
   now?: () => number;
@@ -100,6 +110,8 @@ export async function claimWorkItem(
           runId: options.runId,
           worker,
           leaseUntilMs,
+          title: options.title ?? null,
+          kind: options.kind ?? null,
         }),
       },
     ]);

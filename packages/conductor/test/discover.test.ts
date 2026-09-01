@@ -256,7 +256,7 @@ describe("the queue projection", () => {
         {
           type: "WorkItemClaimed",
           actor: "conductor",
-          data: { runId: "run-x", worker: "test", leaseUntilMs: Date.now() + 60_000 },
+          data: { runId: "run-x", worker: "test", leaseUntilMs: Date.now() + 60_000, title: null, kind: null },
         },
       ]);
       await runner.stop();

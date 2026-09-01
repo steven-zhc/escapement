@@ -34,7 +34,7 @@ describe("reduceWorkItem", () => {
     const e = makeStream("wi-nextloom-ai-admin-117");
     const s = reduceWorkItem([
       e("WorkItemDiscovered", discovered),
-      e("WorkItemClaimed", { runId: "run-01JX", worker: "conductor@host", leaseUntilMs: 1_000 }),
+      e("WorkItemClaimed", { runId: "run-01JX", worker: "conductor@host", leaseUntilMs: 1_000, title: null, kind: null }),
       e("WorkItemLanded", { mergeCommit: "abc1234", base: "develop" }),
     ]);
 
@@ -47,7 +47,7 @@ describe("reduceWorkItem", () => {
     const e = makeStream("wi-p-1");
     const s = reduceWorkItem([
       e("WorkItemDiscovered", discovered),
-      e("WorkItemClaimed", { runId: "run-a", worker: "w", leaseUntilMs: 1 }),
+      e("WorkItemClaimed", { runId: "run-a", worker: "w", leaseUntilMs: 1, title: null, kind: null }),
       e("WorkItemReleased", { runId: "run-a", reason: "lease expired" }),
     ]);
 
@@ -93,7 +93,7 @@ describe("reduceWorkItem", () => {
     const s = reduceWorkItem([
       e("WorkItemDiscovered", discovered),
       e("WorkItemBlocked", { question: "?", needsFrom: "human" as const, runId: null }),
-      e("WorkItemClaimed", { runId: "run-b", worker: "w", leaseUntilMs: 2 }),
+      e("WorkItemClaimed", { runId: "run-b", worker: "w", leaseUntilMs: 2, title: null, kind: null }),
     ]);
 
     expect(s.lifecycle.status).toBe("claimed");

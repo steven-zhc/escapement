@@ -61,6 +61,22 @@ export const WorkItemClaimed = z.object({
   worker: z.string(),
   /** Absence of a heartbeat past this is the expiry. Nothing to clean up. */
   leaseUntilMs: z.number().int(),
+  /**
+   * What the task is, recorded at the moment Escapement takes responsibility
+   * for it.
+   *
+   * Here because the queue left the log (0012). `WorkItemDiscovered` used to be
+   * where a title entered, and without it a rebuilt projection had no row at
+   * all for anything claimed — every running and landed task simply vanished,
+   * since GitHub's *open* issue list cannot supply a title for work that has
+   * already merged.
+   *
+   * Null for a v1 event, and for a claim made without the queue entry to hand.
+   * The projection falls back to the issue number, which is honest about not
+   * knowing rather than inventing something.
+   */
+  title: z.string().nullable(),
+  kind: z.string().nullable(),
 });
 
 export const WorkItemReleased = z.object({ runId: z.string(), reason: z.string() });
@@ -342,6 +358,8 @@ export type PayloadOf<T extends EventType> = z.infer<(typeof EVENTS)[T]>;
 const BUMPED: Partial<Record<EventType, number>> = {
   // 2: added `owner`. 3: added `base`. See ProjectConfigured above.
   ProjectConfigured: 3,
+  // 2: added `title` and `kind`, because the queue left the log. See above.
+  WorkItemClaimed: 2,
 };
 
 export const SCHEMA_VER: Record<EventType, number> = Object.fromEntries(
