@@ -29,7 +29,7 @@ import { type RefusalReason, parsePayload, reduceIntegration } from "@escapement
 import { directDatabaseUrl } from "@escapement/env";
 import { ConcurrencyError, type EventStore, eventStore } from "@escapement/store";
 import pg from "pg";
-import { git, stateDir, worktreePath } from "./worktree.ts";
+import { type TokenSource, git, stateDir, worktreePath } from "./worktree.ts";
 
 /** `int-{project}-{base}` — one lane per base branch, forever. */
 export function integrationStream(project: string, base: string): string {
@@ -48,7 +48,7 @@ export interface IntegrateOptions {
   /** False when a gate refused. The integrator records it and does not merge. */
   gatesPassed: boolean;
   gateDetail?: string;
-  token?: string;
+  token?: TokenSource;
   home?: string;
   gitEnv?: NodeJS.ProcessEnv;
   store?: EventStore;

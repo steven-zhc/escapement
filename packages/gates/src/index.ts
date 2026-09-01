@@ -17,4 +17,4 @@ export {
   type ProcessGateSpec,
 } from "./process-gate.ts";
 export { gatesFromRecipe, GateKindNotImplementedError } from "./from-recipe.ts";
-export * from "./command.ts";
+export { runCommand, type CommandOutcome, type RunCommandOptions } from "./command.ts";

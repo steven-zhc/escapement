@@ -34,7 +34,7 @@ import { integrate } from "./integrate.ts";
 import { prepareWorktree } from "./prepare.ts";
 import { policyOf } from "./projects.ts";
 import type { ProjectState } from "@escapement/core";
-import { DEFAULT_PRODUCTION_PATTERNS, filterEnv, git, provisionWorktree, removeWorktree, stateDir } from "./worktree.ts";
+import { DEFAULT_PRODUCTION_PATTERNS, type TokenSource, filterEnv, git, provisionWorktree, removeWorktree, runnableEnv, stateDir } from "./worktree.ts";
 import { spawn } from "node:child_process";
 
 export interface RunOnceOptions {
@@ -48,7 +48,7 @@ export interface RunOnceOptions {
   /** The ticket prompt. Versioned, and recorded on every `RunPrompted`. */
   prompt: string;
   promptVersion?: string;
-  token?: string;
+  token?: TokenSource;
   home?: string;
   store?: EventStore;
   gitEnv?: NodeJS.ProcessEnv;
@@ -208,7 +208,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       runId,
       workItemId,
       cwd: worktree.path,
-      env: env.values,
+      env: runnableEnv(env.values),
       steps: recipe.prepare,
       store,
       at: 0,
@@ -263,7 +263,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         cwd: worktree.path,
         prompt: options.prompt,
         settingsPath: wiring.settingsPath,
-        env: { ...env.values, ...wiring.env, PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "" },
+        env: runnableEnv({ ...env.values, ...wiring.env }),
         limits: {
           turns: recipe.runtime.limits.turns,
           wallMs: parseDuration(recipe.runtime.limits.wall),
@@ -340,7 +340,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       const gates = gatesFromRecipe(recipe.gates);
       const pipeline = await runGatePipeline({
         gates,
-        context: { runId, onSha: headSha, cwd: worktree.path, env: { ...env.values, PATH: process.env["PATH"] ?? "" } },
+        context: { runId, onSha: headSha, cwd: worktree.path, env: runnableEnv(env.values) },
         emit: async (event) => {
           const at = (await store.read(runId)).length;
           await store.append(runId, at, [

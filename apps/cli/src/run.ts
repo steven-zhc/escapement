@@ -70,6 +70,11 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
     client,
     runtime: createClaudeCodeRuntime(),
     issue: options.issue,
+    // Both managed repositories are private. Without this every git command in
+    // the run is an anonymous one, and the clone fails before anything else
+    // gets a chance to. Passed as the client's token *function*, not a string:
+    // an installation token lasts an hour and a run's wall limit is two.
+    token: () => client.token(),
     hookBinary,
     prompt: prompt.replace("{{issue}}", String(options.issue)),
     promptVersion: `ticket@${prompt.length}`,

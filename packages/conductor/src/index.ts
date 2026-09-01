@@ -41,10 +41,13 @@ export {
   provisionWorktree,
   removeWorktree,
   renderEnvFile,
+  RUNNABLE,
+  runnableEnv,
   stateDir,
   worktreePath,
   type FilteredEnv,
   type ProvisionOptions,
+  type TokenSource,
   type Worktree,
 } from "./worktree.ts";
 export {
@@ -89,4 +92,4 @@ export {
   type BoardGate,
 } from "./board.ts";
 export { runOnce, type RunOnceOptions, type RunOnceResult } from "./run-once.ts";
-export * from "./prepare.ts";
+export { prepareWorktree, type PrepareOptions, type PrepareResult } from "./prepare.ts";

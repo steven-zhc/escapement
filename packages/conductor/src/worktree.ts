@@ -32,6 +32,16 @@ export function stateDir(): string {
   return process.env["ESCAPEMENT_HOME"] ?? join(homedir(), ".escapement");
 }
 
+/**
+ * A token, or something that will produce a current one.
+ *
+ * The function form is what real runs use. An installation token lasts an hour
+ * and a run may last two, so anything holding a string taken at the start is
+ * holding something that expires before the integrator pushes. The string form
+ * stays for tests, which do not talk to GitHub at all.
+ */
+export type TokenSource = string | (() => Promise<string>);
+
 export interface GitRunOptions {
   cwd?: string;
   /**
@@ -42,14 +52,17 @@ export interface GitRunOptions {
    * readable from inside the worktree by the agent itself. The environment of a
    * single child process is neither.
    */
-  token?: string;
+  token?: TokenSource;
   env?: NodeJS.ProcessEnv;
 }
 
 export async function git(args: string[], options: GitRunOptions = {}): Promise<string> {
   const env: NodeJS.ProcessEnv = { ...(options.env ?? process.env) };
-  if (options.token) {
-    const basic = Buffer.from(`x-access-token:${options.token}`).toString("base64");
+  // Resolved here, per invocation, rather than once by the caller — that is the
+  // whole point of accepting a function.
+  const token = typeof options.token === "function" ? await options.token() : options.token;
+  if (token) {
+    const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
     env["GIT_CONFIG_COUNT"] = "1";
     env["GIT_CONFIG_KEY_0"] = "http.https://github.com/.extraheader";
     env["GIT_CONFIG_VALUE_0"] = `AUTHORIZATION: basic ${basic}`;
@@ -105,6 +118,45 @@ export interface FilteredEnv {
  * Reduces an environment to the names a recipe allows, and refuses one that
  * looks like production.
  */
+/**
+ * The variables a process needs in order to be a process at all.
+ *
+ * `filterEnv` is an allowlist of the *project's* variables — the secrets and
+ * connection strings a recipe names. It is not, and should not become, a list of
+ * the things a shell needs to find a binary. Those are two different questions
+ * and conflating them is how the first real run against a repository died on
+ * `/bin/sh: pnpm: command not found`.
+ *
+ * That failure had three instances and one cause: the agent was given `PATH` and
+ * `HOME`, the gates were given `PATH` and not `HOME` — which `pnpm` needs for
+ * its store and its config — and the prepare stage was given neither. Three call
+ * sites, three different answers, one of them right. So it is computed here,
+ * once.
+ *
+ * Deliberately short. `NODE_OPTIONS` is excluded because it injects behaviour
+ * into every child; anything a project genuinely needs belongs in `env.allow`,
+ * where a person wrote it down.
+ *
+ * `HOME` is the operator's, which is what makes a warm package store possible
+ * and every install after the first one fast. It also means a command can read
+ * the operator's home directory — contained by the tier, not by this, and worth
+ * revisiting if a scratch home ever becomes affordable.
+ */
+export const RUNNABLE = ["PATH", "HOME", "TMPDIR", "LANG"] as const;
+
+export function runnableEnv(
+  values: Record<string, string>,
+  from: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+  const base: Record<string, string> = {};
+  for (const name of RUNNABLE) {
+    const value = from[name];
+    if (value) base[name] = value;
+  }
+  // The project's own values win: a recipe that allows `PATH` meant it.
+  return { ...base, ...values };
+}
+
 export function filterEnv(
   allow: readonly string[],
   source: NodeJS.ProcessEnv = process.env,
@@ -166,7 +218,7 @@ export interface ProvisionOptions {
   /** Where inside the worktree the filtered env file goes. */
   plantAt: string;
   env: Record<string, string>;
-  token?: string;
+  token?: TokenSource;
   /** Overrides the clone source. Tests point it at a local repository. */
   remote?: string;
   home?: string;
@@ -208,7 +260,7 @@ export async function ensureMirror(options: {
   project: string;
   owner: string;
   repo: string;
-  token?: string;
+  token?: TokenSource;
   remote?: string;
   home?: string;
   gitEnv?: NodeJS.ProcessEnv;

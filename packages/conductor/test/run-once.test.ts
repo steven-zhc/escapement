@@ -106,6 +106,12 @@ function fakeClient(over: Partial<GitHubClient> & { recipe?: string } = {}): Git
     request: async () => {
       throw new Error("not used");
     },
+    // Throws rather than returning a dummy: these tests clone from a local path
+    // and must never authenticate. If something starts asking for a token, the
+    // test should say so loudly rather than quietly succeed with a fake one.
+    token: async () => {
+      throw new Error("not used");
+    },
     defaultBranch: async () => "develop",
     // The governance rule: the recipe comes from the base branch, and this
     // client will not serve it for any other ref.

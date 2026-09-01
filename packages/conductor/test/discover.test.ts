@@ -110,6 +110,12 @@ function fakeClient(issues: Issue[], project = "esctest"): GitHubClient {
     request: async () => {
       throw new Error("not used");
     },
+    // Throws rather than returning a dummy: these tests clone from a local path
+    // and must never authenticate. If something starts asking for a token, the
+    // test should say so loudly rather than quietly succeed with a fake one.
+    token: async () => {
+      throw new Error("not used");
+    },
     defaultBranch: async () => "develop",
     fileAt: async () => null,
     refSha: async () => "0".repeat(40),

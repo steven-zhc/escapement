@@ -20,6 +20,7 @@ import {
   provisionWorktree,
   removeWorktree,
   renderEnvFile,
+  runnableEnv,
 } from "../src/index.ts";
 
 const exec = promisify(execFile);
@@ -264,5 +265,55 @@ describe("renderEnvFile", () => {
 
   it("is stable in order, so a diff of two runs is about the values", () => {
     expect(renderEnvFile({ B: "2", A: "1" })).toBe(renderEnvFile({ A: "1", B: "2" }));
+  });
+});
+
+/**
+ * The first real run against a private repository died here, on
+ * `/bin/sh: pnpm: command not found`, after three seams had already worked.
+ *
+ * The cause was that `filterEnv` answers "which of the project's variables may
+ * this run see" and something had to answer the different question "what does a
+ * process need in order to be a process". Three call sites had answered it
+ * three ways: the agent got PATH and HOME, the gates got PATH without HOME —
+ * which pnpm needs for its store and config — and prepare got neither.
+ */
+describe("the environment a command needs to run at all", () => {
+  const from = { PATH: "/usr/bin", HOME: "/home/t", TMPDIR: "/tmp/", LANG: "en_US.UTF-8" };
+
+  it("adds what a shell needs to find and run a binary", () => {
+    expect(runnableEnv({}, from)).toEqual(from);
+  });
+
+  it("keeps the project's own values alongside", () => {
+    const env = runnableEnv({ LOCAL_DATABASE_URL: "postgres://localhost/dev" }, from);
+
+    expect(env["LOCAL_DATABASE_URL"]).toBe("postgres://localhost/dev");
+    expect(env["PATH"]).toBe("/usr/bin");
+    expect(env["HOME"]).toBe("/home/t");
+  });
+
+  it("lets a recipe override one, because naming it was deliberate", () => {
+    // A recipe that allows PATH meant PATH. This is not a hole: the value comes
+    // from the operator's own environment either way, and the allowlist is
+    // about which of *those* the run may see.
+    expect(runnableEnv({ PATH: "/opt/toolchain/bin" }, from)["PATH"]).toBe("/opt/toolchain/bin");
+  });
+
+  it("carries nothing that was not set, rather than an empty string", () => {
+    const env = runnableEnv({}, { PATH: "/usr/bin" });
+
+    // `HOME: ""` is worse than no HOME: tools read it, believe it, and resolve
+    // paths against the filesystem root.
+    expect("HOME" in env).toBe(false);
+    expect(env["PATH"]).toBe("/usr/bin");
+  });
+
+  it("does not carry NODE_OPTIONS, which would inject behaviour into every child", () => {
+    const env = runnableEnv({}, { ...from, NODE_OPTIONS: "--require ./evil.js" });
+
+    // Anything a project genuinely needs belongs in `env.allow`, where a person
+    // wrote it down and a reviewer saw it.
+    expect("NODE_OPTIONS" in env).toBe(false);
   });
 });

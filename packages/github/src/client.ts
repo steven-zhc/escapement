@@ -54,6 +54,21 @@ export interface GitHubClient {
 
   listOpenIssues(): Promise<Issue[]>;
   getIssue(number: number): Promise<Issue>;
+
+  /**
+   * The current installation token, refreshed if it is about to expire.
+   *
+   * Exposed because git needs it and this client is the only thing that has it.
+   * Both managed repositories here are private, so without this every clone is
+   * an anonymous one — which fails at the first fetch, before anything else in a
+   * run has a chance to.
+   *
+   * A function rather than a value on purpose. An installation token lasts an
+   * hour and a run's wall limit is two, so a snapshot taken at the start would
+   * be expired by the time the integrator pushes. Callers hold *this*, and
+   * resolve it per git invocation.
+   */
+  token(): Promise<string>;
 }
 
 export interface CreateClientOptions {
@@ -120,6 +135,8 @@ export async function createGitHubClient(options: CreateClientOptions): Promise<
     repo,
     installation,
     request,
+    // The same source `request` uses, handed out so git can authenticate too.
+    token: tokenFor,
 
     async defaultBranch() {
       const raw = await request<{ default_branch: string }>("GET", `/repos/${owner}/${repo}`);
