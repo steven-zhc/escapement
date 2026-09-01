@@ -6,7 +6,7 @@
  * repository on an hourly cycle, and the two must never both claim a ticket.
  * Nominating by number is the safety rule, not a limitation of the plumbing.
  */
-import { loadProject, runOnce } from "@escapement/conductor";
+import { currentRecipe, loadProject, runOnce, runQueue } from "@escapement/conductor";
 import { githubApp, hasGitHubApp } from "@escapement/env";
 import { createGitHubClient } from "@escapement/github";
 import { createClaudeCodeRuntime } from "@escapement/runtime";
@@ -18,7 +18,14 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 export interface RunOptions {
   project: string;
-  issue: number;
+  /**
+   * One nominated issue. Undefined takes the queue instead, which is what
+   * "consecutive" in Phase 2's exit criterion means: the conductor picked the
+   * next one up, not a person typing another number.
+   */
+  issue?: number;
+  /** Stop after this many. `--max 2` is the exit criterion. */
+  max?: number;
   /** False for `--no-merge`: stop after the gates and ask before writing. */
   merge?: boolean;
   /** Defaults to the compiled hook in `packages/hook/bin`. */
@@ -67,11 +74,10 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
     repo: options.project,
   });
 
-  const result = await runOnce({
+  const common = {
     project,
     client,
     runtime: createClaudeCodeRuntime(),
-    issue: options.issue,
     // Both managed repositories are private. Without this every git command in
     // the run is an anonymous one, and the clone fails before anything else
     // gets a chance to. Passed as the client's token *function*, not a string:
@@ -79,9 +85,43 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
     token: () => client.token(),
     merge: options.merge,
     hookBinary,
-    prompt: prompt.replace("{{issue}}", String(options.issue)),
     promptVersion: `ticket@${prompt.length}`,
     log,
+  };
+
+  // ---- the queue -----------------------------------------------------------
+  if (options.issue === undefined) {
+    // The project's *state*, not its name — the recipe is resolved from the
+    // base recorded at `esc add`.
+    const resolved = await currentRecipe(project, client).catch(() => null);
+    if (!resolved) {
+      log(`could not read ${options.project}'s recipe — run esc doctor`);
+      return 1;
+    }
+
+    const outcome = await runQueue({
+      ...common,
+      prompt,
+      // The recipe's order, asked rather than stored: a project that reorders
+      // its kinds must not need a projection rebuild.
+      kinds: resolved.recipe.source.kinds,
+      ...(options.max === undefined ? {} : { max: options.max }),
+    });
+
+    const landed = outcome.ran.filter((r) => r.ok === true).length;
+    const held = outcome.ran.filter((r) => r.ok === "held").length;
+    const stopped = outcome.ran.length - landed - held;
+    log(`${outcome.ran.length} run(s): ${landed} landed, ${held} held, ${stopped} stopped (${outcome.stopped})`);
+    // Exit 0 unless something actually went wrong. An empty queue is not a
+    // failure, and neither is a bounded run reaching its bound.
+    return stopped > 0 ? 1 : 0;
+  }
+
+  // ---- one nominated issue -------------------------------------------------
+  const result = await runOnce({
+    ...common,
+    issue: options.issue,
+    prompt: prompt.replace("{{issue}}", String(options.issue)),
   });
 
   if (result.ok === true) {

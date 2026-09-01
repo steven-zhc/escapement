@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { approve, boardProjection, integrationStream, readBoard, reject, runOnce, waive, workItemStream } from "../src/index.ts";
+import { approve, boardProjection, discover, integrationStream, queueProjection, readBoard, reject, runOnce, runQueue, waive, workItemStream } from "../src/index.ts";
 import type { ProjectState } from "@escapement/core";
 
 const exec = promisify(execFile);
@@ -601,6 +601,105 @@ git add -A && git commit -q -m "fix the race"
       expect(outcome.ok).toBe(false);
       expect(outcome.detail).toContain("not in this project's approvers");
     }, 180_000);
+  });
+
+  /**
+   * Taking the queue, which is what "consecutive" in Phase 2's exit criterion
+   * means. The dangerous test is the second one.
+   */
+  describe("the scheduler", () => {
+    // Its own project. `runQueue` drains a project's queue, and every other
+    // test in this file leaves work items in PROJECT's — so sharing it would
+    // make these two assert on their neighbours' rows. The same isolation the
+    // live tests already needed.
+    const SCHED = `${PROJECT}sched`;
+    const schedProject: ProjectState = { ...project, project: SCHED };
+
+    const queued = async (refs: number[]) => {
+      // Discovery writes the work items; the projection turns them into queue
+      // rows. Both are real here — a fake queue would test nothing.
+      for (const ref of refs) {
+        await discover({
+          project: SCHED,
+          client: fakeClient({ getIssue: async () => issue2(ref), listOpenIssues: async () => [issue2(ref)] }),
+          recipe: (
+            await (await import("@escapement/config")).resolveRecipe(
+              async (path) => (path === ".escapement/config.yaml" ? RECIPE : null),
+              "develop",
+            )
+          ).recipe,
+          store,
+          only: [ref],
+        });
+      }
+      const runner = createProjectionRunner({ projection: queueProjection, store });
+      try {
+        await runner.start();
+      } finally {
+        await runner.close();
+      }
+    };
+
+    it("takes items itself, in order, without anyone naming them", async () => {
+      await queued([140, 141]);
+      const agent = await agentThat(`
+mkdir -p src && echo "export const q = $RANDOM;" > src/fix.ts
+git add -A && git commit -q -m "fix"
+`);
+
+      const outcome = await runQueue({
+        project: schedProject,
+        client: fakeClient({ getIssue: async (n: number) => issue2(n) }),
+        runtime: createClaudeCodeRuntime({ binary: agent }),
+        hookBinary,
+        prompt: "fix the race",
+        kinds: ["bug"],
+        max: 2,
+        merge: false,
+        home,
+        store,
+        remote: originPath,
+        gitEnv: { ...process.env, ...authored },
+      });
+
+      // Two, consecutively, and nobody typed a second number.
+      expect(outcome.ran).toHaveLength(2);
+      expect(outcome.stopped).toBe("max");
+      expect(new Set(outcome.attempted).size).toBe(2);
+    }, 300_000);
+
+    /**
+     * The one that matters. `runOnce` releases a failed item back into the
+     * queue, so the obvious loop takes it again immediately — forever, at the
+     * price of an agent call per pass. The old loop did a version of this: #58
+     * and #59 re-ran five times for roughly $29.
+     */
+    it("does not take the same failing item twice in one pass", async () => {
+      await queued([142]);
+      // Fails every time, and is released every time.
+      const agent = await agentThat(`echo "no commits from me"; exit 0`);
+
+      const outcome = await runQueue({
+        project: schedProject,
+        client: fakeClient({ getIssue: async (n: number) => issue2(n) }),
+        runtime: createClaudeCodeRuntime({ binary: agent }),
+        hookBinary,
+        prompt: "fix the race",
+        kinds: ["bug"],
+        home,
+        store,
+        remote: originPath,
+        gitEnv: { ...process.env, ...authored },
+      });
+
+      // One attempt, not an unbounded number of them.
+      expect(outcome.ran).toHaveLength(1);
+      expect(outcome.ran[0]?.ok).toBe(false);
+      // And it says *why* it stopped: the queue is not empty, everything left
+      // has been tried. A caller reading this as "all done" would be wrong,
+      // which is why it is not called `empty`.
+      expect(outcome.stopped).toBe("exhausted");
+    }, 300_000);
   });
 
   it("refuses before claiming anything when the recipe cannot be read", async () => {

@@ -92,5 +92,11 @@ export {
   type BoardGate,
 } from "./board.ts";
 export { runOnce, type RunOnceOptions, type RunOnceResult } from "./run-once.ts";
+export {
+  runQueue,
+  type ScheduleOptions,
+  type ScheduleResult,
+  type StoppedBecause,
+} from "./schedule.ts";
 export { prepareWorktree, type PrepareOptions, type PrepareResult } from "./prepare.ts";
 export { approve, reject, waive, type ApproveOptions, type ApproveResult } from "./approve.ts";

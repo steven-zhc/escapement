@@ -38,8 +38,10 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
     --base <branch>             default: the repository's own default branch
     --tier open|guarded|sandboxed
     --require <gate,gate>       gates the recipe may not remove
-  esc run --once <project> --issue <n>
-                                one nominated issue, discovery through merge
+  esc run <project>             take the queue, in the recipe's priority order
+    --issue <n>                 one nominated issue instead of the queue
+    --max <n>                   stop after n items (--max 2 is Phase 2's bar)
+    --once                      the same as --max 1
     --no-merge                  stop after the gates and ask before merging
   esc approve <project> --issue <n>
                                 merge what a held run produced, if its head has
@@ -167,20 +169,37 @@ async function main(argv: string[]): Promise<number> {
       return addCommand(rest);
     case "run": {
       const { flags } = parseFlags(rest);
-      const positional = rest.filter((a) => !a.startsWith("--") && a !== flags["issue"]);
+      const positional = rest.filter(
+        (a) => !a.startsWith("--") && a !== flags["issue"] && a !== flags["max"],
+      );
       const project = positional.find((p) => p !== "--once") ?? flags["project"];
-      const issue = Number(flags["issue"]);
-      if (!("once" in flags)) {
-        console.error("only `esc run --once` exists; unattended running is Phase 2 (#27)");
+      if (!project) {
+        console.error("esc run <project> [--issue <n>] [--max <n>] [--no-merge]");
         return 2;
       }
-      if (!project || !Number.isInteger(issue)) {
-        console.error("esc run --once <project> --issue <n>");
+
+      // `--once` with no `--issue` used to be the only mode. It now means the
+      // same as `--max 1`: take the queue, but stop after one.
+      const issue = "issue" in flags ? Number(flags["issue"]) : undefined;
+      if (issue !== undefined && !Number.isInteger(issue)) {
+        console.error("--issue takes a number");
         return 2;
       }
-      // `--no-merge` is absence of merging, so the flag's presence is the
-      // whole signal.
-      return runOnceCommand({ project, issue, merge: !("no-merge" in flags) });
+      const max =
+        "max" in flags ? Number(flags["max"]) : "once" in flags && issue === undefined ? 1 : undefined;
+      if (max !== undefined && (!Number.isInteger(max) || max < 1)) {
+        console.error("--max takes a positive number");
+        return 2;
+      }
+
+      return runOnceCommand({
+        project,
+        ...(issue === undefined ? {} : { issue }),
+        ...(max === undefined ? {} : { max }),
+        // `--no-merge` is absence of merging, so the flag's presence is the
+        // whole signal.
+        merge: !("no-merge" in flags),
+      });
     }
     case "approve": {
       const { positional, flags } = parseFlags(rest);
