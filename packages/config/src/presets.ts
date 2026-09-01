@@ -22,16 +22,35 @@ export type Preset = {
 
 export const PRESETS: Record<string, Preset> = {
   /**
-   * A pnpm workspace with submodules and a single `verify` script — the shape
-   * `nextloom-ai-admin` actually has, which is the only reason it is here.
+   * A pnpm workspace with submodules.
    *
-   * `submodules: true` is not a stylistic default. `git worktree add` does not
-   * populate submodules, and a worktree without them fails every test that
-   * imports one — which reads on the board as "the agent broke the tests".
+   * This used to claim it was "the shape `nextloom-ai-admin` actually has" and
+   * gate on `pnpm verify`. That repository has no `verify` script — it has
+   * `typecheck`, `lint` and `test` — so the preset described a repository I had
+   * imagined rather than one that exists, and anyone who wrote
+   * `extends: pnpm-workspace` would have had the gate die on a missing script.
+   * The lesson is in the comment as much as in the fix: a default derived from
+   * a repository has to be read off that repository.
+   *
+   * `pnpm install` is part of the gate because a gate runs in a freshly cut
+   * worktree and `git worktree add` copies no node_modules. Without it the
+   * first real command fails on a missing binary, which reads on the board as
+   * "the agent broke the build".
+   *
+   * `submodules: true` is not a stylistic default either. `git worktree add`
+   * does not populate submodules, and a worktree without them fails every test
+   * that imports one — which reads the same wrong way.
    */
   "pnpm-workspace": {
     repo: { submodules: true },
-    gates: [{ kind: "process", name: "build", run: "pnpm verify", timeout: "15m" }],
+    gates: [
+      {
+        kind: "process",
+        name: "build",
+        run: "pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test",
+        timeout: "15m",
+      },
+    ],
     runtime: { agent: "claude-code" },
   },
 };

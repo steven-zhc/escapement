@@ -207,12 +207,21 @@ repo: { base: develop }
 source: { kinds: [bug] }
 env: { plantAt: apps/web/.env.local }
 `;
+    // Deliberately spelled out by hand rather than read from PRESETS: the test
+    // is that two independent descriptions of the same run agree, and deriving
+    // one from the other would make it agree with itself. The cost is that
+    // changing the preset means changing this string, which is the correct
+    // amount of friction for changing what every extending recipe will do.
     const spelledOut = `
 version: 1
 repo: { base: develop, submodules: true }
 source: { kinds: [bug] }
 env: { plantAt: apps/web/.env.local }
-gates: [{ kind: process, name: build, run: pnpm verify, timeout: 15m }]
+gates:
+  - kind: process
+    name: build
+    run: pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test
+    timeout: 15m
 runtime: { agent: claude-code }
 `;
     const a = await resolveRecipe(reader(withPreset), "develop");
