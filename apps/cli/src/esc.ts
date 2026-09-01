@@ -19,7 +19,7 @@ import {
   type Projection,
 } from "@escapement/store";
 import type { Tier } from "@escapement/core";
-import { boardProjection, queueProjection, taskViewProjection } from "@escapement/conductor";
+import { boardProjection, taskViewProjection } from "@escapement/conductor";
 import { add } from "./add.ts";
 import { approveCommand } from "./approve.ts";
 import { formatReport, runDoctor } from "./doctor.ts";
@@ -31,7 +31,6 @@ const PROJECTIONS: Record<string, Projection> = {
   [taskViewProjection.name]: taskViewProjection,
   [boardProjection.name]: boardProjection,
   [guardTripsProjection.name]: guardTripsProjection,
-  [queueProjection.name]: queueProjection,
 };
 
 const USAGE = `esc — event-sourced scheduler for autonomous code agents

@@ -9,20 +9,15 @@ export {
 } from "./claim.ts";
 export {
   considerIssue,
-  discover,
   FOREIGN_LABEL_PREFIX,
   kindOf,
+  refreshQueue,
   workItemStream,
   type Considered,
-  type DiscoverOptions,
-  type DiscoveryResult,
+  type QueueRefresh,
+  type RefreshQueueOptions,
   type SkipReason,
 } from "./discover.ts";
-export {
-  queueProjection,
-  readQueue,
-  type QueueEntry,
-} from "./queue.ts";
 export {
   currentRecipe,
   listProjectStreams,
@@ -92,12 +87,15 @@ export {
   type BoardGate,
 } from "./board.ts";
 export {
+  DEFAULT_BACKOFF_MS,
   DEFAULT_RETENTION_DAYS,
   TASK_VIEW_TABLE,
+  readRunnable,
   readTasks,
   syncQueued,
   taskViewProjection,
   type ReadTasksOptions,
+  type RunnableOptions,
   type TaskCard,
   type TaskState,
 } from "./task-view.ts";

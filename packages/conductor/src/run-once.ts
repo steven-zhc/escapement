@@ -26,7 +26,7 @@ import type { GitHubClient } from "@escapement/github";
 import { type Runtime, missingForTier } from "@escapement/runtime";
 import { type EventStore, eventStore } from "@escapement/store";
 import { claimWorkItem, releaseWorkItem } from "./claim.ts";
-import { discover, workItemStream } from "./discover.ts";
+import { refreshQueue, workItemStream } from "./discover.ts";
 import type { GuardPolicy } from "./guard.ts";
 import { smokeTestFailClosed, writeHookWiring } from "./hook-config.ts";
 import { createHookServer } from "./hook-socket.ts";
@@ -147,22 +147,22 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
 
   if (missing.length > 0) {
     // Never silently downgrade. The refusal is an event on the work item so the
-    // board can say why nothing ran.
-    await discover({ project, client: options.client, recipe, store, only: [options.issue] });
+    // board can say why nothing ran — appended at whatever version the stream
+    // is at, including zero. Nothing precedes it now that discovery appends
+    // nothing, and a refusal nobody can read is the failure mode this whole
+    // file exists to remove.
     const at = (await store.read(workItemId)).length;
-    if (at > 0) {
-      await store.append(workItemId, at, [
-        {
-          type: "DispatchRefused",
-          actor: "conductor",
-          data: parsePayload("DispatchRefused", {
-            requiredTier: tier,
-            runtime: options.runtime.capabilities.id,
-            missing,
-          }),
-        },
-      ]);
-    }
+    await store.append(workItemId, at, [
+      {
+        type: "DispatchRefused",
+        actor: "conductor",
+        data: parsePayload("DispatchRefused", {
+          requiredTier: tier,
+          runtime: options.runtime.capabilities.id,
+          missing,
+        }),
+      },
+    ]);
     return {
       ok: false,
       workItemId,
@@ -173,27 +173,25 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   }
 
   // ---- 3. discover and claim ----------------------------------------------
-  const found = await discover({ project, client: options.client, recipe, store, only: [options.issue] });
-  const history = await store.read(workItemId);
-  if (history.length === 0) {
-    const why = found.skipped.find((s) => s.ref === options.issue)?.reason ?? "not discovered";
+  // Eligibility is asked, not looked up. Nothing was appended when this issue
+  // was first seen (0012), so there is no "was it discovered" to read — the
+  // recipe decides against the issue as GitHub reports it right now, which is
+  // also the only way a label edit takes effect without a second mechanism.
+  const found = await refreshQueue({ project, client: options.client, recipe, only: [options.issue] });
+  const ticket = found.runnable.find((r) => r.ref === String(options.issue));
+  if (!ticket) {
+    const why = found.skipped.find((s) => s.ref === options.issue)?.reason ?? "not runnable";
     return { ok: false, workItemId, runId: null, stage: "discover", detail: why };
   }
 
-  // Carried onto the claim, because the claim is now the only place a title
-  // enters the log (0012). Taken from the stream that was just read rather than
-  // from a second API call — and when discovery goes (#41) the queue row
-  // supplies the same two fields to the same argument.
-  const ticketMeta = history.find((e) => e.type === "WorkItemDiscovered")?.data as
-    | { title?: string; kind?: string }
-    | undefined;
-
   const runId = `run-${crypto.randomUUID()}`;
+  // The claim carries what the task is, because it is now the only place a
+  // title enters the log at all.
   const claim = await claimWorkItem(workItemId, {
     runId,
     store,
-    title: ticketMeta?.title ?? null,
-    kind: ticketMeta?.kind ?? null,
+    title: ticket.title,
+    kind: ticket.kind,
   });
   if (!claim.ok) {
     return {

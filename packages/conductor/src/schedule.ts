@@ -34,7 +34,7 @@ import type { GitHubClient } from "@escapement/github";
 import type { Runtime } from "@escapement/runtime";
 import type { EventStore } from "@escapement/store";
 import type { ProjectState } from "@escapement/core";
-import { readQueue } from "./queue.ts";
+import { readRunnable } from "./task-view.ts";
 import { type RunOnceResult, runOnce } from "./run-once.ts";
 import type { TokenSource } from "./worktree.ts";
 
@@ -109,28 +109,31 @@ export async function runQueue(options: ScheduleOptions): Promise<ScheduleResult
     if (options.signal?.aborted) return finish("aborted");
     if (options.max !== undefined && ran.length >= options.max) return finish("max");
 
-    const queue = await readQueue(name, options.kinds as never);
+    // Reads `task_view`: what GitHub last reported, minus what the log says is
+    // claimed, minus anything inside the backoff window. The backoff is the
+    // part that survives a restart, which the in-memory set below does not.
+    const queue = await readRunnable({ project: name, kinds: options.kinds });
     if (queue.length === 0) return finish("empty");
 
-    const next = queue.find((entry) => !attempted.has(entry.workItemId));
+    const next = queue.find((entry) => !attempted.has(entry.taskId));
     if (!next) {
       // The queue has items and every one of them has already been through this
       // pass. Retrying now would be the $29 loop.
       return finish("exhausted");
     }
 
-    const issue = Number(next.externalRef);
+    const issue = Number(next.issue);
     if (!Number.isInteger(issue)) {
       // A work item whose reference is not a number cannot be run by a path
       // that nominates issues by number. Marked attempted so the loop moves on
       // rather than seeing it at the top of the queue forever.
-      attempted.add(next.workItemId);
-      log(`skipping ${next.workItemId}: "${next.externalRef}" is not an issue number`);
+      attempted.add(next.taskId);
+      log(`skipping ${next.taskId}: "${next.issue}" is not an issue number`);
       continue;
     }
 
-    attempted.add(next.workItemId);
-    log(`taking ${next.workItemId} — ${next.title}`);
+    attempted.add(next.taskId);
+    log(`taking ${next.taskId} — ${next.title}`);
 
     const result = await runOnce({
       project: options.project,

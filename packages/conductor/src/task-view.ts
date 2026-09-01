@@ -216,8 +216,19 @@ export const taskViewProjection: Projection = {
 
         case "DispatchRefused": {
           const d = event.data as PayloadOf<"DispatchRefused">;
-          await set(ctx, event.streamId, seq, at, {
+          // An upsert, because this can be a task's first event: it refuses
+          // before anything is claimed, and nothing is appended when an issue
+          // is merely seen. An UPDATE would leave the refusal unreadable, which
+          // is the failure it exists to report.
+          const { project: p, issue: i } = splitTaskId(event.streamId);
+          await upsert(ctx, event.streamId, seq, at, {
+            project: p,
+            issue: i,
+            title: null,
+            kind: null,
             state: "waiting",
+          });
+          await set(ctx, event.streamId, seq, at, {
             note: `needs ${d.requiredTier}; ${d.runtime} is missing ${d.missing.join(", ")}`,
           });
           break;
@@ -582,6 +593,63 @@ export interface TaskCard {
   closedAt: Date | null;
   attempts: number;
   lastAttemptAt: Date | null;
+}
+
+/** Long enough that a failing ticket stops costing money; short enough to retry today. */
+export const DEFAULT_BACKOFF_MS = 60 * 60_000;
+
+export interface RunnableOptions {
+  project: string;
+  /** The recipe's priority order. Priority is asked, not stored. */
+  kinds: readonly string[];
+  /**
+   * Skip anything attempted inside this window.
+   *
+   * The whole of the loop guard. A failed run releases its task, a release is a
+   * completion event, and a completion event is what tells the conductor to
+   * pick up the next one — so without this the top of the queue is the ticket
+   * that just failed, forever, at agent prices. The old harness re-ran #58 and
+   * #59 five times for roughly $29 exactly this way.
+   *
+   * In the table rather than in memory on purpose: an in-memory set forgets on
+   * restart, and a daemon that crashes on a bad ticket would come back and
+   * spend the money again.
+   */
+  backoffMs?: number;
+  /** Injectable so a test does not have to wait an hour. */
+  now?: Date;
+  url?: string;
+}
+
+/**
+ * What the conductor may pick up next, best first.
+ *
+ * Reads `task_view` rather than a queue projection of its own: what is queued
+ * is what GitHub last reported minus what the log says is claimed, and both of
+ * those already land in this table.
+ */
+export async function readRunnable(options: RunnableOptions): Promise<TaskCard[]> {
+  const kinds = options.kinds.length > 0 ? [...options.kinds] : ["bug"];
+  const tasks = await readTasks({
+    project: options.project,
+    // Retention is about landed work; a queued task is never filtered by it.
+    retentionDays: 36_500,
+    ...(options.url === undefined ? {} : { url: options.url }),
+  });
+
+  const now = (options.now ?? new Date()).getTime();
+  const backoff = options.backoffMs ?? DEFAULT_BACKOFF_MS;
+
+  return tasks
+    .filter((t) => t.state === "queued")
+    .filter((t) => kinds.includes(t.kind))
+    .filter((t) => t.lastAttemptAt === null || now - t.lastAttemptAt.getTime() >= backoff)
+    .sort((a, b) => {
+      const byKind = kinds.indexOf(a.kind) - kinds.indexOf(b.kind);
+      if (byKind !== 0) return byKind;
+      // Numerically, not lexically: #402 comes before #409 and both before #4100.
+      return Number(a.issue) - Number(b.issue);
+    });
 }
 
 export interface ReadTasksOptions {

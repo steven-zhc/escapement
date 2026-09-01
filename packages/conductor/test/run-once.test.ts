@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { approve, boardProjection, discover, integrationStream, queueProjection, readBoard, reject, renderPrompt, runOnce, runQueue, waive, workItemStream } from "../src/index.ts";
+import { approve, integrationStream, readTasks, reject, renderPrompt, runOnce, runQueue, syncQueued, taskViewProjection, waive, workItemStream } from "../src/index.ts";
 import type { ProjectState } from "@escapement/core";
 
 const exec = promisify(execFile);
@@ -218,7 +218,7 @@ git -c user.name=agent -c user.email=a@example.invalid commit -qm 'fix the race'
 
     // ---- the event stream reads as a coherent story with no gaps ----
     const wi = (await store.read(workItemId())).map((e) => e.type);
-    expect(wi).toEqual(["WorkItemDiscovered", "WorkItemClaimed", "WorkItemLanded"]);
+    expect(wi).toEqual(["WorkItemClaimed", "WorkItemLanded"]);
 
     const run = (await store.read(result.runId)).map((e) => e.type);
     expect(run.slice(0, 2)).toEqual(["RunStarted", "RunFinished"]);
@@ -239,18 +239,20 @@ git -c user.name=agent -c user.email=a@example.invalid commit -qm 'fix the race'
   }, 240_000);
 
   it("shows the landed card on the board with its receipt", async () => {
-    const runner = createProjectionRunner({ projection: boardProjection, store });
+    const runner = createProjectionRunner({ projection: taskViewProjection, store });
     try {
       await runner.start();
-      const cards = await readBoard(PROJECT);
-      const card = cards.find((c) => c.externalRef === "117");
+      const cards = await readTasks({ project: PROJECT, retentionDays: 3650 });
+      const card = cards.find((c) => c.issue === "117");
 
       expect(card, "the work item never reached the board").toBeDefined();
-      expect(card!.column).toBe("landed");
-      expect(card!.mergeCommit).toBeTruthy();
-      expect(card!.run?.turns).toBe(7);
-      expect(card!.run?.costUsd).toBe(0.42);
-      expect(card!.gates.map((g) => g.gate)).toContain("build");
+      expect(card!.state).toBe("landed");
+      expect(card!.note).toBeTruthy();
+      expect(card!.turns).toBe(7);
+      expect(card!.costUsd).toBe(0.42);
+      // The count, not the verdicts: evidence is read from the stream when
+      // somebody opens the task.
+      expect(card!.gatesPassed).toBeGreaterThan(0);
     } finally {
       await runner.close();
     }
@@ -292,7 +294,7 @@ git -c user.name=agent -c user.email=a@example.invalid commit -qm 'wrong change'
     // Blocked with a question, not silently dropped — the board's "Waiting on
     // you" column is where a refusal goes.
     const wi = (await store.read(workItemStream(PROJECT, 118))).map((e) => e.type);
-    expect(wi).toEqual(["WorkItemDiscovered", "WorkItemClaimed", "WorkItemBlocked"]);
+    expect(wi).toEqual(["WorkItemClaimed", "WorkItemBlocked"]);
 
     const log = await exec("git", ["log", "--oneline", "develop"], { cwd: originPath });
     expect(log.stdout).not.toContain("wrong change");
@@ -616,28 +618,20 @@ git add -A && git commit -q -m "fix the race"
     const schedProject: ProjectState = { ...project, project: SCHED };
 
     const queued = async (refs: number[]) => {
-      // Discovery writes the work items; the projection turns them into queue
-      // rows. Both are real here — a fake queue would test nothing.
-      for (const ref of refs) {
-        await discover({
-          project: SCHED,
-          client: fakeClient({ getIssue: async () => issue2(ref), listOpenIssues: async () => [issue2(ref)] }),
-          recipe: (
-            await (await import("@escapement/config")).resolveRecipe(
-              async (path) => (path === ".escapement/config.yaml" ? RECIPE : null),
-              "develop",
-            )
-          ).recipe,
-          store,
-          only: [ref],
-        });
-      }
-      const runner = createProjectionRunner({ projection: queueProjection, store });
+      // What the conductor does: ask GitHub, write the runnable set into
+      // `task_view`. Nothing is appended — since 0012 the queue is not in the
+      // log, so seeding it by appending would be testing a path that no longer
+      // exists.
+      const runner = createProjectionRunner({ projection: taskViewProjection, store });
       try {
         await runner.start();
       } finally {
         await runner.close();
       }
+      await syncQueued(
+        SCHED,
+        refs.map((ref) => ({ ref: String(ref), title: `issue ${ref}`, kind: "bug" })),
+      );
     };
 
     it("takes items itself, in order, without anyone naming them", async () => {

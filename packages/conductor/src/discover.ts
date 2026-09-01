@@ -1,11 +1,14 @@
 /**
  * Discovery: GitHub becomes an *input source*, not a database.
  *
- * This is the one place in the system that reads a GitHub label, and it reads
- * them exactly once per work item — to learn that the item exists, what kind of
- * work it is, and whether something else already owns it. After
- * `WorkItemDiscovered` lands, the log is the authority and no label is consulted
- * for state again. That inversion is the whole of
+ * This is the one place in the system that reads a GitHub label — to learn that
+ * an item exists, what kind of work it is, and whether something else already
+ * owns it. Once a task is claimed the log is the authority and no label is
+ * consulted for state again.
+ *
+ * Since 0012 this appends nothing at all. The runnable set is written into
+ * `task_view` and the queue is simply what GitHub currently says, minus what
+ * the log says is claimed. That inversion is the whole of
  * doc/decisions/0001-event-sourcing.md: #35 carried `agent:blocked` and
  * `agent:review` at the same time because `--add-label` is set union, not a
  * transition, and nothing could have noticed.
@@ -17,9 +20,9 @@
  * discover it at all.
  */
 import type { Recipe } from "@escapement/config";
-import { type WorkKind, WorkKind as WorkKindSchema, parsePayload } from "@escapement/core";
+import { type WorkKind, WorkKind as WorkKindSchema } from "@escapement/core";
 import type { GitHubClient, Issue } from "@escapement/github";
-import { type EventStore, eventStore } from "@escapement/store";
+import { syncQueued } from "./task-view.ts";
 
 /** `wi-{project}-{n}`, the work item's own stream. */
 export function workItemStream(project: string, externalRef: string | number): string {
@@ -87,35 +90,46 @@ export function considerIssue(issue: Issue, recipe: Recipe): Considered {
   return { issue, skip: null };
 }
 
-export interface DiscoveryResult {
-  discovered: string[];
-  /** Every issue that was not discovered, with the reason. */
+export interface QueueRefresh {
+  /** Issues GitHub lists that the recipe will take. */
+  runnable: { ref: string; title: string; kind: string }[];
+  /** Every issue that was not runnable, with the reason. */
   skipped: { ref: number; reason: SkipReason }[];
 }
 
-export interface DiscoverOptions {
+export interface RefreshQueueOptions {
   project: string;
   client: GitHubClient;
   recipe: Recipe;
-  store?: EventStore;
-  /**
-   * Restricts discovery to specific issue numbers.
-   *
-   * Phase 1 runs against issues nominated by number rather than against the
-   * whole queue, because `agent-loop.sh` is still working the same repository.
-   */
+  /** Restricts the refresh to specific issue numbers. */
   only?: number[];
+  /** Injectable so a test does not need a database. */
+  sync?: typeof syncQueued;
 }
 
-export async function discover(options: DiscoverOptions): Promise<DiscoveryResult> {
+/**
+ * Ask GitHub what is runnable and write it into `task_view`.
+ *
+ * **Nothing is appended.** Which issues exist is GitHub's state, not
+ * Escapement's, and mirroring it into an append-only log meant one event per
+ * issue per pass to reproduce a fact that GitHub answers correctly on request
+ * ([0012](../../../doc/decisions/0012-one-task-view.md)). What Escapement
+ * decides — which one it claimed — is still an event, and still the whole of
+ * the mutual exclusion.
+ *
+ * The conductor calls this, never the board. A board that asked GitHub per
+ * render would exhaust the rate limit with a few tabs open and an event stream
+ * refreshing them; going through the projection means the board keeps reading
+ * one table and this stays the only caller that needs a token.
+ */
+export async function refreshQueue(options: RefreshQueueOptions): Promise<QueueRefresh> {
   const { project, client, recipe } = options;
-  const store = options.store ?? eventStore;
 
   const issues = options.only
     ? await Promise.all(options.only.map((n) => client.getIssue(n)))
     : await client.listOpenIssues();
 
-  const result: DiscoveryResult = { discovered: [], skipped: [] };
+  const result: QueueRefresh = { runnable: [], skipped: [] };
 
   for (const issue of issues) {
     const { skip } = considerIssue(issue, recipe);
@@ -123,35 +137,17 @@ export async function discover(options: DiscoverOptions): Promise<DiscoveryResul
       result.skipped.push({ ref: issue.number, reason: skip });
       continue;
     }
-
-    const stream = workItemStream(project, issue.number);
-    // Re-discovering is a no-op, not a duplicate event. The check is a read
-    // rather than an upsert because a work item's stream is its identity: if it
-    // has any history at all, it has been discovered.
-    const existing = await store.read(stream);
-    if (existing.length > 0) {
-      result.skipped.push({ ref: issue.number, reason: "already-discovered" });
-      continue;
-    }
-
-    await store.append(stream, 0, [
-      {
-        type: "WorkItemDiscovered",
-        actor: "github",
-        data: parsePayload("WorkItemDiscovered", {
-          project,
-          source: "github-issue",
-          externalRef: String(issue.number),
-          title: issue.title,
-          kind: kindOf(issue),
-          // The labels as they were at discovery, recorded because they are a
-          // fact about that moment — never read back to decide anything.
-          labels: issue.labels,
-        }),
-      },
-    ]);
-    result.discovered.push(stream);
+    result.runnable.push({
+      ref: String(issue.number),
+      title: issue.title,
+      // `considerIssue` already refused a null kind, so this is a string.
+      kind: kindOf(issue)!,
+    });
   }
+
+  // A partial refresh must not delete the rest of the queue: `only` means "look
+  // at these", not "these are all there is".
+  if (!options.only) await (options.sync ?? syncQueued)(project, result.runnable);
 
   return result;
 }

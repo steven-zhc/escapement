@@ -7,7 +7,7 @@
  * worked has a reason, and until now the reason was never written down anywhere.
  */
 import { hasGitHubApp, githubApp } from "@escapement/env";
-import { currentRecipe, loadProjects, readQueue } from "@escapement/conductor";
+import { currentRecipe, loadProjects, readRunnable, readTasks } from "@escapement/conductor";
 import { createGitHubClient } from "@escapement/github";
 import type { WorkKind } from "@escapement/core";
 
@@ -64,16 +64,24 @@ export async function status(options: StatusOptions = {}, log = console.log): Pr
       }
     }
 
-    const queue = await readQueue(name, kinds, { includeHeld: options.all });
-    if (queue.length === 0) {
+    // Runnable now, from `task_view`. `--all` widens it to everything the
+    // project has a row for, which is how you see what is running, held or
+    // landed rather than only what could start next.
+    const runnable = await readRunnable({ project: name, kinds });
+    const rows = options.all ? await readTasks({ project: name }) : runnable;
+
+    if (rows.length === 0) {
       log("  queue: empty");
       continue;
     }
 
-    log(`  queue: ${queue.filter((q) => q.heldBy === null).length} runnable`);
-    for (const entry of queue) {
-      const held = entry.heldBy ? `  [${entry.heldBy}]` : "";
-      log(`    #${entry.externalRef.padEnd(5)} ${entry.kind.padEnd(11)} ${entry.title}${held}`);
+    log(`  queue: ${runnable.length} runnable`);
+    for (const t of rows) {
+      // A task inside the backoff window is runnable-but-not-yet, and saying so
+      // is the difference between "nothing to do" and "not for a while".
+      const waiting = t.state === "queued" && !runnable.some((r) => r.taskId === t.taskId);
+      const note = t.state === "queued" ? (waiting ? "  [backing off]" : "") : `  [${t.state}]`;
+      log(`    #${t.issue.padEnd(5)} ${t.kind.padEnd(11)} ${t.title}${note}`);
     }
   }
   return 0;

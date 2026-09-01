@@ -2,17 +2,16 @@
  * Discovery, and the queue it feeds.
  *
  * `considerIssue` is pure, so most of the rules are testable without a database
- * or a network. The parts that append and project are run against the real
- * store, because "re-discovering is a no-op" is a claim about what is in the
- * log, not about what a function returned.
+ * or a network. `refreshQueue` gets the real store anyway, because "it appends
+ * nothing" is a claim about the log rather than about a return value.
  */
 import type { Recipe } from "@escapement/config";
 import type { GitHubClient, Issue } from "@escapement/github";
-import { createDb, createEventStore, createProjectionRunner, type Db, type EventStore } from "@escapement/store";
+import { createDb, createEventStore, type Db, type EventStore } from "@escapement/store";
 import pg from "pg";
 import { directDatabaseUrl } from "@escapement/env";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { considerIssue, discover, kindOf, queueProjection, readQueue, workItemStream } from "../src/index.ts";
+import { considerIssue, kindOf, refreshQueue, workItemStream } from "../src/index.ts";
 
 const recipe = {
   version: 1,
@@ -151,8 +150,13 @@ function track(streams: string[]): void {
   for (const s of streams) created.add(s);
 }
 
-describe("discover", () => {
-  it("appends one WorkItemDiscovered per eligible issue, and explains the rest", async () => {
+describe("refreshQueue", () => {
+  /**
+   * Nothing is appended any more. What is runnable is what GitHub lists that
+   * the recipe will take, written into `task_view` — so the assertion is about
+   * what was handed to the sync, not about what landed in the log.
+   */
+  it("reports what is runnable and explains every issue it passed over", async () => {
     const PROJECT = newProject();
     const issues = [
       issue({ number: 101, labels: ["bug"], title: "a race in the importer" }),
@@ -161,121 +165,66 @@ describe("discover", () => {
       issue({ number: 104, labels: [] }),
     ];
 
-    const result = await discover({ project: PROJECT, client: fakeClient(issues, PROJECT), recipe, store });
-    track(result.discovered);
+    const synced: unknown[] = [];
+    const result = await refreshQueue({
+      project: PROJECT,
+      client: fakeClient(issues, PROJECT),
+      recipe,
+      sync: (async (_p: string, list: unknown[]) => {
+        synced.push(list);
+        return { added: list.length, removed: 0 };
+      }) as never,
+    });
 
-    expect(result.discovered).toEqual([
-      workItemStream(PROJECT, 101),
-      workItemStream(PROJECT, 102),
-    ]);
+    expect(result.runnable.map((r) => r.ref)).toEqual(["101", "102"]);
+    expect(result.runnable[0]).toEqual({ ref: "101", title: "a race in the importer", kind: "bug" });
     expect(result.skipped).toEqual([
       { ref: 103, reason: "owned-by-another-agent" },
       { ref: 104, reason: "no-kind" },
     ]);
-
-    const events = await store.read(workItemStream(PROJECT, 101));
-    expect(events).toHaveLength(1);
-    expect(events[0]!.type).toBe("WorkItemDiscovered");
-    expect(events[0]!.actor).toBe("github");
-    expect((events[0]!.data as { title: string }).title).toBe("a race in the importer");
+    expect(synced).toHaveLength(1);
   });
 
-  it("re-discovering is a no-op, not a duplicate event", async () => {
+  it("appends nothing at all", async () => {
     const PROJECT = newProject();
     const issues = [issue({ number: 201, labels: ["bug"] })];
 
-    const first = await discover({ project: PROJECT, client: fakeClient(issues, PROJECT), recipe, store });
-    track(first.discovered);
-    const second = await discover({ project: PROJECT, client: fakeClient(issues, PROJECT), recipe, store });
+    await refreshQueue({
+      project: PROJECT,
+      client: fakeClient(issues, PROJECT),
+      recipe,
+      sync: (async () => ({ added: 0, removed: 0 })) as never,
+    });
 
-    expect(second.discovered).toEqual([]);
-    expect(second.skipped).toEqual([{ ref: 201, reason: "already-discovered" }]);
-    expect(await store.read(workItemStream(PROJECT, 201))).toHaveLength(1);
+    // The whole point of 0012: which issues exist is GitHub's state, and one
+    // event per issue per pass was reproducing a fact GitHub answers on demand.
+    expect(await store.read(workItemStream(PROJECT, 201))).toEqual([]);
   });
 
-  it("can be restricted to nominated issue numbers", async () => {
+  /**
+   * `only` means "look at these", not "these are all there is". Syncing on a
+   * partial refresh would delete every queued task the caller did not name.
+   */
+  it("does not touch the stored queue when it is restricted to some issues", async () => {
     const PROJECT = newProject();
     const issues = [
       issue({ number: 301, labels: ["bug"] }),
       issue({ number: 302, labels: ["bug"] }),
     ];
 
-    // Phase 1 runs against numbers you nominate, not against the queue.
-    const result = await discover({
+    let synced = 0;
+    const result = await refreshQueue({
       project: PROJECT,
       client: fakeClient(issues, PROJECT),
       recipe,
-      store,
       only: [302],
+      sync: (async () => {
+        synced += 1;
+        return { added: 0, removed: 0 };
+      }) as never,
     });
-    track(result.discovered);
 
-    expect(result.discovered).toEqual([workItemStream(PROJECT, 302)]);
-    expect(await store.read(workItemStream(PROJECT, 301))).toEqual([]);
-  });
-});
-
-describe("the queue projection", () => {
-  it("orders by the recipe's kinds, then oldest first", async () => {
-    const PROJECT = newProject();
-    const issues = [
-      issue({ number: 410, labels: ["feature"] }),
-      issue({ number: 402, labels: ["bug"] }),
-      issue({ number: 401, labels: ["feature"] }),
-      issue({ number: 409, labels: ["bug"] }),
-    ];
-    track((await discover({ project: PROJECT, client: fakeClient(issues, PROJECT), recipe, store })).discovered);
-
-    const runner = createProjectionRunner({ projection: queueProjection, store });
-    try {
-      await runner.start();
-
-      const queue = await readQueue(PROJECT, recipe.source.kinds);
-      // bug before feature because the recipe lists it first; #402 before #409
-      // numerically, not lexically.
-      expect(queue.map((q) => q.externalRef)).toEqual(["402", "409", "401", "410"]);
-      expect(queue.every((q) => q.heldBy === null)).toBe(true);
-    } finally {
-      await runner.close();
-    }
-  });
-
-  it("a claimed item leaves the queue, and a release brings it back", async () => {
-    const PROJECT = newProject();
-    const issues = [issue({ number: 501, labels: ["bug"] })];
-    const { discovered } = await discover({ project: PROJECT, client: fakeClient(issues, PROJECT), recipe, store });
-    track(discovered);
-    const stream = discovered[0]!;
-
-    const runner = createProjectionRunner({ projection: queueProjection, store });
-    try {
-      await runner.start();
-      expect((await readQueue(PROJECT, recipe.source.kinds)).some((q) => q.workItemId === stream)).toBe(true);
-
-      await store.append(stream, 1, [
-        {
-          type: "WorkItemClaimed",
-          actor: "conductor",
-          data: { runId: "run-x", worker: "test", leaseUntilMs: Date.now() + 60_000, title: null, kind: null },
-        },
-      ]);
-      await runner.stop();
-      await runner.start();
-
-      // It left because an event said so, not because a label was added.
-      expect((await readQueue(PROJECT, recipe.source.kinds)).some((q) => q.workItemId === stream)).toBe(false);
-      const held = await readQueue(PROJECT, recipe.source.kinds, { includeHeld: true });
-      expect(held.find((q) => q.workItemId === stream)?.heldBy).toBe("running");
-
-      await store.append(stream, 2, [
-        { type: "WorkItemReleased", actor: "conductor", data: { runId: "run-x", reason: "lease expired" } },
-      ]);
-      await runner.stop();
-      await runner.start();
-
-      expect((await readQueue(PROJECT, recipe.source.kinds)).some((q) => q.workItemId === stream)).toBe(true);
-    } finally {
-      await runner.close();
-    }
+    expect(result.runnable.map((r) => r.ref)).toEqual(["302"]);
+    expect(synced).toBe(0);
   });
 });
