@@ -12,12 +12,14 @@
   },
   "dependencies": {
     "@escapement/core": "workspace:*",
+    "picomatch": "^4.0.7",
     "yaml": "^2.8.1",
     "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "@types/picomatch": "^4.0.2"
   }
 }

@@ -374,6 +374,15 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
             wallMs: parseDuration(recipe.runtime.limits.wall),
           },
         },
+        policy: {
+          changedFiles: async () => {
+            const names = await git(["diff", "--name-only", `${worktree.baseSha}...HEAD`], {
+              ...{ token: options.token, env: options.gitEnv },
+              cwd: worktree.path,
+            });
+            return names.split("\n").filter(Boolean);
+          },
+        },
       });
       const pipeline = await runGatePipeline({
         gates,
@@ -402,32 +411,42 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       // end-to-end run fail.
       await removeWorktree({ project, runId, home }).catch(() => {});
 
-      // ---- 9. hold, if a person asked to see it first ----------------------
-      // After the push, so the branch is there to look at, and after the gates,
-      // so what is being approved is a diff someone has evidence about.
+      // ---- 9. hold, if anything asked for a person -------------------------
+      // Two things can ask: a gate whose verdict is `needs-approval` — the
+      // human gate, or a policy gate that saw a migration — and the operator,
+      // with `--no-merge`.
       //
-      // The approval is requested even when a gate refused. "The build is red,
-      // merge anyway" is a decision a person is allowed to make — that is what
-      // a waiver is for — and pre-empting it here would mean the flag silently
-      // means something different on a red run than on a green one.
-      if (options.merge === false) {
-        const gate = "merge";
-        const at = (await store.read(runId)).length;
-        await store.append(runId, at, [
-          {
-            type: "ApprovalRequested",
-            actor: "conductor",
-            data: parsePayload("ApprovalRequested", {
-              gate,
-              runId,
-              onSha: headSha,
-              question: pipeline.ok
-                ? `Merge ${branch} into ${base}? Every gate passed.`
-                : `Merge ${branch} into ${base} anyway? The ${pipeline.failedAt} gate refused.`,
-              artifacts: [`${branch}@${headSha}`],
-            }),
-          },
-        ]);
+      // **One path, deliberately.** #38 shipped `--no-merge` emitting
+      // `ApprovalRequested` precisely so that when the human gate arrived they
+      // would not become two vocabularies for one idea. The gate has already
+      // emitted its own request through the pipeline; the flag emits one here.
+      // Everything after this point is identical either way.
+      //
+      // The flag asks even when a gate refused. "The build is red, merge
+      // anyway" is a decision a person is allowed to make — that is what a
+      // waiver is for — and pre-empting it would make the flag mean something
+      // different on a red run than on a green one.
+      if (pipeline.heldAt !== null || options.merge === false) {
+        const gate = pipeline.heldAt ?? "merge";
+
+        if (pipeline.heldAt === null) {
+          const at = (await store.read(runId)).length;
+          await store.append(runId, at, [
+            {
+              type: "ApprovalRequested",
+              actor: "conductor",
+              data: parsePayload("ApprovalRequested", {
+                gate,
+                runId,
+                onSha: headSha,
+                question: pipeline.ok
+                  ? `Merge ${branch} into ${base}? Every gate passed.`
+                  : `Merge ${branch} into ${base} anyway? The ${pipeline.failedAt} gate refused.`,
+                artifacts: [`${branch}@${headSha}`],
+              }),
+            },
+          ]);
+        }
         // Blocked rather than released, the same as a refusal — a question for
         // a person belongs in "Waiting on you", not back in the queue where
         // another run could claim it and throw the question away. It also stops
@@ -438,7 +457,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
             type: "WorkItemBlocked",
             actor: "conductor",
             data: parsePayload("WorkItemBlocked", {
-              question: `held for approval to merge ${branch} into ${base}`,
+              question: `held at the ${gate} gate: ${branch} into ${base}`,
               needsFrom: "human",
               runId,
             }),

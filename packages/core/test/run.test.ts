@@ -196,7 +196,14 @@ describe("reduceRun", () => {
     expect(granted.gates["human"]!.verdict).toBe("passed");
   });
 
-  it("turns a revoked approval back into a failure", () => {
+  /**
+   * This asserted `failed` until #20. A withdrawn approval is not a gate that
+   * refused the diff — nothing refused anything, someone took an answer back —
+   * and the difference is what the card tells a person: "the build is broken"
+   * versus "this is waiting on you". Only one of those is true, and acting on
+   * the wrong one costs a person a search for a defect that does not exist.
+   */
+  it("returns a revoked approval to the gate, not to a refusal", () => {
     const e = makeStream("run-01JX");
     const s = reduceRun([
       e("RunStarted", started),
@@ -217,8 +224,11 @@ describe("reduceRun", () => {
       }),
     ]);
 
-    expect(s.gates["human"]!.verdict).toBe("failed");
-    expect(gatesOn(s).every((g) => g.verdict === "failed")).toBe(true);
+    expect(s.gates["human"]!.verdict).toBe("requested");
+    // And the run is waiting again, on the same commit, with the reason the
+    // person gave — not merged, not queued, not failed.
+    expect(s.lifecycle).toMatchObject({ status: "awaiting-approval", gate: "human", onSha: "sha-a" });
+    expect(s.lifecycle).toHaveProperty("question", expect.stringContaining("spotted a migration"));
   });
 
   it("keeps the receipt the old .jsonl could not be parsed for", () => {

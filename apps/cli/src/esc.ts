@@ -45,6 +45,7 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
                                 merge what a held run produced, if its head has
                                 not moved since the approval was asked for
     --note <text>               recorded with the approval
+    --reject <why>              withdraw instead: back to the gate, not merged
   esc status [project]          what is runnable, and what is holding the rest
     --all                       include items that have left the queue
   esc doctor                    check everything that can be checked
@@ -188,7 +189,12 @@ async function main(argv: string[]): Promise<number> {
         console.error("esc approve <project> --issue <n> [--note <text>]");
         return 2;
       }
-      return approveCommand({ project: positional[0], issue, note: flags["note"] });
+      return approveCommand({
+        project: positional[0],
+        issue,
+        note: flags["note"],
+        ...("reject" in flags ? { reject: flags["reject"] ?? "no reason given" } : {}),
+      });
     }
     case "status": {
       const { positional, flags } = parseFlags(rest);

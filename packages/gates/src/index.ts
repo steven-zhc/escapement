@@ -26,5 +26,7 @@ export {
   type AgentGateSpec,
   type ReviewIssue,
 } from "./agent-gate.ts";
+export { createHumanGate, type HumanGateSpec } from "./human-gate.ts";
+export { createPolicyGate, type PolicyGateDeps, type PolicyGateSpec } from "./policy-gate.ts";
 export { gatesFromRecipe, GateKindNotImplementedError, type GateDeps } from "./from-recipe.ts";
 export { runCommand, type CommandOutcome, type RunCommandOptions } from "./command.ts";

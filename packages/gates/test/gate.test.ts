@@ -204,14 +204,19 @@ describe("gatesFromRecipe", () => {
    * A pipeline that silently skipped the `human` gate because nothing implements
    * it would produce a green board for a change nobody approved.
    */
-  it("refuses a kind that is not implemented, naming the issue", () => {
-    expect(() => gatesFromRecipe([{ kind: "human", name: "approval" }])).toThrow(
-      GateKindNotImplementedError,
-    );
-    expect(() => gatesFromRecipe([{ kind: "human", name: "approval" }])).toThrow(/#20/);
+  it("builds every kind the schema allows", () => {
+    // All four exist now. The factory has an exhaustiveness check against the
+    // schema union, so a fifth kind is a type error rather than a gate that
+    // falls through and silently does nothing.
+    expect(gatesFromRecipe([{ kind: "human", name: "approval" }])).toHaveLength(1);
+    expect(
+      gatesFromRecipe([{ kind: "policy", name: "tamper", watch: ["**/x"], then: "fail" }], {
+        policy: { changedFiles: async () => [] },
+      }),
+    ).toHaveLength(1);
   });
 
-  it("refuses an agent gate with no reviewer, rather than skipping it", () => {
+  it("refuses a gate whose dependencies are missing, rather than skipping it", () => {
     // `agent` is implemented, but it needs a runtime, a ticket and a diff, and
     // callers that only want to know whether a recipe *parses* do not have
     // them. Absent deps refuse for the same reason an unbuilt kind does: a gate
@@ -222,5 +227,8 @@ describe("gatesFromRecipe", () => {
     expect(() => gatesFromRecipe([{ kind: "agent", name: "review", prompt: "p" }])).toThrow(
       /no reviewer was supplied/,
     );
+    expect(() =>
+      gatesFromRecipe([{ kind: "policy", name: "tamper", watch: ["**/x"], then: "fail" }]),
+    ).toThrow(/no file list was supplied/);
   });
 });

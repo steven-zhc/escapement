@@ -16,6 +16,8 @@ export interface ApproveCommandOptions {
   issue: number;
   note?: string;
   by?: string;
+  /** Withdraws instead of granting. The item goes back to the gate. */
+  reject?: string;
 }
 
 export async function approveCommand(
@@ -39,6 +41,27 @@ export async function approveCommand(
     repo: options.project,
   });
 
+  // From the project's policy, in Escapement's log — never from the managed
+  // repository, which could otherwise name itself as its own approver.
+  const approvers = project.approvers;
+  const by = options.by ?? `human:${userInfo().username}`;
+
+  if (options.reject !== undefined) {
+    const { reject } = await import("@escapement/conductor");
+    const outcome = await reject({
+      project: options.project,
+      issue: options.issue,
+      base: project.base ?? (await client.defaultBranch()),
+      client,
+      by,
+      approvers,
+      reason: options.reject,
+      log,
+    });
+    log(outcome.detail);
+    return outcome.ok ? 0 : 1;
+  }
+
   const result = await approveRun({
     project: options.project,
     issue: options.issue,
@@ -46,7 +69,8 @@ export async function approveCommand(
     client,
     // An approval is never anonymous. The local account is a weak claim, but it
     // is a true one, and it is what a single-machine deployment has (0007).
-    by: options.by ?? `human:${userInfo().username}`,
+    by,
+    approvers,
     note: options.note,
     token: () => client.token(),
     log,

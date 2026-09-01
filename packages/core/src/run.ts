@@ -367,14 +367,31 @@ export function applyRun(state: RunState, event: Envelope): RunState {
       };
     }
 
+    /**
+     * Back to the gate, not to a refusal and not to the queue.
+     *
+     * This set the verdict to `failed`, which says the gate refused the diff.
+     * It did not: someone withdrew an answer, and the question is open again.
+     * The difference is what a person sees on the card — "the build is broken"
+     * versus "this is waiting on you" — and only one of them is true.
+     *
+     * The work item stays blocked either way. Returning it to the queue would
+     * let another run claim it and throw the question away.
+     */
     case "ApprovalRevoked": {
       const d = event.data as PayloadOf<"ApprovalRevoked">;
       return {
         ...state,
         ...at,
+        lifecycle: {
+          status: "awaiting-approval",
+          gate: d.gate,
+          onSha: d.onSha,
+          question: `${d.by} withdrew the approval: ${d.reason}`,
+        },
         gates: withGate(state, {
           gate: d.gate,
-          verdict: "failed",
+          verdict: "requested",
           onSha: d.onSha,
           evidence: null,
           findings: [],

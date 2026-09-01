@@ -93,4 +93,4 @@ export {
 } from "./board.ts";
 export { runOnce, type RunOnceOptions, type RunOnceResult } from "./run-once.ts";
 export { prepareWorktree, type PrepareOptions, type PrepareResult } from "./prepare.ts";
-export { approve, type ApproveOptions, type ApproveResult } from "./approve.ts";
+export { approve, reject, type ApproveOptions, type ApproveResult } from "./approve.ts";

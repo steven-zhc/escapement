@@ -31,7 +31,20 @@ export interface ApproveOptions {
   client: GitHubClient;
   /** Recorded on the approval. A waiver is never anonymous, and neither is this. */
   by: string;
+  /**
+   * Who may answer, from the project's **policy** — Escapement's own log, never
+   * the managed repository. A recipe that could name its own approvers could
+   * approve itself, which is the same hole as a recipe that could lower its own
+   * containment tier.
+   *
+   * Empty means nobody has been named yet, and anyone may approve. That is the
+   * state a project is in before someone decides, and refusing every approval
+   * until then would make onboarding a chicken-and-egg problem.
+   */
+  approvers?: readonly string[];
   note?: string;
+  /** Withdraws an approval instead of granting one. See `reject` below. */
+  revoke?: { reason: string };
   token?: TokenSource;
   home?: string;
   gitEnv?: NodeJS.ProcessEnv;
@@ -68,6 +81,15 @@ export async function approve(options: ApproveOptions): Promise<ApproveResult> {
 
   const { gate, onSha } = run.lifecycle;
   const branch = `agent/${options.issue}`;
+
+  if (options.approvers && options.approvers.length > 0 && !options.approvers.includes(options.by)) {
+    return {
+      ok: false,
+      workItemId,
+      reason: "not-an-approver",
+      detail: `${options.by} is not in this project's approvers (${options.approvers.join(", ")})`,
+    };
+  }
 
   // The check that makes the approval mean anything. A verdict is about a diff,
   // and between the hold and now someone may have pushed to this branch —
@@ -148,4 +170,54 @@ export async function approve(options: ApproveOptions): Promise<ApproveResult> {
   ]);
   log(`landed ${merged.mergeCommit.slice(0, 7)} on ${options.base}`);
   return { ok: true, workItemId, runId, mergeCommit: merged.mergeCommit };
+}
+
+/**
+ * Withdrawing an approval, or refusing to give one.
+ *
+ * The item goes **back to the gate**, not back to the queue. The question is
+ * open again and the answer is still a person's; returning it to the queue
+ * would let another run claim it and throw the question away.
+ *
+ * Nothing is merged and nothing is deleted. The branch stays where it is, and
+ * the log carries both the request and the withdrawal — which is the whole
+ * reason a rejection is an event rather than a label being removed.
+ */
+export async function reject(
+  options: Omit<ApproveOptions, "revoke"> & { reason: string },
+): Promise<{ ok: boolean; workItemId: string; detail: string }> {
+  const store = options.store ?? eventStore;
+  const workItemId = workItemStream(options.project, options.issue);
+
+  const item = reduceWorkItem(await store.read(workItemId));
+  const runId = item.runs[item.runs.length - 1];
+  if (!runId) return { ok: false, workItemId, detail: `${workItemId} has never been run` };
+
+  const run = reduceRun(await store.read(runId));
+  if (run.lifecycle.status !== "awaiting-approval") {
+    return {
+      ok: false,
+      workItemId,
+      detail: `${runId} is ${run.lifecycle.status}, not waiting for approval`,
+    };
+  }
+
+  if (options.approvers && options.approvers.length > 0 && !options.approvers.includes(options.by)) {
+    return {
+      ok: false,
+      workItemId,
+      detail: `${options.by} is not in this project's approvers`,
+    };
+  }
+
+  const { gate, onSha } = run.lifecycle;
+  await store.append(runId, run.version, [
+    {
+      type: "ApprovalRevoked",
+      actor: options.by,
+      data: parsePayload("ApprovalRevoked", { gate, runId, onSha, by: options.by, reason: options.reason }),
+    },
+  ]);
+
+  return { ok: true, workItemId, detail: `${gate} on ${onSha.slice(0, 7)} was withdrawn by ${options.by}` };
 }

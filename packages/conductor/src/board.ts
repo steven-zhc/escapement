@@ -472,7 +472,14 @@ export async function readBoard(project?: string, url = databaseUrl()): Promise<
        from board b
        left join board_project p on p.project = b.project
        ${project ? "where b.project = $1" : ""}
-       order by b.project, nullif(regexp_replace(b.external_ref, '\\D', '', 'g'), '')::bigint`,
+       order by b.project,
+         -- "Waiting on you" is ordered oldest first, because it is the column
+         -- that stalls and the thing that has waited longest is the thing to do
+         -- next. Ascending updated_seq is exactly "least recently touched".
+         -- Null for every other column, so they keep falling through to the
+         -- ticket number.
+         case when b.col = 'waiting' then b.updated_seq end asc nulls last,
+         nullif(regexp_replace(b.external_ref, '\\D', '', 'g'), '')::bigint`,
       project ? [project] : [],
     );
 

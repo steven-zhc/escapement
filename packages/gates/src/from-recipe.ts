@@ -9,6 +9,8 @@
 import type { GateSpec } from "@escapement/config";
 import { type AgentGateDeps, createAgentGate } from "./agent-gate.ts";
 import type { Gate } from "./gate.ts";
+import { createHumanGate } from "./human-gate.ts";
+import { createPolicyGate, type PolicyGateDeps } from "./policy-gate.ts";
 import { createProcessGate } from "./process-gate.ts";
 
 /**
@@ -21,6 +23,7 @@ import { createProcessGate } from "./process-gate.ts";
  */
 export interface GateDeps {
   agent?: AgentGateDeps;
+  policy?: PolicyGateDeps;
 }
 
 export class GateKindNotImplementedError extends Error {
@@ -38,11 +41,6 @@ export class GateKindNotImplementedError extends Error {
   }
 }
 
-const NOT_YET: Record<string, string> = {
-  policy: "#19",
-  human: "#20",
-};
-
 export function gatesFromRecipe(specs: readonly GateSpec[], deps: GateDeps = {}): Gate[] {
   return specs.map((spec) => {
     if (spec.kind === "process") {
@@ -58,6 +56,31 @@ export function gatesFromRecipe(specs: readonly GateSpec[], deps: GateDeps = {})
       }
       return createAgentGate({ name: spec.name, prompt: spec.prompt }, deps.agent);
     }
-    throw new GateKindNotImplementedError(spec.name, spec.kind, NOT_YET[spec.kind] ?? "Phase 2");
+    if (spec.kind === "policy") {
+      if (!deps.policy) {
+        throw new GateKindNotImplementedError(
+          spec.name,
+          spec.kind,
+          "no file list was supplied to gatesFromRecipe",
+        );
+      }
+      // Compiles the globs here, so a bad pattern refuses at configuration time
+      // rather than becoming a watch that quietly matches nothing.
+      return createPolicyGate({ name: spec.name, watch: spec.watch, then: spec.then }, deps.policy);
+    }
+    if (spec.kind === "human") {
+      // Needs nothing: it asks, and the answer arrives later on the same stream.
+      return createHumanGate({ name: spec.name });
+    }
+
+    // Every kind in the schema is handled, so this is `never` and the compiler
+    // says so. Kept rather than deleted: adding a fifth kind should be a type
+    // error here, not a gate that falls through and does nothing.
+    const unreachable: never = spec;
+    throw new GateKindNotImplementedError(
+      (unreachable as { name: string }).name,
+      (unreachable as { kind: string }).kind,
+      "Phase 2",
+    );
   });
 }

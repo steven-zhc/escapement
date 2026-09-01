@@ -19,7 +19,15 @@
 import type { GateSpec } from "@escapement/config";
 import type { PayloadOf } from "@escapement/core";
 
-export type GateVerdict = "passed" | "failed";
+/**
+ * `needs-approval` is a third outcome, not a flavour of failure.
+ *
+ * A policy gate that sees a migration in the diff, and a human gate, both end
+ * the same way: nothing is wrong, and nothing may proceed until a person says
+ * so. Folding that into `failed` would put "the build is broken" on a card
+ * whose build is fine, and folding it into `passed` would merge it.
+ */
+export type GateVerdict = "passed" | "failed" | "needs-approval";
 
 export interface GateFinding {
   file: string;
@@ -62,15 +70,19 @@ export type GateEvent =
   | { type: "GateRequested"; data: PayloadOf<"GateRequested"> }
   | { type: "GateStarted"; data: PayloadOf<"GateStarted"> }
   | { type: "GatePassed"; data: PayloadOf<"GatePassed"> }
-  | { type: "GateFailed"; data: PayloadOf<"GateFailed"> };
+  | { type: "GateFailed"; data: PayloadOf<"GateFailed"> }
+  /** The same event `--no-merge` emits. One vocabulary for one idea. */
+  | { type: "ApprovalRequested"; data: PayloadOf<"ApprovalRequested"> };
 
 export interface PipelineResult {
-  /** True when every gate passed. */
+  /** True when every gate passed. Never true when one is waiting on a person. */
   ok: boolean;
   /** The gate that failed, when one did. */
   failedAt: string | null;
+  /** The gate waiting on a person, when one is. */
+  heldAt: string | null;
   results: { gate: string; verdict: GateVerdict; evidence: string }[];
-  /** Gates never reached because an earlier one failed. */
+  /** Gates never reached because an earlier one failed or is waiting. */
   skipped: string[];
 }
 
@@ -125,6 +137,23 @@ export async function runGatePipeline(options: PipelineOptions): Promise<Pipelin
       continue;
     }
 
+    if (result.verdict === "needs-approval") {
+      // Stops for the same reason a failure does — the gates after this one are
+      // about a diff that is not going anywhere yet — but it is not a failure,
+      // and the event says which.
+      await emit({
+        type: "ApprovalRequested",
+        data: { ...base, question: result.evidence, artifacts: [] },
+      });
+      return {
+        ok: false,
+        failedAt: null,
+        heldAt: gate.name,
+        results,
+        skipped: gates.slice(index + 1).map((g) => g.name),
+      };
+    }
+
     await emit({
       type: "GateFailed",
       data: { ...base, evidence: result.evidence, findings: result.findings },
@@ -132,10 +161,11 @@ export async function runGatePipeline(options: PipelineOptions): Promise<Pipelin
     return {
       ok: false,
       failedAt: gate.name,
+      heldAt: null,
       results,
       skipped: gates.slice(index + 1).map((g) => g.name),
     };
   }
 
-  return { ok: true, failedAt: null, results, skipped: [] };
+  return { ok: true, failedAt: null, heldAt: null, results, skipped: [] };
 }
