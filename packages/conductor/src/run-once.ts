@@ -354,7 +354,27 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       void proposedSha;
 
       // ---- 8. the gates ---------------------------------------------------
-      const gates = gatesFromRecipe(recipe.gates);
+      // The reviewer sees the ticket and the diff, and gets the diff from here
+      // because the gates package does not know about git and should not learn.
+      const gates = gatesFromRecipe(recipe.gates, {
+        agent: {
+          runtime: options.runtime,
+          issue: async () => {
+            const ticket = await options.client.getIssue(options.issue);
+            return { ref: String(ticket.number), title: ticket.title, body: ticket.body };
+          },
+          diff: () =>
+            git(["diff", `${worktree.baseSha}...HEAD`], {
+              ...{ token: options.token, env: options.gitEnv },
+              cwd: worktree.path,
+            }),
+          settingsPath: wiring.settingsPath,
+          limits: {
+            turns: recipe.runtime.limits.turns,
+            wallMs: parseDuration(recipe.runtime.limits.wall),
+          },
+        },
+      });
       const pipeline = await runGatePipeline({
         gates,
         context: { runId, onSha: headSha, cwd: worktree.path, env: runnableEnv(env.values) },

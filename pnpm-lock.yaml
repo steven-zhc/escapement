@@ -191,6 +191,9 @@ importers:
       '@escapement/core':
         specifier: workspace:*
         version: link:../core
+      '@escapement/runtime':
+        specifier: workspace:*
+        version: link:../runtime
     devDependencies:
       '@types/node':
         specifier: ^26.4.0

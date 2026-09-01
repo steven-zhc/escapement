@@ -143,6 +143,7 @@ export function createClaudeCodeRuntime(options: ClaudeCodeOptions = {}): Runtim
             turns: 0,
             durationMs: Date.now() - started,
             costUsd: null,
+            text: null,
             failure: { kind, detail },
             sessionId,
           });
@@ -161,6 +162,7 @@ export function createClaudeCodeRuntime(options: ClaudeCodeOptions = {}): Runtim
             turns: 0,
             durationMs: Date.now() - started,
             costUsd: null,
+            text: null,
             // Includes "claude is not installed", which must be an event and not
             // a stack trace nobody sees.
             failure: { kind: "crash", detail: err.message },
@@ -175,7 +177,15 @@ export function createClaudeCodeRuntime(options: ClaudeCodeOptions = {}): Runtim
           const costUsd = parsed?.total_cost_usd ?? null;
 
           if (parsed && code === 0 && parsed.is_error !== true) {
-            finish({ exitCode: code, turns, durationMs, costUsd, failure: null, sessionId });
+            finish({
+              exitCode: code,
+              turns,
+              durationMs,
+              costUsd,
+              text: parsed.result ?? null,
+              failure: null,
+              sessionId,
+            });
             return;
           }
 
@@ -184,6 +194,7 @@ export function createClaudeCodeRuntime(options: ClaudeCodeOptions = {}): Runtim
             turns,
             durationMs,
             costUsd,
+            text: parsed?.result ?? null,
             failure: {
               kind: "crash",
               // Whatever went wrong, something says so. A run that ends with no

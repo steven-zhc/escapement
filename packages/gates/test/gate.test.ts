@@ -209,6 +209,18 @@ describe("gatesFromRecipe", () => {
       GateKindNotImplementedError,
     );
     expect(() => gatesFromRecipe([{ kind: "human", name: "approval" }])).toThrow(/#20/);
-    expect(() => gatesFromRecipe([{ kind: "agent", name: "review", prompt: "p" }])).toThrow(/#18/);
+  });
+
+  it("refuses an agent gate with no reviewer, rather than skipping it", () => {
+    // `agent` is implemented, but it needs a runtime, a ticket and a diff, and
+    // callers that only want to know whether a recipe *parses* do not have
+    // them. Absent deps refuse for the same reason an unbuilt kind does: a gate
+    // that is silently not run is worse than a run that will not start.
+    expect(() => gatesFromRecipe([{ kind: "agent", name: "review", prompt: "p" }])).toThrow(
+      GateKindNotImplementedError,
+    );
+    expect(() => gatesFromRecipe([{ kind: "agent", name: "review", prompt: "p" }])).toThrow(
+      /no reviewer was supplied/,
+    );
   });
 });

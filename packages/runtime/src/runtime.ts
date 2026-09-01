@@ -58,6 +58,14 @@ export interface RunOutcome {
    * exists to make impossible.
    */
   failure: { kind: "timeout" | "crash" | "no-commits" | "guard-hard-stop"; detail: string } | null;
+  /**
+   * The model's final message.
+   *
+   * Kept because a gate that asks an agent a question needs the answer, and the
+   * runtime was throwing it away — cost and turn counts survived, the actual
+   * output did not. Null when the run produced nothing parseable.
+   */
+  text: string | null;
   /** The runtime's own session identifier, for finding its transcript. */
   sessionId: string;
 }

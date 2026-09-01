@@ -16,5 +16,15 @@ export {
   tail,
   type ProcessGateSpec,
 } from "./process-gate.ts";
-export { gatesFromRecipe, GateKindNotImplementedError } from "./from-recipe.ts";
+export {
+  buildReviewPrompt,
+  createAgentGate,
+  DIFF_LIMIT_BYTES,
+  parseFindings,
+  verdictFor,
+  type AgentGateDeps,
+  type AgentGateSpec,
+  type ReviewIssue,
+} from "./agent-gate.ts";
+export { gatesFromRecipe, GateKindNotImplementedError, type GateDeps } from "./from-recipe.ts";
 export { runCommand, type CommandOutcome, type RunCommandOptions } from "./command.ts";

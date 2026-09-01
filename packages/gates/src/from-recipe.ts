@@ -7,8 +7,21 @@
  * a run that will not start.
  */
 import type { GateSpec } from "@escapement/config";
+import { type AgentGateDeps, createAgentGate } from "./agent-gate.ts";
 import type { Gate } from "./gate.ts";
 import { createProcessGate } from "./process-gate.ts";
+
+/**
+ * What the kinds that are not pure processes need from the caller.
+ *
+ * Optional, because `esc doctor` and the config tests build gates purely to
+ * check that a recipe *can* be built. Absent deps make an `agent` gate refuse
+ * for the same reason an unimplemented kind does — loudly, rather than by
+ * quietly not running.
+ */
+export interface GateDeps {
+  agent?: AgentGateDeps;
+}
 
 export class GateKindNotImplementedError extends Error {
   override readonly name = "GateKindNotImplementedError";
@@ -26,15 +39,24 @@ export class GateKindNotImplementedError extends Error {
 }
 
 const NOT_YET: Record<string, string> = {
-  agent: "#18",
   policy: "#19",
   human: "#20",
 };
 
-export function gatesFromRecipe(specs: readonly GateSpec[]): Gate[] {
+export function gatesFromRecipe(specs: readonly GateSpec[], deps: GateDeps = {}): Gate[] {
   return specs.map((spec) => {
     if (spec.kind === "process") {
       return createProcessGate({ name: spec.name, run: spec.run, timeout: spec.timeout });
+    }
+    if (spec.kind === "agent") {
+      if (!deps.agent) {
+        throw new GateKindNotImplementedError(
+          spec.name,
+          spec.kind,
+          "no reviewer was supplied to gatesFromRecipe",
+        );
+      }
+      return createAgentGate({ name: spec.name, prompt: spec.prompt }, deps.agent);
     }
     throw new GateKindNotImplementedError(spec.name, spec.kind, NOT_YET[spec.kind] ?? "Phase 2");
   });
