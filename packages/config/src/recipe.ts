@@ -58,6 +58,30 @@ export const Recipe = z.object({
     submodules: z.boolean().default(false),
   }),
 
+  /**
+   * Getting the worktree workable before the agent starts. Ordered, and the
+   * first refusal stops the run.
+   *
+   * Optional because it is genuinely optional: a Go repository may need nothing
+   * at all. But `git worktree add` copies no `node_modules`, so for most of them
+   * the absence of this is the difference between an agent that can run the
+   * tests and one writing blind.
+   *
+   * Not a gate. A gate's verdict is about a commit — `onSha` — and a force-push
+   * invalidates it by arithmetic. A prepare step runs before the agent has
+   * written anything and holds no verdict about anything.
+   */
+  prepare: z
+    .array(
+      z.object({
+        name: z.string(),
+        run: z.string(),
+        /** Shorter than a gate's by default: installing is not verifying. */
+        timeout: z.string().default("10m"),
+      }),
+    )
+    .default([]),
+
   source: z.object({
     /** Also the priority order: earlier wins. */
     kinds: z.array(WorkKind).min(1),

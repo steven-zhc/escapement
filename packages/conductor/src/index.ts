@@ -89,3 +89,4 @@ export {
   type BoardGate,
 } from "./board.ts";
 export { runOnce, type RunOnceOptions, type RunOnceResult } from "./run-once.ts";
+export * from "./prepare.ts";

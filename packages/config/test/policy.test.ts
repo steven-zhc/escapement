@@ -137,6 +137,7 @@ runtime: { agent: claude-code }
         {
           version: 1,
           repo: { base: "develop", submodules: false },
+          prepare: [],
           source: { kinds: ["bug"], exclude: [] },
           env: { allow: [], plantAt: ".env" },
           gates: [{ kind: "process", name: "build", run: "x", timeout: "15m" }],
@@ -215,12 +216,16 @@ env: { plantAt: apps/web/.env.local }
     const spelledOut = `
 version: 1
 repo: { base: develop, submodules: true }
+prepare:
+  - name: install
+    run: pnpm install --frozen-lockfile
+    timeout: 10m
 source: { kinds: [bug] }
 env: { plantAt: apps/web/.env.local }
 gates:
   - kind: process
     name: build
-    run: pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test
+    run: pnpm typecheck && pnpm lint && pnpm test
     timeout: 15m
 runtime: { agent: claude-code }
 `;

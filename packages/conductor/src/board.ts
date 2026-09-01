@@ -185,6 +185,39 @@ export const boardProjection: Projection = {
         }
 
         // ---- the run's stream ----
+        /**
+         * The first event a run writes, when a recipe declares any preparation.
+         * It creates the run→card link that `viaRun` needs, because everything
+         * below assumes `RunStarted` did that and prepare happens before it.
+         *
+         * The card moves to `running` here rather than at `RunStarted`: a
+         * ten-minute install is work in flight, and leaving the card in `queued`
+         * for it would say nothing is happening while something is.
+         */
+        case "PreparationStarted": {
+          const d = event.data as PayloadOf<"PreparationStarted">;
+          await ctx.query(
+            `insert into board_run (run_id, work_item_id) values ($1, $2)
+             on conflict (run_id) do update set work_item_id = excluded.work_item_id`,
+            [event.streamId, d.workItemId],
+          );
+          await viaRun(ctx, event.streamId, seq, { col: "running", run_id: event.streamId });
+          break;
+        }
+
+        case "PreparationFailed": {
+          const d = event.data as PayloadOf<"PreparationFailed">;
+          await viaRun(ctx, event.streamId, seq, {
+            col: "waiting",
+            // Not `run-failed`: no agent ever ran. The card has to say the
+            // worktree could not be made workable, which is a different problem
+            // with a different fix.
+            refusal: d.timedOut ? "prepare-timed-out" : "prepare-failed",
+            refusal_detail: `the ${d.step} step: ${d.evidence}`,
+          });
+          break;
+        }
+
         case "RunStarted": {
           const d = event.data as PayloadOf<"RunStarted">;
           await ctx.query(

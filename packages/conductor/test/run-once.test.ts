@@ -317,6 +317,71 @@ git -c user.name=agent -c user.email=a@example.invalid commit -qm 'wrong change'
     if (!result.ok) expect(result.stage).not.toBe("recipe");
   }, 120_000);
 
+  /**
+   * The point of the stage, stated as a test: whatever prepare does, the agent
+   * is looking at afterwards. Before it existed the agent got a worktree with no
+   * node_modules and could not run the repository's own tests — it wrote blind,
+   * and nothing said so until a gate failed at the very end.
+   *
+   * Here prepare writes a file and the agent refuses unless it is there.
+   */
+  it("runs prepare before the agent, so the agent sees a worktree that works", async () => {
+    const recipe = RECIPE.replace(
+      "source:",
+      'prepare:\n  - { name: install, run: "echo ready > .prepared", timeout: 1m }\nsource:',
+    );
+    const agent = await agentThat(`
+test -f .prepared || { echo "prepare did not run before me"; exit 1; }
+mkdir -p src && echo "export const x = 1;" > src/fix.ts
+git add -A && git commit -q -m "fix the race"
+`);
+
+    const result = await runOnce({
+      ...options(agent),
+      issue: 122,
+      client: fakeClient({ recipe, getIssue: async () => ({ ...issue, number: 122 }) }),
+    });
+
+    expect(result.ok).toBe(true);
+
+    const events = (await store.read(result.runId!)).map((e) => e.type);
+    // Ordering is the assertion. Prepare finishes before the run begins.
+    expect(events.indexOf("PreparationPassed")).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf("PreparationPassed")).toBeLessThan(events.indexOf("RunStarted"));
+  }, 180_000);
+
+  it("refuses at prepare without starting the agent, and says which step", async () => {
+    const recipe = RECIPE.replace(
+      "source:",
+      'prepare:\n  - { name: install, run: "echo could not resolve dependency; exit 1", timeout: 1m }\nsource:',
+    );
+    // If this ever runs, the test fails loudly rather than quietly passing.
+    const agent = await agentThat(`echo "the agent must not have started"; exit 1`);
+
+    const result = await runOnce({
+      ...options(agent),
+      issue: 123,
+      client: fakeClient({ recipe, getIssue: async () => ({ ...issue, number: 123 }) }),
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.stage).toBe("prepare");
+    // The log tail, not just "it failed". A card has to be workable without
+    // leaving it.
+    expect(result.detail).toContain("could not resolve dependency");
+
+    const events = (await store.read(result.runId!)).map((e) => e.type);
+    expect(events).toContain("PreparationFailed");
+    // The whole cost argument: nothing expensive happened.
+    expect(events).not.toContain("RunStarted");
+
+    // And the work item goes back rather than sitting claimed by a run that is
+    // over — the same rule every other refusal follows.
+    const item = await store.read(workItemStream(PROJECT, 123));
+    expect(item.map((e) => e.type)).toContain("WorkItemReleased");
+  }, 180_000);
+
   it("refuses before claiming anything when the recipe cannot be read", async () => {
     const result = await runOnce({
       ...options(await agentThat("true")),

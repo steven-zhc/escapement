@@ -16,6 +16,7 @@ import type { Recipe } from "./recipe.ts";
 /** What a preset may fill in. Everything is optional; the recipe always wins. */
 export type Preset = {
   repo?: Partial<Recipe["repo"]>;
+  prepare?: Recipe["prepare"];
   gates?: Recipe["gates"];
   runtime?: Partial<Recipe["runtime"]>;
 };
@@ -32,10 +33,9 @@ export const PRESETS: Record<string, Preset> = {
    * The lesson is in the comment as much as in the fix: a default derived from
    * a repository has to be read off that repository.
    *
-   * `pnpm install` is part of the gate because a gate runs in a freshly cut
-   * worktree and `git worktree add` copies no node_modules. Without it the
-   * first real command fails on a missing binary, which reads on the board as
-   * "the agent broke the build".
+   * The install is a `prepare` step, not part of the gate. It was in the gate
+   * briefly, which fixed the gate and left the agent holding the same empty
+   * worktree — unable to run the tests it was being asked to keep green.
    *
    * `submodules: true` is not a stylistic default either. `git worktree add`
    * does not populate submodules, and a worktree without them fails every test
@@ -43,11 +43,12 @@ export const PRESETS: Record<string, Preset> = {
    */
   "pnpm-workspace": {
     repo: { submodules: true },
+    prepare: [{ name: "install", run: "pnpm install --frozen-lockfile", timeout: "10m" }],
     gates: [
       {
         kind: "process",
         name: "build",
-        run: "pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm test",
+        run: "pnpm typecheck && pnpm lint && pnpm test",
         timeout: "15m",
       },
     ],
@@ -110,6 +111,10 @@ export function applyPreset(raw: unknown): PresetApplied {
       ...rest,
       repo: section("repo"),
       runtime: section("runtime"),
+      // Arrays replace rather than concatenate, for both of these. A recipe
+      // that lists its own steps means *those* steps; silently appending the
+      // preset's would be a way to acquire work nobody wrote down.
+      prepare: recipe["prepare"] ?? preset.prepare,
       gates: recipe["gates"] ?? preset.gates,
     },
     preset: name,

@@ -31,6 +31,7 @@ import type { GuardPolicy } from "./guard.ts";
 import { smokeTestFailClosed, writeHookWiring } from "./hook-config.ts";
 import { createHookServer } from "./hook-socket.ts";
 import { integrate } from "./integrate.ts";
+import { prepareWorktree } from "./prepare.ts";
 import { policyOf } from "./projects.ts";
 import type { ProjectState } from "@escapement/core";
 import { DEFAULT_PRODUCTION_PATTERNS, filterEnv, git, provisionWorktree, removeWorktree, stateDir } from "./worktree.ts";
@@ -197,6 +198,33 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       return { ok: false, workItemId, runId, stage: "hook", detail: smoke.detail };
     }
 
+    // ---- 6. prepare: make the worktree workable, or refuse for free --------
+    // After the hook smoke test, which costs milliseconds — a broken hook should
+    // not take a ten-minute install to discover. Before the agent, which is the
+    // whole point: everything past here assumes the agent can run this
+    // repository's own commands, and until this stage existed that assumption
+    // was simply false.
+    const prepared = await prepareWorktree({
+      runId,
+      workItemId,
+      cwd: worktree.path,
+      env: env.values,
+      steps: recipe.prepare,
+      store,
+      at: 0,
+      log,
+    });
+    if (!prepared.ok) {
+      await release(`prepare failed at ${prepared.step}`);
+      return {
+        ok: false,
+        workItemId,
+        runId,
+        stage: "prepare",
+        detail: `the ${prepared.step} step ${prepared.timedOut ? "timed out" : "refused"}:\n${prepared.detail}`,
+      };
+    }
+
     const guard: GuardPolicy = { base, productionPatterns: DEFAULT_PRODUCTION_PATTERNS };
     let proposedSha: string | null = null;
 
@@ -210,8 +238,10 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     await server.listen();
 
     try {
-      // ---- 6. RunStarted, then the agent --------------------------------
-      await store.append(runId, 0, [
+      // ---- 7. RunStarted, then the agent --------------------------------
+      // Not version 0 any more: prepare wrote first. Asserting 0 here would
+      // have failed the moment a recipe declared a single prepare step.
+      await store.append(runId, prepared.version, [
         {
           type: "RunStarted",
           actor: "conductor",
@@ -226,7 +256,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
           }),
         },
       ]);
-      server.register(runId, guard, 1, promptVersion);
+      server.register(runId, guard, prepared.version + 1, promptVersion);
 
       const outcome = await options.runtime.run({
         runId,
