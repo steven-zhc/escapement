@@ -15,7 +15,7 @@ Two sequencing constraints drive the whole shape:
 | | Phase | Exit criterion |
 |---|---|---|
 | 0 | System scaffold | An event round-trips through Postgres and a projection rebuilds from the log · **done** |
-| 1 | Minimum runnable unit | One real admin ticket goes discovery → merge with `esc run --once`, supervised |
+| 1 | Minimum runnable unit | One real admin ticket goes discovery → merge with `esc run --once`, supervised · **done 2026-09-01** |
 | 2 | Take over admin | Escapement works admin unattended for a week; `agent-loop.sh` is retired |
 | 3 | Self-hosting | Escapement lands a change to its own repository, through its own gates |
 | 4 | Multi-project | A second repository runs with no code change, only a descriptor |
@@ -72,25 +72,70 @@ the two must not both hold `agent:wip` on the same issue — Phase 1 runs agains
 **Exit criterion.** A real admin issue is merged into `develop` by Escapement,
 and the board shows it in Landed with its receipt.
 
-**Status: the machinery is built and #7–#17 are closed; the exit criterion is
-not met.** `esc run --once` takes an issue from discovery to a merge, and an
-end-to-end test does exactly that against a real git remote, the real compiled
-hook on a real socket, real gates, the real merge lane and the real board — with
-GitHub itself as the only stand-in. What is missing is a **GitHub App**, which a
-person has to create, give a private key, and install on the repository. Until
-then nothing has run against `nextloom-ai-admin` and the criterion is a claim
-rather than a fact.
+**Status: met, 2026-09-01.** `nextloom-ai-admin` [#155][a155] was taken from a
+GitHub issue to `be25a20` on `develop` by Escapement — recipe from `origin`,
+claim, worktree from the mirror, `pnpm install`, Claude Code, the build gate
+(`pnpm typecheck && pnpm lint && pnpm test`, green in 22.3s), a hold at the
+merge gate, an approval clicked on the board, and the merge lane under its
+advisory lock. 13 turns, $0.86. [#120][a120] landed the same way at 46 turns and
+$4.22.
+
+It took four attempts and each one bought a defect that no test had:
+
+| Attempt | Died at | Cause |
+|---|---|---|
+| 1 | agent, 30 turns, $1.11 | The prompt said "read the issue" and gave a number. There was no `gh` to read it with. |
+| 2 | agent, 45 turns, $3.35 | No `--permission-mode`, so `-p` refused every write and could not prompt. The guard denied nothing; nothing reached the guard. |
+| 3 | landed | — |
+| 4 | landed | — |
+
+The gap between attempts 2 and 3 is the whole lesson of this phase. Attempt 2's
+log recorded fifteen `RunTouchedFile` events with `op: "write"` against a
+worktree the agent had not modified — `PostToolUse` was recording every `Read`.
+The system was reporting work that had not happened, which is worse than
+reporting nothing, and it is the failure mode the log exists to prevent.
+
+**Cost discipline is the other lesson.** #120 is a feature and cost $4.22 per
+attempt to learn one thing about the pipeline. #155 was a text-only change,
+scoped in advance to nine files with the six that could not work named as out of
+scope, and cost $0.86. The pipeline is what was under test; the agent was not.
+Test it with the cheapest ticket that exercises the same eight steps.
+
+[a155]: https://github.com/steven-zhc/nextloom-ai-admin/issues/155
+[a120]: https://github.com/steven-zhc/nextloom-ai-admin/issues/120
 
 ## Phase 2 — Take over admin
 
-**Goal.** Everything that turns one supervised run into an unattended system: the
-remaining three gate kinds, human approval from the board, GitHub write-back
-through the outbox, notifications, crash recovery, and webhooks.
+**Goal.** Everything that turns one supervised run into an unattended system.
 
 This is where the board stops being a status page. The old loop's review queue
 reached 45 items growing at 14 a day against zero processed, because working it
 meant leaving the tool. If Phase 2 ships and that number does not move, the
 bottleneck was never tooling — which is worth knowing.
+
+**Re-planned 2026-09-01, after Phase 1 landed.** Four gate kinds and the board's
+approve / reject / waive were built and are done. What replaced them in this
+phase is a change of shape, recorded in [0012](decisions/0012-one-task-view.md)
+and [0013](decisions/0013-daemon-hosts-the-work.md): one `TaskView` instead of
+three projections, the queue read from GitHub instead of mirrored into the log,
+and a daemon that holds the conductor and the projection follower while the UI
+controls it and watches it.
+
+The prompt for that change was a small incident with a large lesson. Two work
+items merged into `develop` for real while their cards sat in "waiting on you",
+because nothing was advancing the projections and nothing said so. The operator
+saw a button that did nothing. Every item in this phase is now judged against
+whether it would have made that visible.
+
+| Stage | What it delivers | Done when |
+|---|---|---|
+| **2a** | The minimum runnable daemon: one lock, the projection follower, `TaskView`, the UI reading it | An issue goes queue → landed and the card moves on its own, with nobody running a command |
+| **2b** | Control and liveness: drain / pause / stop / run-now through the log, `daemon_status` heartbeat on the board | The board can stop the daemon taking work, and always says whether it is up |
+| **2c** | Robustness: attempt backoff, `Reconciled` at startup, webhooks | A failed ticket does not re-run in a loop, and a crash leaves nothing stuck |
+| **2d** | Everything deferred on purpose: caching, retention, notifications, the outbox | — |
+
+Stage 2a is the bar for "the model is running". Nothing that is an optimisation
+belongs before it.
 
 **Cutover.** `agent-loop.sh` is retired at the end, not the start. Both systems
 run in parallel first, with Escapement on a subset of labels, so a failure has

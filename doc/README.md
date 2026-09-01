@@ -24,6 +24,8 @@ Three kinds of thing live here, and the distinction matters.
 | [0009](decisions/0009-two-connections.md) | Two connection strings: pooled, and session mode | accepted |
 | [0010](decisions/0010-source-runs-unbuilt.md) | The source runs unbuilt, so it obeys strip-only rules | accepted |
 | [0011](decisions/0011-hook-latency-is-runtime-startup.md) | The hook's 20ms budget is Bun's startup, and is not met | accepted |
+| [0012](decisions/0012-one-task-view.md) | One `TaskView`, and the queue leaves the log | accepted |
+| [0013](decisions/0013-daemon-hosts-the-work.md) | The daemon holds the work; the UI controls it | accepted |
 
 ## Experiments
 
