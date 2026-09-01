@@ -22,22 +22,157 @@ discovery through claim, worktree, guard, agent, gates and the merge lane, and
 the board shows the landed card with its receipt.
 
 **Phase 1's exit criterion is not met.** It requires a real `nextloom-ai-admin`
-issue merged into `develop`, and nothing has run against a real repository yet —
-that needs a **GitHub App**, which is a human step. See
-[Connecting GitHub](#connecting-github) below, then
-[`doc/roadmap.md`](doc/roadmap.md) for the phases and
+issue merged into `develop`, and nothing has run against a real repository yet.
+The App is configured and a read-only preflight against the real installation
+passes; what remains is committing that repository's recipe and running one
+ticket under supervision.
+
+**Nothing here runs unattended, deliberately.** `esc run --once` merges as soon
+as its gates pass, and the human gate that should sit in front of that merge is
+Phase 2 ([#20], [#21]). Watch the runs until it exists.
+
+See [`doc/roadmap.md`](doc/roadmap.md) for the phases and
 [`doc/README.md`](doc/README.md) for what is settled and what is open.
+
+## How it fits together
+
+There are two sides, and almost everything confusing about the configuration
+comes from not knowing which side a thing is on.
+
+**Escapement runs on one machine of yours.** It owns a Postgres database, a
+clone of each repository it manages, and the agent processes it starts.
+
+**The repositories it manages live on GitHub and stay ordinary.** Nothing is
+installed in them. There is no bot account, no webhook, no CI job, no label
+state machine — one committed file, `.escapement/config.yaml`, and that is all.
+If you deleted Escapement tomorrow the managed repository would not notice.
+
+```mermaid
+flowchart TB
+  subgraph github["GitHub"]
+    repo["<b>managed repository</b><br/>issues, branches,<br/>.escapement/config.yaml"]
+  end
+
+  subgraph yours["your machine"]
+    cond["<b>conductor</b><br/>discover → claim → worktree →<br/>run → gate → integrate"]
+    agent["<b>agent runtime</b><br/>claude-code, in a worktree<br/>of its own"]
+    hook["<b>esc-hook</b><br/>allow or deny<br/>each tool call"]
+    log[("<b>event log</b><br/>Postgres, append-only")]
+    cli["<b>esc</b><br/>the CLI"]
+    board["<b>board</b><br/>the web UI"]
+  end
+
+  repo -- "issues, recipe" --> cond
+  cond -- "branch, merge" --> repo
+  cond --> agent
+  agent <--> hook
+  cond --> log
+  agent --> log
+  hook --> log
+  log --> board
+  cli <--> log
+  cli --> cond
+```
+
+The log in the middle is the point. The conductor, the agent, the hook and the
+gates all write to it, and the board and the CLI only read from it. Nothing has
+private state, so *what state is this ticket in*, *why did this not merge* and
+*what is waiting on me* are all the same query against the same table. The bash
+harness this replaces kept those three answers in GitHub labels, issue comments
+and an unparsed log file respectively, which is why it could answer none of them.
+
+### The pieces
+
+| | What it is | What it does not do |
+|---|---|---|
+| **conductor** | The scheduler. Finds work, claims it, cuts the worktree, starts the agent, runs the gates, merges. Everything it decides, it appends. | Never edits code itself. |
+| **agent runtime** | The thing that actually writes the code — Claude Code today, in a worktree and an environment of its own. | Never talks to GitHub, and never sees a secret the recipe did not name. |
+| **esc-hook** | A small binary Claude Code calls before every tool use. Exit 0 allows, exit 2 denies. Fails closed on anything it cannot understand. | Not a security boundary — see below. |
+| **gates** | Named checks that produce a verdict about a *specific commit*. `process` gates run a command; `agent`, `policy` and `human` gates are Phase 2. | Not tied to a ticket, so a force-push invalidates a verdict by arithmetic. |
+| **board** | Reads the log and shows one card per work item, with its cost, its guard trips and its gate verdicts. | Read-only today. Approve/reject is Phase 2 ([#21], [#22]). |
+| **esc** | Configures projects and drives runs. `esc run --once` is supervised, one nominated issue. | Unattended running is Phase 2 ([#27]). |
+
+The hook deserves the caveat it gets. It is a *coordination* mechanism, not a
+sandbox: an agent that wants to get around it can. The three boundaries that
+actually hold are the filtered environment, the isolated worktree and the
+runtime sandbox — see [ADR 0007](doc/decisions/0007-dual-runtime.md).
+
+### What you configure, and why each one exists
+
+Four things, and they are on different sides of the line.
+
+| | Where it lives | Why it exists |
+|---|---|---|
+| **A Postgres database of its own** | `.env.local` here, two connection strings | The log is the product, not a side effect. It must **not** be a managed project's database — Escapement has to keep running while that project is the thing being changed. |
+| **A GitHub App** | `.env.local` here, App ID + private key | It reads issues and pushes branches as something that is not you. A fine-grained token can be wrong in a way nothing reports: one covered a repository's submodule but not the repository, and every run failed with a 403 that said nothing about scope. An installation makes reachability explicit and checkable — `esc add` verifies the four permissions before it writes anything. |
+| **A recipe, per managed repository** | `.escapement/config.yaml`, committed **in that repository** | The repository's own team decides what an agent may pick up, what environment it gets, and what must pass before anything merges. It ships with the code and is reviewed like code. |
+| **A policy, per project** | Escapement's log, set by `esc add --tier --require` | The part a managed repository **cannot** soften. Containment floor, mandatory gates, who may approve. |
+
+The board and the CLI need no configuration of their own. They read the same log
+the conductor writes, which is what makes them consistent by construction rather
+than by discipline.
+
+**Recipe and policy are the pair worth understanding before anything else.**
+
+| | recipe | policy |
+|---|---|---|
+| Lives in | the managed repository | Escapement's event log |
+| Changed by | that repository's team, through a pull request | whoever runs Escapement |
+| Analogous to | a workflow file | branch protection |
+
+A recipe may add strictness and can never remove any. Asking for a looser
+containment tier than the policy's floor, or omitting a gate the policy marks
+mandatory, is rejected **by name** rather than quietly downgraded. And the
+recipe governing a run is read from `origin/<base>`, never from the agent's
+branch — so an agent that edits it changes nothing about the run in flight. See
+[ADR 0005](doc/decisions/0005-config-in-target-repo.md).
+
+### What one run actually does
+
+`esc run --once nextloom-ai-admin --issue 120`, end to end:
+
+1. **Resolve the recipe** from `origin/develop` — the base recorded when the
+   project was registered, not whatever GitHub currently calls the default
+   branch. (Those differ more often than you would think; the repository this
+   was first run against had a feature branch as its default.)
+2. **Check the recipe against the policy.** A conflict stops here, named.
+3. **Claim the issue** — an event, so two schedulers cannot take the same one.
+4. **Cut a worktree** from Escapement's own mirror. Never your checkout.
+5. **Plant a filtered environment file.** Only the variable names the recipe
+   allowed exist in it. Everything else is *absent*, not redacted.
+6. **Start the agent** with the hook wired in, at the tier policy and recipe
+   agree on.
+7. **Run the gates** in recipe order, stopping at the first refusal.
+8. **Integrate** under a Postgres advisory lock: merge the base in, verify,
+   merge out. Every exit path appends an event — including the failures.
+
+Step 8 is shaped the way it is because of one expensive silence. The old
+harness's integrate step had six `return 1` paths and not one of them emitted a
+log line, a comment or a label; two tickets re-ran five times for roughly $29
+while the actual cause — uncommitted work in the operator's own checkout — was
+never reported by anything at all.
 
 ## Layout
 
 | | |
 |---|---|
-| `packages/core` | Event catalogue and aggregate reducers. Zero I/O, so it tests without a database. |
-| `packages/config` | The recipe schema — what a managed repository puts in its own `.escapement/config.yaml`. |
-| `packages/store` | The Postgres event store: append, read, subscribe, and the projection runner. Prisma 8 for reads and writes, `pg` for `LISTEN/NOTIFY` and for projections. |
-| `apps/cli` | `esc` — `doctor`, and `projection lag` / `projection rebuild`. |
-| `apps/board` | Next.js shell. Real cards are Phase 1. |
+| `packages/core` | Event catalogue, upcasters and aggregate reducers. Zero I/O, so it tests without a database. |
+| `packages/env` | Where configuration values come from, for everything else. |
+| `packages/store` | The Postgres event store: append, read, subscribe, and the projection runner. Prisma 8 for reads and writes, `pg` for `LISTEN/NOTIFY`. |
+| `packages/config` | The recipe schema, the presets, and the policy rules a recipe is checked against. |
+| `packages/github` | The App: JWT, installation tokens, and a **read-only** client. Writes go through git. |
+| `packages/conductor` | Discovery, the queue, claiming, worktrees, the guard, the hook socket, and the merge lane. |
+| `packages/gates` | The gate pipeline and the `process` gate. |
+| `packages/runtime` | Containment tiers, and starting Claude Code. |
+| `packages/hook` | `esc-hook` — the binary Claude Code calls before every tool use. |
+| `apps/cli` | `esc` — `add`, `run`, `status`, `doctor`, `projection`. |
+| `apps/board` | The web UI. Real cards, read from the projection. |
 | `doc/` | The design, every decision, and the experiments that back them. |
+
+[#20]: https://github.com/steven-zhc/escapement/issues/20
+[#21]: https://github.com/steven-zhc/escapement/issues/21
+[#22]: https://github.com/steven-zhc/escapement/issues/22
+[#27]: https://github.com/steven-zhc/escapement/issues/27
 
 ## Getting started
 
