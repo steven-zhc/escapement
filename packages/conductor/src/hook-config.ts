@@ -15,7 +15,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { stateDir } from "./worktree.ts";
 
 /** The five both runtimes have, then Claude Code's extras. */
@@ -88,7 +88,18 @@ export interface RenderOptions {
  * runtime's.
  */
 export function renderSettings(options: RenderOptions): unknown {
+  // Absolute, and checked rather than trusted, because a relative path here
+  // fails *open*. The caller verifies the binary exists by resolving it against
+  // its own cwd; Claude Code spawns it resolved against the worktree. A relative
+  // path can therefore pass the existence check and then not be found — and a
+  // hook command that is not found exits 127, which is not the 2 that means
+  // deny, so the runtime treats it as a non-blocking error and runs the tool
+  // anyway. The result is a run with no guard that looks exactly like a run
+  // with one. Refusing here costs nothing and removes the whole class.
   const command = options.hookBinary;
+  if (!isAbsolute(command)) {
+    throw new Error(`esc-hook path must be absolute, got: ${command}`);
+  }
   const entry = () => [{ matcher: "*", hooks: [{ type: "command", command }] }];
 
   const hooks: Record<string, unknown> = {};

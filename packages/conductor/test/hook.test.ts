@@ -336,6 +336,24 @@ describe("hook wiring", () => {
     // The extras are bonus signal; the adapter contract is the intersection.
     expect(Object.keys((all as { hooks: object }).hooks)).toContain("PreCompact");
   });
+
+  /**
+   * A relative hook path fails open, which is the worst way for a guard to
+   * fail: the run looks normal and is unguarded.
+   *
+   * The caller checks the binary exists by resolving it against its own cwd.
+   * The runtime spawns it resolved against the worktree. A relative path can
+   * satisfy the first and miss the second, and a command that is not found
+   * exits 127 — not the 2 that means deny — so the tool is allowed to run.
+   */
+  it("refuses a relative hook path rather than writing a guard that fails open", () => {
+    expect(() => renderSettings({ runId: "r", hookBinary: "packages/hook/bin/esc-hook" })).toThrow(
+      /must be absolute/,
+    );
+    expect(() => renderSettings({ runId: "r", hookBinary: "./esc-hook" })).toThrow(/must be absolute/);
+    // The real one, as `run.ts` builds it.
+    expect(() => renderSettings({ runId: "r", hookBinary: "/opt/escapement/packages/hook/bin/esc-hook" })).not.toThrow();
+  });
 });
 
 describe("socket paths", () => {
