@@ -2,6 +2,7 @@ import { loadBoard, type BoardCard } from "@/lib/board";
 import { loadProjects } from "@escapement/conductor/projects";
 import { Decide } from "./decide.tsx";
 import { Evidence } from "./evidence.tsx";
+import { Live } from "./live.tsx";
 
 /**
  * The board is not a status page. It is where the backlog gets worked, and the
@@ -171,6 +172,10 @@ export default async function Page() {
         <span className={`chip ${total > 0 ? "" : "idle"}`}>
           {total > 0 ? `${total} items` : "nothing in the log yet"}
         </span>
+        <span className="sep" />
+        {/* Says whether what you are looking at is current. A board that has
+            silently stopped updating is worse than one that admits it. */}
+        <Live />
       </div>
 
       <div className="cols">
