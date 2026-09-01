@@ -1,6 +1,7 @@
 export {
   meetsTier,
   missingForTier,
+  type AuthStatus,
   type RunOutcome,
   type RunRequest,
   type Runtime,

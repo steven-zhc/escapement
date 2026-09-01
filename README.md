@@ -587,6 +587,7 @@ Every refusal names itself. The common ones:
 | `the GitHub App is not installed on …` | Step 3 above — install it on that repository. |
 | `the installation is missing permissions:` | Step 1's table; each gap is listed with what it has, what it needs and what it is for. |
 | `no .escapement/config.yaml on develop` | The recipe is missing from the **base branch**. A copy on the agent's branch is not read, by design. |
+| `runtime: signed in — claude-code reports not signed in` | `esc doctor` asks in the environment a *run* gets, not yours. If you are signed in and this fails, that environment is missing something the credential store needs. `/login` will not help. |
 | `no esc-hook binary at …` | `pnpm --filter @escapement/hook build`. A run without the guard must not start. |
 | `ENOENT … escapement-app.pem` | The key path is wrong. `~` and relative paths both work; relative is from this repository's root. |
 | `stopped at recipe: … policy requires …` | The recipe would weaken the run. Every conflicting clause is listed at once. |

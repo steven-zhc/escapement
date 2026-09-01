@@ -79,6 +79,34 @@ describe("esc doctor — environment", () => {
   });
 });
 
+describe("esc doctor — the runtime's own login", () => {
+  /**
+   * The check exists because the operator being signed in says nothing about
+   * whether a *run* can sign in. A run's environment is filtered, and the first
+   * real run against a repository died on "Not logged in" while the operator
+   * was signed in perfectly well — the filtered environment had no `USER`, and
+   * macOS finds a keychain item by who is asking.
+   *
+   * This asserts the check is present and reports on the *run's* environment.
+   * Whether this machine happens to be signed in is not the test's business.
+   */
+  it("asks the runtime, and says which environment it asked in", async () => {
+    const report = await runDoctor(env({}));
+    const check = report.results.find((r) => r.name === "runtime: signed in");
+
+    expect(check).toBeDefined();
+    if (check?.status === "fail") {
+      // A failure has to name the environment it probed, because "not signed
+      // in" without that sends the reader to `/login` — which is the one thing
+      // that would not have helped.
+      expect(check.detail).toMatch(/filtered environment a run gets/);
+      expect(check.detail).toContain("USER");
+    } else {
+      expect(check?.status).toBe("ok");
+    }
+  }, 60_000);
+});
+
 describe("esc doctor — reporting", () => {
   it("lists the checks that cannot run yet, rather than omitting them", async () => {
     // With no GITHUB_APP_ID in this environment, the credentials check is itself

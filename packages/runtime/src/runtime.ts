@@ -70,9 +70,31 @@ export interface RunOutcome {
   sessionId: string;
 }
 
+/**
+ * Whether the runtime can authenticate **in a given environment**.
+ *
+ * The environment is the point. Asking "is the operator logged in" is not the
+ * question and answering it is worse than not asking: the first real run failed
+ * with "Not logged in · Please run /login" while the operator was perfectly
+ * logged in, because the filtered environment a run gets had no `USER` and
+ * macOS finds a keychain item by who is asking.
+ */
+export interface AuthStatus {
+  loggedIn: boolean;
+  /** `claude.ai`, `apiKey`, `none` — whatever the runtime calls it. */
+  method: string | null;
+  /** Said back verbatim when something could not be asked at all. */
+  detail: string;
+}
+
 export interface Runtime {
   readonly capabilities: RuntimeCapabilities;
   run(request: RunRequest): Promise<RunOutcome>;
+  /**
+   * Optional: a runtime that cannot be asked cheaply should not pretend.
+   * `esc doctor` reports an absent check as deferred rather than as passing.
+   */
+  checkAuth?(env: Record<string, string>): Promise<AuthStatus>;
 }
 
 /**

@@ -20,7 +20,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import type { RunOutcome, RunRequest, Runtime, RuntimeCapabilities } from "./runtime.ts";
+import type { AuthStatus, RunOutcome, RunRequest, Runtime, RuntimeCapabilities } from "./runtime.ts";
 
 export const CLAUDE_CODE_CAPABILITIES: RuntimeCapabilities = {
   id: "claude-code",
@@ -87,6 +87,71 @@ export function createClaudeCodeRuntime(options: ClaudeCodeOptions = {}): Runtim
 
   return {
     capabilities: CLAUDE_CODE_CAPABILITIES,
+
+    /**
+     * `claude auth status`, in the environment a run would actually get.
+     *
+     * Free — it reads the credential and does not call the API. Verified
+     * against both environments: without `USER` it answers
+     * `{loggedIn: false, authMethod: "none"}`, with it
+     * `{loggedIn: true, authMethod: "claude.ai"}`.
+     *
+     * **The exit code is 0 either way**, so the field is the answer and the
+     * code is not. Reading the code would have made this check pass in exactly
+     * the situation it exists to catch.
+     */
+    async checkAuth(env: Record<string, string>): Promise<AuthStatus> {
+      return new Promise<AuthStatus>((resolve) => {
+        const child = spawn(binary, ["auth", "status"], {
+          env,
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        let out = "";
+        let err = "";
+        child.stdout.on("data", (c: Buffer) => (out += c.toString()));
+        child.stderr.on("data", (c: Buffer) => (err += c.toString()));
+
+        // A hung probe must not hang the doctor.
+        const timer = setTimeout(() => {
+          child.kill("SIGKILL");
+          resolve({ loggedIn: false, method: null, detail: "claude auth status did not answer in 20s" });
+        }, 20_000);
+
+        child.on("error", (e) => {
+          clearTimeout(timer);
+          resolve({ loggedIn: false, method: null, detail: e.message });
+        });
+
+        child.on("close", () => {
+          clearTimeout(timer);
+          // Defensive for the same reason `parseResult` is: a wrapper or a
+          // warning can put a line in front of the JSON.
+          const brace = out.indexOf("{");
+          if (brace < 0) {
+            resolve({
+              loggedIn: false,
+              method: null,
+              detail: (err.trim() || out.trim() || "no output").slice(0, 300),
+            });
+            return;
+          }
+          try {
+            const parsed = JSON.parse(out.slice(brace)) as {
+              loggedIn?: boolean;
+              authMethod?: string;
+            };
+            resolve({
+              loggedIn: parsed.loggedIn === true,
+              method: parsed.authMethod ?? null,
+              detail: parsed.loggedIn === true ? `signed in via ${parsed.authMethod}` : "not signed in",
+            });
+          } catch {
+            resolve({ loggedIn: false, method: null, detail: out.slice(0, 300) });
+          }
+        });
+      });
+    },
 
     async run(request: RunRequest): Promise<RunOutcome> {
       const sessionId = sessionIdFor(request.runId);

@@ -21,8 +21,10 @@
  * that will fill them in, rather than omitted — a check you cannot see is a
  * check you will forget you never had.
  */
+import { runnableEnv } from "@escapement/conductor";
 import { githubApp, hasGitHubApp } from "@escapement/env";
 import { REQUIRED_PERMISSIONS } from "@escapement/github";
+import { createClaudeCodeRuntime } from "@escapement/runtime";
 import { projectionLag } from "@escapement/store";
 import { createPublicKey } from "node:crypto";
 import pg from "pg";
@@ -320,6 +322,45 @@ async function projections(url: string): Promise<CheckResult> {
  * answered here is the one that costs an hour to diagnose otherwise: is a key
  * configured at all, and is it a key.
  */
+/**
+ * Whether the agent runtime can sign in **in the environment a run gets**.
+ *
+ * That qualifier is the entire check. The operator being signed in tells you
+ * nothing: the first real run against a repository died on "Not logged in ·
+ * Please run /login" while the operator was signed in perfectly well, because
+ * a run's environment is filtered and had no `USER` — and macOS finds a
+ * keychain item by who is asking. A check that probed `process.env` would have
+ * been green throughout.
+ *
+ * `claude auth status` is free; it reads the credential and does not call the
+ * API. Its exit code is 0 whether or not you are signed in, so the field is the
+ * answer.
+ */
+async function runtimeAuth(): Promise<CheckResult> {
+  const name = "runtime: signed in";
+  const runtime = createClaudeCodeRuntime();
+  if (!runtime.checkAuth) {
+    return { name, status: "skip", detail: `${runtime.capabilities.id} cannot be asked cheaply` };
+  }
+
+  // Exactly what a run gets. Not `process.env`.
+  const env = runnableEnv({});
+  const status = await runtime.checkAuth(env);
+
+  if (status.loggedIn) {
+    return { name, status: "ok", detail: `${runtime.capabilities.id} — ${status.detail}` };
+  }
+  return {
+    name,
+    status: "fail",
+    detail:
+      `${runtime.capabilities.id} reports ${status.detail}, in the filtered environment a run gets ` +
+      `(${Object.keys(env).sort().join(", ")}). ` +
+      "If you are signed in yourself, the run's environment is missing something the credential " +
+      "store needs — on macOS that is USER, because a keychain item is found by who is asking.",
+  };
+}
+
 function githubCredentials(env: NodeJS.ProcessEnv): CheckResult {
   const name = "github: app credentials";
   if (!hasGitHubApp(env)) {
@@ -402,6 +443,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
   }
 
   results.push(githubCredentials(env));
+  results.push(await runtimeAuth());
   for (const d of DEFERRED) results.push({ ...d, status: "skip", deferred: true });
 
   return {
