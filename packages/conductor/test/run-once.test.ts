@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { approve, boardProjection, discover, integrationStream, queueProjection, readBoard, reject, runOnce, runQueue, waive, workItemStream } from "../src/index.ts";
+import { approve, boardProjection, discover, integrationStream, queueProjection, readBoard, reject, renderPrompt, runOnce, runQueue, waive, workItemStream } from "../src/index.ts";
 import type { ProjectState } from "@escapement/core";
 
 const exec = promisify(execFile);
@@ -700,6 +700,27 @@ git add -A && git commit -q -m "fix"
       // which is why it is not called `empty`.
       expect(outcome.stopped).toBe("exhausted");
     }, 300_000);
+  });
+
+  /**
+   * The defect that made the first real run useless. The prompt said "read the
+   * issue" and the agent was handed a number — no title, no body, and no `gh`
+   * to fetch one with. Thirty turns and $1.11 later it had written to
+   * `.escapement/config.yaml`, the only thing in the worktree that looked like
+   * an instruction, and committed nothing.
+   */
+  it("gives the implementer the ticket, not just its number", () => {
+    const filled = renderPrompt("#{{issue}} — {{title}}\n\n{{body}}", {
+      number: 120,
+      title: "The dashboard reports state but does not start work",
+      body: "`/` shows twelve stat tiles and no way in.",
+    });
+
+    expect(filled).toContain("#120");
+    expect(filled).toContain("The dashboard reports state");
+    expect(filled).toContain("twelve stat tiles");
+    // Nothing left for the agent to wonder about.
+    expect(filled).not.toContain("{{");
   });
 
   it("refuses before claiming anything when the recipe cannot be read", async () => {

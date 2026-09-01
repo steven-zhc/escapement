@@ -279,10 +279,25 @@ describe("renderEnvFile", () => {
  * which pnpm needs for its store and config — and prepare got neither.
  */
 describe("the environment a command needs to run at all", () => {
-  const from = { PATH: "/usr/bin", HOME: "/home/t", TMPDIR: "/tmp/", LANG: "en_US.UTF-8" };
+  const from = {
+    PATH: "/usr/bin",
+    HOME: "/home/t",
+    TMPDIR: "/tmp/",
+    LANG: "en_US.UTF-8",
+    USER: "t",
+    LOGNAME: "t",
+  };
 
   it("adds what a shell needs to find and run a binary", () => {
     expect(runnableEnv({}, from)).toEqual(from);
+  });
+
+  it("carries who is running, because a keychain is looked up by user", () => {
+    // The second instance of this bug, and the more expensive one. The first
+    // real run reached the agent and died on "Not logged in", with HOME set and
+    // the credentials where they always are. Measured: USER alone makes the run
+    // call the API; without it there are zero tokens and zero cost.
+    expect(runnableEnv({}, from)["USER"]).toBe("t");
   });
 
   it("keeps the project's own values alongside", () => {

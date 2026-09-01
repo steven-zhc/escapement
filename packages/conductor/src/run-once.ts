@@ -68,6 +68,23 @@ export interface RunOnceOptions {
   log?: (line: string) => void;
 }
 
+/**
+ * Fills the ticket into the prompt.
+ *
+ * `{{issue}}` was the only placeholder, and a number is not a ticket. The
+ * others are substituted whether or not the template uses them, so a project
+ * that writes its own prompt can leave any of them out.
+ */
+export function renderPrompt(
+  template: string,
+  ticket: { number: number; title: string; body: string },
+): string {
+  return template
+    .replaceAll("{{issue}}", String(ticket.number))
+    .replaceAll("{{title}}", ticket.title)
+    .replaceAll("{{body}}", ticket.body);
+}
+
 export type RunOnceResult =
   | { ok: true; workItemId: string; runId: string; mergeCommit: string }
   /**
@@ -275,10 +292,21 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       ]);
       server.register(runId, guard, prepared.version + 1, promptVersion);
 
+      // The ticket itself, which the implementer was never given. The prompt
+      // said "read the issue" and handed over a number: no title, no body, and
+      // no `gh` to fetch it with. The first real run spent 30 turns and $1.11
+      // discovering that there was nothing to work from, and wrote to
+      // `.escapement/config.yaml` — the only file in the worktree that looked
+      // like an instruction.
+      //
+      // Fetched once here and shared with the review gate below, so a run costs
+      // one call for it rather than two.
+      const ticket = await options.client.getIssue(options.issue);
+
       const outcome = await options.runtime.run({
         runId,
         cwd: worktree.path,
-        prompt: options.prompt,
+        prompt: renderPrompt(options.prompt, ticket),
         settingsPath: wiring.settingsPath,
         env: runnableEnv({ ...env.values, ...wiring.env }),
         limits: {
@@ -359,10 +387,11 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       const gates = gatesFromRecipe(recipe.gates, {
         agent: {
           runtime: options.runtime,
-          issue: async () => {
-            const ticket = await options.client.getIssue(options.issue);
-            return { ref: String(ticket.number), title: ticket.title, body: ticket.body };
-          },
+          issue: async () => ({
+            ref: String(ticket.number),
+            title: ticket.title,
+            body: ticket.body,
+          }),
           diff: () =>
             git(["diff", `${worktree.baseSha}...HEAD`], {
               ...{ token: options.token, env: options.gitEnv },

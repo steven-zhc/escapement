@@ -141,8 +141,20 @@ export interface FilteredEnv {
  * and every install after the first one fast. It also means a command can read
  * the operator's home directory — contained by the tier, not by this, and worth
  * revisiting if a scratch home ever becomes affordable.
+ *
+ * **`USER` is here because Claude Code cannot log in without it.** The first
+ * real run against `nextloom-ai-admin` reached the agent and died on
+ * "Not logged in · Please run /login", with `HOME` set and the credentials
+ * exactly where they always are. Measured directly: with `USER`, the run calls
+ * the API and costs money; with `SHELL` instead and no `USER`, it reports zero
+ * tokens and zero cost and never calls anything. macOS finds a keychain item by
+ * who is asking, and with nobody asking there is nothing to find.
+ *
+ * `LOGNAME` is its POSIX twin and some tools read that one instead. `SHELL` is
+ * deliberately *not* here: it was not needed, and leaving it out keeps the
+ * shell a command runs under predictable rather than inherited.
  */
-export const RUNNABLE = ["PATH", "HOME", "TMPDIR", "LANG"] as const;
+export const RUNNABLE = ["PATH", "HOME", "TMPDIR", "LANG", "USER", "LOGNAME"] as const;
 
 export function runnableEnv(
   values: Record<string, string>,

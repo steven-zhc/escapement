@@ -136,7 +136,8 @@ export async function runQueue(options: ScheduleOptions): Promise<ScheduleResult
       runtime: options.runtime,
       issue,
       hookBinary: options.hookBinary,
-      prompt: options.prompt.replace("{{issue}}", String(issue)),
+      // Raw. `runOnce` has the ticket and does the substitution.
+      prompt: options.prompt,
       ...(options.promptVersion === undefined ? {} : { promptVersion: options.promptVersion }),
       ...(options.merge === undefined ? {} : { merge: options.merge }),
       ...(options.token === undefined ? {} : { token: options.token }),

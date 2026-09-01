@@ -121,7 +121,9 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
   const result = await runOnce({
     ...common,
     issue: options.issue,
-    prompt: prompt.replace("{{issue}}", String(options.issue)),
+    // The raw template. `runOnce` fetches the ticket and fills it in — it is
+    // the only place that has the title and the body.
+    prompt,
   });
 
   if (result.ok === true) {
