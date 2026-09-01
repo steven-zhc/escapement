@@ -568,6 +568,19 @@ pnpm --filter @escapement/board dev       # the board, on :3200
 A run without the hook does not start — a run with no guard is not a smaller
 run, it is a different one.
 
+`--no-guard` is the exception, and it is for bringing the pipeline up on a
+machine you are watching. It wires no hooks at all: the settings file is still
+written and still passed to the runtime, with an empty `hooks` object, so what
+is in force is legible from the file rather than guessed from its absence. The
+run says `guard OFF` every time it starts.
+
+What it costs is real but bounded. Two of the three boundaries are untouched —
+the environment is still filtered to what the recipe named, and the worktree is
+still disposable and still not your checkout ([ADR 0007](doc/decisions/0007-dual-runtime.md)).
+What you lose is the third: no tool call is refusable, and the run records no
+guard trips and no touched files, so it proves less about what the agent did
+than a guarded run does.
+
 ### Run one, and stop before it writes
 
 The first thing to do with a repository, and the thing to keep doing until you
