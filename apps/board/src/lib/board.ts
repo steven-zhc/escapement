@@ -37,6 +37,9 @@ export interface BoardCard {
    * cards reading `#122`, one per project, none of them duplicates.
    */
   project: string;
+  /** Which column it is in, so a card only offers a decision where one is
+   *  actually being asked for. */
+  column: ColumnId;
   ref: string;
   kind: "bug" | "feature" | "enhancement" | "tech-debt";
   title: string;
@@ -82,6 +85,7 @@ function toCard(card: ProjectionCard): BoardCard {
   return {
     workItemId: card.workItemId,
     project: card.project,
+    column: card.column,
     ref: card.externalRef,
     kind: card.kind as BoardCard["kind"],
     title: card.title,

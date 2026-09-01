@@ -23,6 +23,12 @@ importers:
       '@escapement/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@escapement/env':
+        specifier: workspace:*
+        version: link:../../packages/env
+      '@escapement/github':
+        specifier: workspace:*
+        version: link:../../packages/github
       '@escapement/store':
         specifier: workspace:*
         version: link:../../packages/store

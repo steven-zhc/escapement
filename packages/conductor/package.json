@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./board": "./src/board.ts",
-    "./projects": "./src/projects.ts"
+    "./projects": "./src/projects.ts",
+    "./decide": "./src/approve.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

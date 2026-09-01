@@ -42,6 +42,17 @@ export interface ApproveOptions {
    * until then would make onboarding a chicken-and-egg problem.
    */
   approvers?: readonly string[];
+  /**
+   * The sha the caller was looking at when they decided.
+   *
+   * Distinct from the approval's own `onSha`, and both are checked. A board
+   * card renders a commit; if the branch moved *and a new approval was
+   * requested* since, the run's current question is about a different diff than
+   * the one on screen, and answering it would be answering a question nobody
+   * read. The CLI omits this because it has just printed the state it is acting
+   * on; the board always sends it.
+   */
+  onSha?: string;
   note?: string;
   /** Withdraws an approval instead of granting one. See `reject` below. */
   revoke?: { reason: string };
@@ -88,6 +99,17 @@ export async function approve(options: ApproveOptions): Promise<ApproveResult> {
       workItemId,
       reason: "not-an-approver",
       detail: `${options.by} is not in this project's approvers (${options.approvers.join(", ")})`,
+    };
+  }
+
+  if (options.onSha && options.onSha !== onSha) {
+    return {
+      ok: false,
+      workItemId,
+      reason: "stale",
+      detail:
+        `the card showed ${options.onSha.slice(0, 7)} and the run is now asking about ` +
+        `${onSha.slice(0, 7)}. Nothing was merged — reload and read it again.`,
     };
   }
 
@@ -220,4 +242,79 @@ export async function reject(
   ]);
 
   return { ok: true, workItemId, detail: `${gate} on ${onSha.slice(0, 7)} was withdrawn by ${options.by}` };
+}
+
+/**
+ * Waiving a gate: merging past a verdict, on the record.
+ *
+ * **A waiver is never silent.** It records who and why, and both go on the
+ * card. That is the entire difference between this and the thing it replaces —
+ * a person deciding "the build failure is unrelated, land it" is legitimate and
+ * happens; a person doing it by deleting a label and telling nobody is how a
+ * system stops being able to explain itself.
+ *
+ * Bound to the sha like every other verdict. A waiver for a commit that is no
+ * longer the head stops counting the moment the branch moves, without anyone
+ * revoking it.
+ */
+export async function waive(options: {
+  project: string;
+  issue: number;
+  gate: string;
+  by: string;
+  reason: string;
+  approvers?: readonly string[];
+  onSha?: string;
+  store?: EventStore;
+}): Promise<{ ok: boolean; workItemId: string; detail: string }> {
+  const store = options.store ?? eventStore;
+  const workItemId = workItemStream(options.project, options.issue);
+
+  if (!options.reason.trim()) {
+    // The one rule. A waiver with no reason is the silent waiver by another
+    // name, and the field being present is not the same as it being filled in.
+    return { ok: false, workItemId, detail: "a waiver needs a reason" };
+  }
+
+  const item = reduceWorkItem(await store.read(workItemId));
+  const runId = item.runs[item.runs.length - 1];
+  if (!runId) return { ok: false, workItemId, detail: `${workItemId} has never been run` };
+
+  const run = reduceRun(await store.read(runId));
+  if (!run.headSha) return { ok: false, workItemId, detail: `${runId} has produced no diff to waive` };
+
+  if (options.approvers && options.approvers.length > 0 && !options.approvers.includes(options.by)) {
+    return { ok: false, workItemId, detail: `${options.by} is not in this project's approvers` };
+  }
+
+  // The sha the person was looking at, when they said so. If the branch has
+  // moved since the card rendered, they are waiving something they have not
+  // seen.
+  if (options.onSha && options.onSha !== run.headSha) {
+    return {
+      ok: false,
+      workItemId,
+      detail: `the card showed ${options.onSha.slice(0, 7)} and the branch is now ${run.headSha.slice(0, 7)}`,
+    };
+  }
+
+  await store.append(runId, run.version, [
+    {
+      type: "GateWaived",
+      actor: options.by,
+      data: parsePayload("GateWaived", {
+        gate: options.gate,
+        runId,
+        onSha: run.headSha,
+        by: options.by,
+        reason: options.reason,
+      }),
+    },
+  ]);
+
+  return {
+    ok: true,
+    workItemId,
+    detail: `${options.gate} waived on ${run.headSha.slice(0, 7)} by ${options.by}: ${options.reason}`,
+  };
 }

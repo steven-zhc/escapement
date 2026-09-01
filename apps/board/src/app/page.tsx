@@ -1,5 +1,6 @@
 import { loadBoard, type BoardCard } from "@/lib/board";
 import { loadProjects } from "@escapement/conductor/projects";
+import { Decide } from "./decide.tsx";
 
 /**
  * The board is not a status page. It is where the backlog gets worked, and the
@@ -105,6 +106,18 @@ function Card({ card, showProject }: { card: BoardCard; showProject: boolean }) 
         <p className="refusal" title={card.refusalDetail ?? undefined}>
           {card.refusal}
         </p>
+      ) : null}
+
+      {/* The controls, only where a person is actually the thing being waited
+          on. A card in Gates is waiting on a process, and offering to approve
+          it would invite a decision nobody is being asked for. */}
+      {card.column === "waiting" && card.diff ? (
+        <Decide
+          project={card.project}
+          issue={Number(card.ref)}
+          onSha={card.diff.headSha}
+          gates={card.gates.filter((g) => g.state === "failed").map((g) => g.gate)}
+        />
       ) : null}
 
       {card.mergeCommit ? <p className="merge">{card.mergeCommit.slice(0, 7)}</p> : null}

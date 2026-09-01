@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { approve, boardProjection, integrationStream, readBoard, runOnce, workItemStream } from "../src/index.ts";
+import { approve, boardProjection, integrationStream, readBoard, reject, runOnce, waive, workItemStream } from "../src/index.ts";
 import type { ProjectState } from "@escapement/core";
 
 const exec = promisify(execFile);
@@ -80,6 +80,8 @@ const project: ProjectState = {
   version: 1,
   lastSeq: null,
 };
+
+const issue2 = (n: number): Issue => ({ ...issue, number: n });
 
 const issue: Issue = {
   number: 117,
@@ -488,6 +490,118 @@ git add -A && git commit -q -m "fix the race"
     expect(approved.detail).toContain(result.headSha.slice(0, 7));
     expect((await g(["rev-parse", "develop"], originPath)).stdout).toBe(before);
   }, 180_000);
+
+  /**
+   * The three things a person can do, and the rules that keep them honest.
+   * #21 calls this the ticket the whole project is a bet on.
+   */
+  describe("deciding", () => {
+    const held = async (issue: number, marker: string) => {
+      const agent = await agentThat(`
+mkdir -p src && echo "export const held = ${marker};" > src/fix.ts
+git add -A && git commit -q -m "fix the race"
+`);
+      const result = await runOnce({
+        ...options(agent),
+        issue,
+        merge: false,
+        client: fakeClient({ getIssue: async () => ({ ...issue2(issue) }) }),
+      });
+      expect(result.ok).toBe("held");
+      return result as Extract<typeof result, { ok: "held" }>;
+    };
+
+    it("refuses a waiver with no reason, because a silent waiver is the thing being replaced", async () => {
+      const r = await held(130, "130");
+      const outcome = await waive({
+        project: PROJECT,
+        issue: 130,
+        gate: "build",
+        by: "human:test",
+        reason: "   ",
+        store,
+      });
+
+      expect(outcome.ok).toBe(false);
+      expect(outcome.detail).toContain("needs a reason");
+      expect(r.runId).toBeTruthy();
+    }, 180_000);
+
+    it("records who and why on a waiver, and binds it to the commit", async () => {
+      const r = await held(131, "131");
+      const outcome = await waive({
+        project: PROJECT,
+        issue: 131,
+        gate: "build",
+        by: "human:test",
+        reason: "unrelated flake in the importer suite",
+        store,
+      });
+
+      expect(outcome.ok).toBe(true);
+      const waived = (await store.read(r.runId)).find((e) => e.type === "GateWaived");
+      const d = waived?.data as { by: string; reason: string; onSha: string };
+      // Never silent. Both halves, on the event, on the card.
+      expect(d.by).toBe("human:test");
+      expect(d.reason).toContain("unrelated flake");
+      // And about a diff, so a force-push stops it counting by arithmetic.
+      expect(d.onSha).toBe(r.headSha);
+    }, 180_000);
+
+    it("refuses a decision made against a commit the card is no longer showing", async () => {
+      const r = await held(132, "132");
+      const outcome = await waive({
+        project: PROJECT,
+        issue: 132,
+        gate: "build",
+        by: "human:test",
+        reason: "looks fine",
+        // What a stale card would send.
+        onSha: "0".repeat(40),
+        store,
+      });
+
+      expect(outcome.ok).toBe(false);
+      expect(outcome.detail).toContain(r.headSha.slice(0, 7));
+    }, 180_000);
+
+    it("sends a rejection back to the gate rather than to the queue", async () => {
+      const r = await held(133, "133");
+      const outcome = await reject({
+        project: PROJECT,
+        issue: 133,
+        base: "develop",
+        client: fakeClient(),
+        by: "human:test",
+        reason: "wrong approach",
+        store,
+      });
+
+      expect(outcome.ok).toBe(true);
+      const events = (await store.read(r.runId)).map((e) => e.type);
+      expect(events).toContain("ApprovalRevoked");
+      // Still waiting on a person, not released for another run to claim and
+      // throw the question away.
+      const item = (await store.read(r.workItemId)).map((e) => e.type);
+      expect(item).not.toContain("WorkItemReleased");
+    }, 180_000);
+
+    it("refuses someone the project's policy did not name", async () => {
+      await held(134, "134");
+      const outcome = await waive({
+        project: PROJECT,
+        issue: 134,
+        gate: "build",
+        by: "human:someone-else",
+        approvers: ["human:steven"],
+        reason: "trust me",
+        store,
+      });
+
+      expect(outcome.ok).toBe(false);
+      expect(outcome.detail).toContain("not in this project's approvers");
+    }, 180_000);
+  });
 
   it("refuses before claiming anything when the recipe cannot be read", async () => {
     const result = await runOnce({
