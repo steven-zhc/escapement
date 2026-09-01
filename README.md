@@ -458,18 +458,91 @@ gates: recipe says build, policy requires a gate named "review"
        — the policy marks it mandatory, and a recipe cannot remove one
 ```
 
-### 3. Run one ticket
+### 3. Check it
 
 ```bash
-pnpm --filter @escapement/hook build     # the guard binary is not committed
-pnpm esc status nextloom-ai-admin        # what is runnable, and what is holding the rest
-pnpm esc run --once nextloom-ai-admin --issue 117
+pnpm esc status nextloom-ai-admin   # what is runnable, and what is holding the rest
 ```
 
-**Nominate a ticket carrying no `agent:*` label.** `agent-loop.sh` is still
-working the same repository on an hourly cycle until Phase 2, and that namespace
-is where it keeps its state — discovery refuses anything in it precisely so the
-two systems cannot both claim one ticket.
+Onboarding is done. How you actually run work is next.
+
+## Running work
+
+Two things have to exist before anything runs, and both refuse loudly rather
+than degrading:
+
+```bash
+pnpm --filter @escapement/hook build      # the guard binary; not committed
+pnpm --filter @escapement/board dev       # the board, on :3200
+```
+
+A run without the hook does not start — a run with no guard is not a smaller
+run, it is a different one.
+
+### Run one, and stop before it writes
+
+The first thing to do with a repository, and the thing to keep doing until you
+trust it:
+
+```bash
+pnpm esc run nextloom-ai-admin --issue 120 --no-merge
+```
+
+Discovery, claim, worktree, prepare, agent, gates — then it **stops** and asks.
+The branch is pushed and every verdict is recorded; nothing is merged. You get:
+
+```
+held at 8f3a1c2 — wi-nextloom-ai-admin-120 is waiting on you
+nothing was merged. Re-run without --no-merge to merge it.
+```
+
+### Decide, on the board
+
+Open <http://localhost:3200>. The card is in **Waiting on you**, with the diff,
+each gate's verdict and its evidence, and the reviewer's findings with their
+failure scenarios. Approve, Reject or Waive are on the card.
+
+That is the whole bet: if deciding still means opening GitHub, nothing changed.
+
+The same three decisions from the terminal, if you prefer:
+
+```bash
+pnpm esc approve nextloom-ai-admin --issue 120
+pnpm esc approve nextloom-ai-admin --issue 120 --reject "wrong approach"
+```
+
+`approve` merges **what the held run actually produced**, not a fresh attempt.
+If the branch moved since the run asked, it refuses and names both commits —
+you would otherwise be merging something you have not read. A rejection sends
+the item back to the gate, not back to the queue.
+
+### Let it merge
+
+Drop the flag once you are willing:
+
+```bash
+pnpm esc run nextloom-ai-admin --issue 120
+```
+
+It still stops for a person wherever the recipe says so — a `human` gate, or a
+`policy` gate that saw a migration.
+
+### Take the queue
+
+No `--issue`, and it picks work itself, in the recipe's priority order:
+
+```bash
+pnpm esc run nextloom-ai-admin --max 2    # Phase 2's exit criterion
+pnpm esc run nextloom-ai-admin            # until nothing runnable is left
+```
+
+**`--max` matters more than it looks.** Without it this drains the queue, and a
+queue you have not read is a bill you have not agreed to. Start bounded.
+
+A pass will not attempt the same work item twice, even though a failed run
+releases it back into the queue — that is what stops a broken ticket from
+costing an agent call per lap. It stops with `exhausted` rather than `empty`
+when work remains that it has already tried, because those are different facts.
 
 ### When something refuses
 
@@ -484,3 +557,7 @@ Every refusal names itself. The common ones:
 | `ENOENT … escapement-app.pem` | The key path is wrong. `~` and relative paths both work; relative is from this repository's root. |
 | `stopped at recipe: … policy requires …` | The recipe would weaken the run. Every conflicting clause is listed at once. |
 | `stopped at discover: owned-by-another-agent` | That issue carries an `agent:*` label. Pick one the old loop has not touched. |
+| `stopped at prepare: … the install step refused` | Dependencies did not install in a fresh worktree. Nothing expensive ran — that is the point of failing here. |
+| `did not merge (stale): the card showed …` | The branch moved between reading and deciding. Reload and read it again. |
+| `a waiver needs a reason` | A waiver records who and why. Both, always. |
+| `stopped: exhausted — 1 run(s)` | The queue still has work; everything left has already been tried this pass. Not the same as `empty`. |
