@@ -22,10 +22,13 @@ discovery through claim, worktree, guard, agent, gates and the merge lane, and
 the board shows the landed card with its receipt.
 
 **Phase 1's exit criterion is not met.** It requires a real `nextloom-ai-admin`
-issue merged into `develop`, and nothing has run against a real repository yet.
-The App is configured and a read-only preflight against the real installation
-passes; what remains is committing that repository's recipe and running one
-ticket under supervision.
+issue merged into `develop`, and no run has produced a commit yet. What is done:
+the App is configured, that repository's recipe is committed on `develop`, and
+runs reach it for real — a worktree cut from the mirror with submodules and
+`pnpm install` in 10.3s, then an agent started under the guard. What is not: the
+agent has yet to finish a ticket. The first attempt spent 30 turns and $1.11
+writing nothing, because the prompt told it to read an issue and handed it only
+a number. See [experiment 005](doc/experiments/005-rung-1-reaches-a-real-repository.md).
 
 **Nothing here runs unattended, deliberately.** `esc run --once` merges as soon
 as its gates pass, and the human gate that should sit in front of that merge is
@@ -33,6 +36,56 @@ Phase 2 ([#20], [#21]). Watch the runs until it exists.
 
 See [`doc/roadmap.md`](doc/roadmap.md) for the phases and
 [`doc/README.md`](doc/README.md) for what is settled and what is open.
+
+## Terms
+
+Most of these are ordinary event-sourcing words. They are collected here because
+the rest of this file uses them without stopping, and one of them — *projection*
+— is the difference between reading the log and reading a table built from it.
+
+### The log, and things derived from it
+
+| Term | What it is |
+|---|---|
+| **event** | One fact that already happened, in the past tense: `WorkItemClaimed`, `GateEvaluated`, `RunFailed`. Never edited, never deleted. |
+| **the log** | The `events` table. Every component writes here and nothing keeps private state, which is why the board and the CLI cannot disagree. |
+| **stream** | The events about one thing, in order — one work item, one run, one project. `stream_id` plus a `version` that counts from 1. |
+| **`UNIQUE (stream_id, version)`** | The whole of the concurrency control. Two writers racing to append version 7 means one of them loses at the database, not at a lock somebody remembered to take. |
+| **state** | A stream folded into an answer — *is this claimed?*, *did this merge?*. Computed in `packages/core`, which does no I/O, so it tests without a database. |
+| **projection** | **A regular Postgres table built by replaying the log.** It holds no truth of its own: delete it and it can be rebuilt exactly. It exists so a question can be a plain `select` instead of a fold over thousands of events. |
+| **checkpoint** | How far a projection has replayed, in the `checkpoints` table. A projection behind the log is *stale*, not wrong — it will catch up. |
+| **upcaster** | A function that reads an event written in an older shape and returns the current one. An unbroken chain from version 1, because old events are never rewritten to match new code. |
+
+There are three projections today:
+
+| Name | Feeds | Rebuild with |
+|---|---|---|
+| `board` | The web UI at `:3200` — one card per work item | `esc projection rebuild board` |
+| `queue` | `esc status`, and what `esc run` takes next | `esc projection rebuild queue` |
+| `guard_trips` | What the agent was stopped from doing | `esc projection rebuild guard_trips` |
+
+`esc projection lag` shows how far behind each one is. `rebuild` drops the
+table, resets the checkpoint and replays from the beginning — safe by
+construction, because the log is the only thing that was ever authoritative.
+
+**Nothing advances a projection on its own yet.** There is no daemon: `esc run`
+appends events, and a projection only moves when you run `esc projection`. That
+is [#27], along with everything else about running unattended.
+
+### Escapement's own words
+
+| Term | What it is |
+|---|---|
+| **work item** | One ticket under management, from the moment it is claimed to the moment it lands or is dropped. What a board card shows. |
+| **run** | One attempt at a work item. A work item can have several; each gets its own worktree, its own agent process and its own id. |
+| **recipe** | `.escapement/config.yaml`, committed **in the managed repository**. Its team decides what may be picked up, what environment it gets, what must pass. Read from `origin/<base>`, never from the agent's branch. |
+| **policy** | The part a recipe cannot soften — containment floor, mandatory gates, who may approve. Lives in Escapement's log, set by `esc add`. |
+| **gate** | A named check that produces a verdict about **one commit**, not about a ticket. `process`, `agent`, `policy`, `human`. A force-push invalidates a verdict by arithmetic rather than by anybody noticing. |
+| **guard**, **guard trip** | The hook's allow/deny on a single tool call, and a record of one that was denied. A coordination mechanism, not a sandbox. |
+| **tier** | How contained the agent runtime is: `open`, `guarded`, `sandboxed`. |
+| **mirror** | Escapement's own bare clone of a managed repository, at `~/.escapement/repos/<project>.git`. Never your checkout. |
+| **worktree** | The disposable checkout a run works in, cut from the mirror and removed when the run ends. |
+| **integrate** | The merge lane: under a Postgres advisory lock, merge the base in, verify, merge out. Every exit path appends an event, including the failures. |
 
 ## How it fits together
 
@@ -88,9 +141,9 @@ and an unparsed log file respectively, which is why it could answer none of them
 | **conductor** | The scheduler. Finds work, claims it, cuts the worktree, starts the agent, runs the gates, merges. Everything it decides, it appends. | Never edits code itself. |
 | **agent runtime** | The thing that actually writes the code — Claude Code today, in a worktree and an environment of its own. | Never talks to GitHub, and never sees a secret the recipe did not name. |
 | **esc-hook** | A small binary Claude Code calls before every tool use. Exit 0 allows, exit 2 denies. Fails closed on anything it cannot understand. | Not a security boundary — see below. |
-| **gates** | Named checks that produce a verdict about a *specific commit*. `process` gates run a command; `agent`, `policy` and `human` gates are Phase 2. | Not tied to a ticket, so a force-push invalidates a verdict by arithmetic. |
-| **board** | Reads the log and shows one card per work item, with its cost, its guard trips and its gate verdicts. | Read-only today. Approve/reject is Phase 2 ([#21], [#22]). |
-| **esc** | Configures projects and drives runs. `esc run --once` is supervised, one nominated issue. | Unattended running is Phase 2 ([#27]). |
+| **gates** | Named checks that produce a verdict about a *specific commit*. All four kinds are built: `process` runs a command, `agent` asks a cold reviewer, `policy` matches paths, `human` waits for you. | Not tied to a ticket, so a force-push invalidates a verdict by arithmetic. |
+| **board** | Reads the `board` projection and shows one card per work item, with its diff, its cost, its guard trips and its gate verdicts. Approve, Reject and Waive are on the card. | Cannot advance its own projection — see [Terms](#terms). |
+| **esc** | Configures projects and drives runs. `esc run <project>` takes the queue; `--issue` nominates one, `--no-merge` stops before writing. | Nothing runs unattended — no daemon, no timer ([#27]). |
 
 The hook deserves the caveat it gets. It is a *coordination* mechanism, not a
 sandbox: an agent that wants to get around it can. The three boundaries that
@@ -162,10 +215,10 @@ never reported by anything at all.
 | `packages/config` | The recipe schema, the presets, and the policy rules a recipe is checked against. |
 | `packages/github` | The App: JWT, installation tokens, and a **read-only** client. Writes go through git. |
 | `packages/conductor` | Discovery, the queue, claiming, worktrees, the guard, the hook socket, and the merge lane. |
-| `packages/gates` | The gate pipeline and the `process` gate. |
+| `packages/gates` | The gate pipeline and all four gate kinds. |
 | `packages/runtime` | Containment tiers, and starting Claude Code. |
 | `packages/hook` | `esc-hook` — the binary Claude Code calls before every tool use. |
-| `apps/cli` | `esc` — `add`, `run`, `status`, `doctor`, `projection`. |
+| `apps/cli` | `esc` — `add`, `run`, `approve`, `status`, `doctor`, `projection`. |
 | `apps/board` | The web UI. Real cards, read from the projection. |
 | `doc/` | The design, every decision, and the experiments that back them. |
 
@@ -203,10 +256,12 @@ Two things in this repository are also not committed: `.env.local`, and
 GitHub or belongs to a run that is over. The part that matters — the event log —
 is in Postgres, and none of it is here.
 
+[#18]: https://github.com/steven-zhc/escapement/issues/18
+[#19]: https://github.com/steven-zhc/escapement/issues/19
 [#20]: https://github.com/steven-zhc/escapement/issues/20
 [#21]: https://github.com/steven-zhc/escapement/issues/21
-[#22]: https://github.com/steven-zhc/escapement/issues/22
 [#27]: https://github.com/steven-zhc/escapement/issues/27
+[#28]: https://github.com/steven-zhc/escapement/issues/28
 
 ## Getting started
 
@@ -235,8 +290,8 @@ database. The suite is not mocked — it appends real events, runs real
 projections and takes real advisory locks — so pointed at your own log it
 leaves work items and board cards behind. It did: twenty-four cards from ten
 throwaway `esctest*` projects, and none from a real one. Cleaning that up is
-not cheap either, because truncating a projection and replaying it brings the
-cards straight back; the only way to remove them is to delete from an
+not cheap either, because rebuilding a projection replays the log and brings
+the cards straight back; the only way to remove them is to delete from an
 append-only table.
 
 Give the test database its schema the same way the main one gets it, with
@@ -532,9 +587,22 @@ nothing was merged. Re-run without --no-merge to merge it.
 
 ### Decide, on the board
 
-Open <http://localhost:3200>. The card is in **Waiting on you**, with the diff,
-each gate's verdict and its evidence, and the reviewer's findings with their
-failure scenarios. Approve, Reject or Waive are on the card.
+The run appended events; it did not update the board. Catch the projection up
+first — until [#27] there is no daemon doing it for you, and a board that has
+never been advanced is simply empty:
+
+```bash
+pnpm esc projection rebuild board
+pnpm esc projection lag                   # board  48/48  0 behind
+```
+
+Then open <http://localhost:3200>. The card is in **Waiting on you**, with the
+diff, each gate's verdict and its evidence, and the reviewer's findings with
+their failure scenarios. Approve, Reject or Waive are on the card.
+
+The page updates itself from then on: Postgres notifies on every append and the
+board re-reads. What it cannot do is advance the projection, so a run started
+while the page is open still needs the command above.
 
 That is the whole bet: if deciding still means opening GitHub, nothing changed.
 

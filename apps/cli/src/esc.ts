@@ -19,7 +19,7 @@ import {
   type Projection,
 } from "@escapement/store";
 import type { Tier } from "@escapement/core";
-import { queueProjection } from "@escapement/conductor";
+import { boardProjection, queueProjection } from "@escapement/conductor";
 import { add } from "./add.ts";
 import { approveCommand } from "./approve.ts";
 import { formatReport, runDoctor } from "./doctor.ts";
@@ -28,6 +28,7 @@ import { status } from "./status.ts";
 
 /** Every projection the runner knows how to advance, by `checkpoints.name`. */
 const PROJECTIONS: Record<string, Projection> = {
+  [boardProjection.name]: boardProjection,
   [guardTripsProjection.name]: guardTripsProjection,
   [queueProjection.name]: queueProjection,
 };
@@ -52,7 +53,7 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
     --all                       include items that have left the queue
   esc doctor                    check everything that can be checked
   esc projection lag            how far each projection is behind the log
-  esc projection rebuild <name> truncate, reset the checkpoint, replay
+  esc projection rebuild <name> drop the table, reset the checkpoint, replay
   esc help
   esc version
 
