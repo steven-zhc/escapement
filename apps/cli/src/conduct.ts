@@ -1,0 +1,116 @@
+/**
+ * One pass of the conductor, for the daemon to call.
+ *
+ * A pass is: ask GitHub what is runnable, write it into `task_view`, and take
+ * **one** item. One rather than draining, because the completion event that
+ * item produces is what triggers the next pass — so the loop advances by
+ * itself, and an operator's pause (#45) can take effect between items instead
+ * of only after a whole queue has been worked.
+ *
+ * This lives in the CLI and not in `@escapement/daemon` on purpose. The daemon
+ * hosts a loop and knows nothing about GitHub clients, runtimes or prompts;
+ * assembling those is what this application already does for `esc run`, and
+ * giving the daemon package those dependencies would make it the thing it is
+ * supposed to be hosting.
+ */
+import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { currentRecipe, loadProjects, refreshQueue, runQueue } from "@escapement/conductor";
+import { createGitHubClient } from "@escapement/github";
+import { githubApp, hasGitHubApp } from "@escapement/env";
+import { createClaudeCodeRuntime } from "@escapement/runtime";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+export interface ConductOptions {
+  /** False wires no hooks. See `RenderOptions.guard`. */
+  guard?: boolean;
+  /** False holds every item at the merge instead of landing it. */
+  merge?: boolean;
+  hookBinary?: string;
+  promptPath?: string;
+  /** How many items one pass may take. One, so completion drives the loop. */
+  max?: number;
+  log?: (line: string) => void;
+}
+
+export interface PassOutcome {
+  /** Projects looked at. */
+  projects: number;
+  /** Items run across all of them. */
+  ran: number;
+  /** Projects that could not be looked at, and why. */
+  refused: { project: string; detail: string }[];
+}
+
+export async function conductorPass(options: ConductOptions = {}): Promise<PassOutcome> {
+  const log = options.log ?? (() => {});
+  const outcome: PassOutcome = { projects: 0, ran: 0, refused: [] };
+
+  if (!hasGitHubApp()) {
+    outcome.refused.push({ project: "*", detail: "no GitHub App configured" });
+    return outcome;
+  }
+
+  const guard = options.guard !== false;
+  const hookBinary = options.hookBinary ?? resolve(root, "packages/hook/bin/esc-hook");
+  if (guard) {
+    try {
+      await readFile(hookBinary);
+    } catch {
+      // A run with no guard must not start unless somebody said so. Refusing
+      // the pass rather than the daemon: the projections stay current, which
+      // is what makes the reason visible on the board.
+      outcome.refused.push({ project: "*", detail: `no esc-hook binary at ${hookBinary}` });
+      return outcome;
+    }
+  }
+
+  const promptPath = options.promptPath ?? resolve(root, "prompts/ticket.md");
+  const prompt = await readFile(promptPath, "utf8");
+
+  for (const project of await loadProjects()) {
+    const name = project.project;
+    if (!name || !project.owner) continue;
+    outcome.projects += 1;
+
+    try {
+      const client = await createGitHubClient({
+        auth: githubApp(),
+        owner: project.owner,
+        repo: name,
+      });
+      const resolved = await currentRecipe(project, client);
+
+      // Ask GitHub first. Without this the queue is whatever the last pass saw,
+      // and a task closed by hand would still be taken.
+      await refreshQueue({ project: name, client, recipe: resolved.recipe });
+
+      const ran = await runQueue({
+        project,
+        client,
+        runtime: createClaudeCodeRuntime(),
+        // A function, not a snapshot: an installation token lasts an hour and a
+        // run's wall limit is two.
+        token: () => client.token(),
+        hookBinary,
+        guard,
+        prompt,
+        promptVersion: `ticket@${prompt.length}`,
+        kinds: resolved.recipe.source.kinds,
+        max: options.max ?? 1,
+        ...(options.merge === undefined ? {} : { merge: options.merge }),
+        log,
+      });
+      outcome.ran += ran.ran.length;
+    } catch (err) {
+      // One project's problem is not the pass's. A misconfigured repository
+      // must not stop the others from being worked.
+      outcome.refused.push({ project: name, detail: (err as Error).message });
+      log(`${name}: ${(err as Error).message}`);
+    }
+  }
+
+  return outcome;
+}

@@ -20,7 +20,8 @@ import {
 } from "@escapement/store";
 import type { Tier } from "@escapement/core";
 import { boardProjection, taskViewProjection } from "@escapement/conductor";
-import { startDaemon } from "@escapement/daemon";
+import { createWorkLoop, startDaemon } from "@escapement/daemon";
+import { conductorPass } from "./conduct.ts";
 import { add } from "./add.ts";
 import { approveCommand } from "./approve.ts";
 import { formatReport, runDoctor } from "./doctor.ts";
@@ -54,7 +55,8 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
   esc status [project]          what is runnable, and what is holding the rest
     --all                       include items that have left the queue
   esc doctor                    check everything that can be checked
-  esc daemon                    hold the projections (and, from #43, the conductor)
+  esc daemon                    hold the projections current
+    --conduct                   also take work; --no-merge and --no-guard apply
   esc projection run            the same thing, kept as an alias
   esc projection lag            how far each projection is behind the log
   esc projection rebuild <name> drop the table, reset the checkpoint, replay
@@ -194,7 +196,7 @@ async function projectionCommand(args: string[]): Promise<number> {
  * reasonable thing to do, and answering it with an error would teach people to
  * ignore errors.
  */
-async function daemonCommand(): Promise<number> {
+async function daemonCommand(flags: Record<string, string> = {}): Promise<number> {
   const started = await startDaemon({
     projections: Object.values(PROJECTIONS),
     log: (line) => console.log(line),
@@ -205,7 +207,37 @@ async function daemonCommand(): Promise<number> {
     return 0;
   }
 
-  const stop = () => started.daemon.stop();
+  // Opt-in until there is a way to stop it.
+  //
+  // The daemon taking work is the point of #43, but a daemon that starts
+  // spending money the moment it is up, with no drain and no pause, is a
+  // feature you cannot turn off — and #45 is what turns it off. The flag comes
+  // out and this becomes the default when that lands.
+  let loop: ReturnType<typeof createWorkLoop> | null = null;
+  if ("conduct" in flags) {
+    loop = createWorkLoop({
+      log: (line) => console.log(line),
+      pass: async (reason) => {
+        const outcome = await conductorPass({
+          guard: !("no-guard" in flags),
+          merge: !("no-merge" in flags),
+          log: (line) => console.log(line),
+        });
+        console.log(
+          `pass (${reason}): ${outcome.projects} project(s), ${outcome.ran} run(s)` +
+            (outcome.refused.length > 0 ? `, ${outcome.refused.length} refused` : ""),
+        );
+      },
+    });
+    await loop.start();
+  } else {
+    console.log("projections only — pass --conduct to take work");
+  }
+
+  const stop = () => {
+    void loop?.stop();
+    started.daemon.stop();
+  };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 
@@ -281,7 +313,7 @@ async function main(argv: string[]): Promise<number> {
     case "doctor":
       return doctor();
     case "daemon":
-      return daemonCommand();
+      return daemonCommand(parseFlags(rest).flags);
     case "projection":
       return projectionCommand(rest);
     case "version":
