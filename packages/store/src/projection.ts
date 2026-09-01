@@ -41,7 +41,18 @@ export interface Projection {
    */
   create(ctx: ProjectionContext): Promise<void>;
 
-  /** Empties everything `create` made. Called by `rebuild`. */
+  /**
+   * **Removes** everything `create` made — dropped, not emptied.
+   *
+   * This used to truncate, and truncating is not enough. `create` is
+   * `create table if not exists`, so a projection whose *shape* changed kept
+   * the old columns forever and the runner died on the first write to a column
+   * that was not there. The error surfaced as "subscription stopped before it
+   * caught up", which names the symptom and not one word of the cause.
+   *
+   * Dropping is what makes the claim in `rebuild` true: a projection's shape is
+   * free to change because changing it costs a rebuild rather than a migration.
+   */
   reset(ctx: ProjectionContext): Promise<void>;
 
   /**
@@ -232,8 +243,10 @@ export function createProjectionRunner(options: ProjectionRunnerOptions): Projec
       await this.stop();
 
       await inTransaction(async (ctx) => {
-        await projection.create(ctx);
+        // Remove first, then recreate. The other order drops what was just
+        // built and leaves nothing behind.
         await projection.reset(ctx);
+        await projection.create(ctx);
         // Zeroed rather than deleted: the projection still exists and is still
         // being run, and a missing row would make it look like one nobody had
         // ever started.

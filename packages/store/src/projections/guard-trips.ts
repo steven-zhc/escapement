@@ -37,7 +37,8 @@ export const guardTripsProjection: Projection = {
   },
 
   async reset(ctx) {
-    await ctx.query("truncate table guard_trips");
+    // Dropped, not truncated — see the note on Projection.reset.
+    await ctx.query("drop table if exists guard_trips");
   },
 
   async apply(events, ctx) {

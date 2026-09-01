@@ -135,7 +135,20 @@ beforeAll(async () => {
   client = createDb();
   store = createEventStore(client);
   await seed();
-}, 120_000);
+
+  // One rebuild, because this database is shared and the table may have been
+  // created by an older shape of this projection. That is the whole workflow
+  // for changing a projection — `esc projection rebuild board` — and it only
+  // works because `reset` drops rather than truncates: `create table if not
+  // exists` would otherwise keep the old columns and the runner would die on
+  // the first write to a column that is not there.
+  const runner = createProjectionRunner({ projection: boardProjection, store });
+  try {
+    await runner.rebuild();
+  } finally {
+    await runner.close();
+  }
+}, 180_000);
 
 afterAll(async () => {
   await client.close();

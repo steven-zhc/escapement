@@ -24,6 +24,14 @@ export interface GateBadge {
    */
   current: boolean;
   evidence: string | null;
+  /** Each with the concrete failure scenario. Without one it is not a finding. */
+  findings: {
+    file: string;
+    line: number | null;
+    claim: string;
+    failureScenario: string;
+    severity: string;
+  }[];
 }
 
 export interface BoardCard {
@@ -40,6 +48,8 @@ export interface BoardCard {
   /** Which column it is in, so a card only offers a decision where one is
    *  actually being asked for. */
   column: ColumnId;
+  /** Where the branch was cut from, so the card can render base...head. */
+  baseSha: string | null;
   ref: string;
   kind: "bug" | "feature" | "enhancement" | "tech-debt";
   title: string;
@@ -86,6 +96,7 @@ function toCard(card: ProjectionCard): BoardCard {
     workItemId: card.workItemId,
     project: card.project,
     column: card.column,
+    baseSha: card.baseSha,
     ref: card.externalRef,
     kind: card.kind as BoardCard["kind"],
     title: card.title,
@@ -94,6 +105,7 @@ function toCard(card: ProjectionCard): BoardCard {
       state: g.verdict as GateBadge["state"],
       current: g.current,
       evidence: g.evidence,
+      findings: g.findings,
     })),
     ...(card.run
       ? {

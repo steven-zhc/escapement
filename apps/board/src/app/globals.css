@@ -233,3 +233,58 @@ body {
 
 /* Not styled as an error: the work landed, and this says so. */
 .decided { margin: 0; font-size: 11px; color: var(--pass); font-family: var(--mono); }
+
+/* --- evidence -------------------------------------------------------------
+   Collapsed by default. A card three screens tall is its own kind of
+   unreadable, and the point is that the answer is *available* here, not that
+   it is all shouted at once. */
+
+.evidence { display: grid; gap: 4px; }
+details > summary {
+  cursor: pointer;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--muted);
+  list-style: none;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; color: var(--rule-2); }
+details[open] > summary::before { content: "▾"; }
+
+.gsum { font-family: var(--mono); font-size: 10px; }
+.gevidence, .dbody {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  /* Scrolls inside itself. A long line must never make the board scroll
+     sideways — the columns are the navigation. */
+  overflow-x: auto;
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre;
+}
+
+.findings { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.findings li { border-left: 2px solid var(--fail); padding-left: 7px; }
+.fpath { font-family: var(--mono); font-size: 10.5px; color: var(--ink-2); }
+.claim { margin: 3px 0 0; font-size: 12px; color: var(--ink); }
+/* The half that makes it a finding rather than an opinion, so it is not the
+   half that gets styled as an afterthought. */
+.scenario { margin: 2px 0 0; font-size: 11.5px; color: var(--muted); line-height: 1.55; }
+
+.diffview { display: grid; gap: 3px; margin-top: 4px; }
+.dfile > summary { justify-content: space-between; }
+.dcount { font-family: var(--mono); font-size: 10px; }
+.dl { display: block; }
+.dl.add { color: var(--pass); }
+.dl.del { color: var(--fail); }
+.dl.hunk { color: var(--accent-ink); }
+.dl.meta { color: var(--rule-2); }
+.note { margin: 0 0 4px; font-size: 11px; color: var(--signal); }

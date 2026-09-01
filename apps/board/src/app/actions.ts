@@ -25,16 +25,14 @@
 // the same reason `./board` and `./projects` exist.
 import { approve, reject, waive } from "@escapement/conductor/decide";
 import { loadProject } from "@escapement/conductor/projects";
+import { git, stateDir } from "@escapement/conductor/worktree";
 import { githubApp, hasGitHubApp } from "@escapement/env";
 import { createGitHubClient } from "@escapement/github";
 import { revalidatePath } from "next/cache";
+// A "use server" module may only export async functions, so the shapes and the
+// limit live next door.
+import { DIFF_FILE_LIMIT, type ActionResult, type DiffFile, type DiffResult } from "@/lib/diff";
 import { userInfo } from "node:os";
-
-export interface ActionResult {
-  ok: boolean;
-  /** Always said back. A refusal the operator cannot read is a lie by omission. */
-  detail: string;
-}
 
 /**
  * Who is acting.
@@ -147,6 +145,51 @@ export async function waiveGate(input: {
 
     revalidatePath("/");
     return { ok: result.ok, detail: result.detail };
+  } catch (err) {
+    return { ok: false, detail: (err as Error).message };
+  }
+}
+
+/**
+ * The diff, read from Escapement's own mirror.
+ *
+ * On demand rather than in the projection: a diff can be megabytes, projections
+ * are rebuilt by replaying everything, and a card that is never expanded should
+ * cost nothing. The mirror is already on this machine — the conductor cloned it
+ * — so this is a local `git diff`, not a network call.
+ *
+ * Split per file here, on the server, because the alternative is shipping one
+ * giant string and making the browser parse it on the main thread.
+ */
+export async function loadDiff(input: {
+  project: string;
+  baseSha: string;
+  headSha: string;
+}): Promise<DiffResult> {
+  try {
+    const mirror = `${stateDir()}/repos/${input.project}.git`;
+    const raw = await git(["diff", `${input.baseSha}...${input.headSha}`], { cwd: mirror });
+
+    const files: DiffFile[] = [];
+    let current: DiffFile | null = null;
+    for (const line of raw.split("\n")) {
+      if (line.startsWith("diff --git ")) {
+        // `diff --git a/x b/x` — the b-side is the path after a rename.
+        const path = line.slice(line.lastIndexOf(" b/") + 3) || line.slice(11);
+        current = { path, added: 0, removed: 0, lines: [] };
+        files.push(current);
+        continue;
+      }
+      if (!current) continue;
+      current.lines.push(line);
+      if (line.startsWith("+") && !line.startsWith("+++")) current.added += 1;
+      if (line.startsWith("-") && !line.startsWith("---")) current.removed += 1;
+    }
+
+    // Bounded, and honest about it. A run that changed 300 files is a work item
+    // that was scoped too large, which the card says elsewhere.
+    const truncated = files.length > DIFF_FILE_LIMIT;
+    return { ok: true, files: files.slice(0, DIFF_FILE_LIMIT), truncated };
   } catch (err) {
     return { ok: false, detail: (err as Error).message };
   }

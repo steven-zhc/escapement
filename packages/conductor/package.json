@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./board": "./src/board.ts",
     "./projects": "./src/projects.ts",
-    "./decide": "./src/approve.ts"
+    "./decide": "./src/approve.ts",
+    "./worktree": "./src/worktree.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

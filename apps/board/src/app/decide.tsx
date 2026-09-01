@@ -14,7 +14,8 @@
  * was read. That has to be visible, not swallowed.
  */
 import { useState, useTransition } from "react";
-import { approveCard, rejectCard, waiveGate, type ActionResult } from "./actions.ts";
+import { approveCard, rejectCard, waiveGate } from "./actions.ts";
+import type { ActionResult } from "@/lib/diff";
 
 type Pending = "approve" | "reject" | "waive" | null;
 

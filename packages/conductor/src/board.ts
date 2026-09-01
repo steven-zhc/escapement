@@ -56,6 +56,9 @@ export const boardProjection: Projection = {
         -- head is stale, which is how a force-push invalidates approval.
         gates        jsonb not null default '[]'::jsonb,
         head_sha     text,
+        -- The commit the branch was cut from, so the card can render
+        -- base...head without asking git what the merge base was.
+        base_sha     text,
         files        int,
         insertions   int,
         deletions    int,
@@ -89,9 +92,11 @@ export const boardProjection: Projection = {
   },
 
   async reset(ctx) {
-    await ctx.query("truncate table board");
-    await ctx.query("truncate table board_run");
-    await ctx.query("truncate table board_project");
+    // Dropped, not truncated: this table's shape changes as the card learns to
+    // show more, and `create table if not exists` would keep the old columns.
+    await ctx.query("drop table if exists board");
+    await ctx.query("drop table if exists board_run");
+    await ctx.query("drop table if exists board_project");
   },
 
   async apply(events, ctx) {
@@ -225,7 +230,11 @@ export const boardProjection: Projection = {
              on conflict (run_id) do update set work_item_id = excluded.work_item_id`,
             [event.streamId, d.workItemId],
           );
-          await viaRun(ctx, event.streamId, seq, { col: "running", run_id: event.streamId });
+          await viaRun(ctx, event.streamId, seq, {
+            col: "running",
+            run_id: event.streamId,
+            base_sha: d.baseSha,
+          });
           break;
         }
 
@@ -284,11 +293,25 @@ export const boardProjection: Projection = {
         case "ApprovalRequested":
         case "ApprovalGranted":
         case "ApprovalRevoked": {
-          const d = event.data as { gate: string; onSha: string; evidence?: string };
+          const d = event.data as {
+            gate: string;
+            onSha: string;
+            evidence?: string;
+            findings?: BoardGate["findings"];
+          };
           // Every case above is a key of VERDICT; the fallback keeps the type
           // honest rather than asserting it away.
           const verdict = VERDICT[event.type] ?? "pending";
-          await upsertGate(ctx, event.streamId, seq, d.gate, verdict, d.onSha, d.evidence ?? null);
+          await upsertGate(
+            ctx,
+            event.streamId,
+            seq,
+            d.gate,
+            verdict,
+            d.onSha,
+            d.evidence ?? null,
+            d.findings ?? [],
+          );
           if (event.type === "ApprovalRequested") {
             await viaRun(ctx, event.streamId, seq, {
               col: "waiting",
@@ -410,6 +433,7 @@ async function upsertGate(
   verdict: string,
   onSha: string,
   evidence: string | null,
+  findings: BoardGate["findings"],
 ): Promise<void> {
   const rows = await ctx.query<{ work_item_id: string }>(
     "select work_item_id from board_run where run_id = $1",
@@ -431,7 +455,7 @@ async function upsertGate(
          ),
          updated_seq = greatest(updated_seq, $2::bigint)
      where work_item_id = $1`,
-    [workItemId, seq, gate, JSON.stringify({ gate, verdict, onSha, evidence })],
+    [workItemId, seq, gate, JSON.stringify({ gate, verdict, onSha, evidence, findings })],
   );
 }
 
@@ -442,6 +466,21 @@ export interface BoardGate {
   verdict: string;
   onSha: string;
   evidence: string | null;
+  /**
+   * What the reviewer found, each with the concrete failure scenario that made
+   * it a finding rather than an opinion.
+   *
+   * On the card because the alternative is a PR body, and burying them there is
+   * what the board exists to stop. A person deciding whether to merge needs the
+   * scenario, not a count.
+   */
+  findings: {
+    file: string;
+    line: number | null;
+    claim: string;
+    failureScenario: string;
+    severity: string;
+  }[];
   /** False when the verdict is about a commit that is no longer the head. */
   current: boolean;
 }
@@ -457,6 +496,8 @@ export interface BoardCard {
   run: { runId: string; turns: number | null; costUsd: number | null; guardTrips: number; compactions: number } | null;
   diff: { headSha: string; files: number; insertions: number; deletions: number } | null;
   gates: BoardGate[];
+  /** The commit the branch was cut from. Null before the run started. */
+  baseSha: string | null;
   refusal: { reason: string; detail: string | null } | null;
   question: string | null;
   mergeCommit: string | null;
@@ -486,6 +527,10 @@ export async function readBoard(project?: string, url = databaseUrl()): Promise<
     return r.rows.map((row) => {
       const gates = (row.gates as BoardGate[]).map((g) => ({
         ...g,
+        // After the spread, not before: rows written before findings existed
+        // have no key, and putting the fallback first let the spread overwrite
+        // it with undefined. The compiler said so.
+        findings: g.findings ?? [],
         // A verdict is about a diff. If the head moved, it is not about this one.
         current: row.head_sha === null || g.onSha === row.head_sha,
       }));
@@ -506,6 +551,7 @@ export async function readBoard(project?: string, url = databaseUrl()): Promise<
               compactions: row.compactions,
             }
           : null,
+        baseSha: row.base_sha,
         diff: row.head_sha
           ? {
               headSha: row.head_sha,

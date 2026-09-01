@@ -1,6 +1,7 @@
 import { loadBoard, type BoardCard } from "@/lib/board";
 import { loadProjects } from "@escapement/conductor/projects";
 import { Decide } from "./decide.tsx";
+import { Evidence } from "./evidence.tsx";
 
 /**
  * The board is not a status page. It is where the backlog gets worked, and the
@@ -106,6 +107,24 @@ function Card({ card, showProject }: { card: BoardCard; showProject: boolean }) 
         <p className="refusal" title={card.refusalDetail ?? undefined}>
           {card.refusal}
         </p>
+      ) : null}
+
+      {/* If you have to open GitHub to decide, nothing changed. The gate that
+          refused, what it said, the findings with their scenarios, and the
+          diff — all here, all collapsed until asked for. */}
+      {card.diff ? (
+        <Evidence
+          project={card.project}
+          baseSha={card.baseSha}
+          headSha={card.diff.headSha}
+          gates={card.gates.map((g) => ({
+            gate: g.gate,
+            state: g.state,
+            current: g.current,
+            evidence: g.evidence,
+            findings: g.findings,
+          }))}
+        />
       ) : null}
 
       {/* The controls, only where a person is actually the thing being waited
