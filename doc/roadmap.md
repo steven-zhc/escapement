@@ -96,8 +96,24 @@ bottleneck was never tooling — which is worth knowing.
 run in parallel first, with Escapement on a subset of labels, so a failure has
 somewhere to fall back to.
 
-**Exit criterion.** Escapement works admin for seven consecutive days with no
-manual intervention beyond approving on the board, and `agent-loop.sh` is off.
+**Exit criterion.** Escapement takes **two consecutive issues** from the queue
+through to merged, with no manual intervention beyond approving on the board.
+
+*Tightened from "seven consecutive days" on 2026-09-01.* Seven days is a
+measurement of reliability, and reliability is not what Phase 2 builds — it
+builds the mechanisms. A week of uptime can be bought by a quiet week, and it
+cannot be run at all until the mechanisms exist, so it was a criterion that
+could neither fail early nor pass on merit.
+
+Two consecutive issues is a smaller claim and a sharper one. **Consecutive is
+the load-bearing word**: it means the conductor picked the second one up by
+itself. One issue proves the pipeline; two in a row prove there is nothing in
+it that only works once — a lock not released, a worktree not removed, a
+checkpoint not advanced. Those are the failures that a single supervised run
+cannot show and a week of uptime would only show slowly.
+
+Uptime is still worth measuring. It belongs to the cutover, next to retiring
+`agent-loop.sh`, not to the phase that writes the code.
 
 ## Phase 3 — Self-hosting
 
