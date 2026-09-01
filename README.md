@@ -205,11 +205,8 @@ not cheap either, because truncating a projection and replaying it brings the
 cards straight back; the only way to remove them is to delete from an
 append-only table.
 
-Give the test database its schema with:
-
-```bash
-ESCAPEMENT_TEST=1 pnpm --filter @escapement/store db:bootstrap
-```
+Give the test database its schema the same way the main one gets it, with
+`ESCAPEMENT_TEST=1` in front — see [Bringing the database up](#bringing-the-database-up).
 
 ### Bringing the database up
 
@@ -217,9 +214,12 @@ Prisma 8 splits planning from applying. Planning is offline; only the second
 half needs a reachable database.
 
 ```bash
-pnpm db:init                      # bootstrap the database and sign it
+pnpm db:init                      # create the tables and sign the database
 pnpm db:bootstrap                 # apply notify.sql, then prove it worked
 ```
+
+The test database takes the same two, with `ESCAPEMENT_TEST=1` in front of each
+so they resolve `TEST_DIRECT_DATABASE_URL` instead.
 
 `db:bootstrap` is not optional and is not Prisma's job. Prisma models tables, not
 triggers, so `notify.sql` carries the two things the schema cannot express: the
