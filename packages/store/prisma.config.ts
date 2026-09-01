@@ -1,6 +1,6 @@
 import { definePrismaConfig } from "@prisma/cli-engine";
 import { defineConfig as ormConfig } from "@prisma/orm-postgres/config";
-import "./src/env.ts";
+import { dbVar } from "./src/env.ts";
 
 export default definePrismaConfig({
   orm: ormConfig({
@@ -9,6 +9,10 @@ export default definePrismaConfig({
     // statements and transaction pooling breaks that. Read rather than
     // asserted — `contract emit` and `migration plan` are offline and must work
     // with no database configured. See doc/decisions/0009-two-connections.md.
-    db: { connection: process.env["DIRECT_DATABASE_URL"] ?? "" },
+    //
+    // `dbVar` rather than the name directly, so that migrating the test
+    // database is `ESCAPEMENT_TEST=1 pnpm db:bootstrap` and not a second
+    // config that can drift from this one.
+    db: { connection: process.env[dbVar("DIRECT_DATABASE_URL")] ?? "" },
   }),
 });

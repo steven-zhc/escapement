@@ -28,6 +28,65 @@ config({
   quiet: true,
 });
 
+/**
+ * Whether this process is a test run.
+ *
+ * Vitest sets `VITEST`; the explicit override exists for anything that runs the
+ * suite by another name.
+ */
+function inTest(): boolean {
+  return Boolean(process.env["VITEST"] || process.env["ESCAPEMENT_TEST"]);
+}
+
+/**
+ * The connection a test may use, which is never the operator's.
+ *
+ * This is a choke point on purpose. The alternative — teaching each test to
+ * pick the right URL — leaves every default I did not audit still pointing at
+ * the real database, and `integrate()` and `approve()` both fall back to the
+ * default store when no store is passed.
+ *
+ * It **throws** when the test URL is missing rather than falling back. A silent
+ * fallback is how the operator's board came to hold twenty-four cards from ten
+ * throwaway `esctest*` projects and not one real one: the suite had been
+ * writing to the live log for as long as it had existed, and nothing said so.
+ *
+ * Deleting that afterwards is not cheap either. A projection can be truncated
+ * and replayed, so the cards come back; the only way to remove them is to
+ * delete from an append-only log, which is a thing this system should never
+ * make routine.
+ */
+/**
+ * Which variable to read for a connection, given who is asking.
+ *
+ * Exported because two callers cannot go through `databaseUrl()`: Prisma's
+ * config and the bootstrap script both have to work with *nothing* configured
+ * — `contract emit` and `migration plan` are offline commands — so they read
+ * the variable rather than demanding it. They still have to obey the same rule
+ * about which variable, and this is that rule, written once.
+ *
+ *   ESCAPEMENT_TEST=1 pnpm --filter @escapement/store db:bootstrap
+ *
+ * is how the test database gets its schema.
+ */
+export function dbVar(name: "DATABASE_URL" | "DIRECT_DATABASE_URL"): string {
+  return inTest() ? `TEST_${name}` : name;
+}
+
+function testUrl(name: string): string {
+  const value = optional(`TEST_${name}`);
+  if (!value) {
+    throw new Error(
+      `TEST_${name} is not set, and the tests will not run against ${name}. ` +
+        "The suite writes real events, and writing them to the operator's own log " +
+        "leaves work items and board cards that only deleting from an append-only " +
+        "table can remove. Point TEST_DATABASE_URL and TEST_DIRECT_DATABASE_URL at " +
+        "a database of their own — see .env.example.",
+    );
+  }
+  return value;
+}
+
 function required(name: string): string {
   const v = process.env[name];
   if (!v) {
@@ -40,7 +99,7 @@ function required(name: string): string {
 
 /** Pooled. Ordinary reads and writes. */
 export function databaseUrl(): string {
-  return required("DATABASE_URL");
+  return inTest() ? testUrl("DATABASE_URL") : required("DATABASE_URL");
 }
 
 /**
@@ -56,7 +115,7 @@ export function databaseUrl(): string {
  * On a plain Postgres this may be the same string as `databaseUrl()`.
  */
 export function directDatabaseUrl(): string {
-  return required("DIRECT_DATABASE_URL");
+  return inTest() ? testUrl("DIRECT_DATABASE_URL") : required("DIRECT_DATABASE_URL");
 }
 
 /** Set, or undefined. For values whose absence is a legitimate state. */

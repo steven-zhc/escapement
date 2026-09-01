@@ -4,7 +4,7 @@
  *
  *   pnpm --filter @escapement/store db:bootstrap
  *
- * Everything here uses DIRECT_DATABASE_URL. Through a transaction pooler the
+ * Everything here uses the DIRECT url. Through a transaction pooler the
  * cross-connection NOTIFY check below fails silently, which is the whole reason
  * that variable exists — see doc/decisions/0009-two-connections.md.
  */
@@ -12,11 +12,14 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
-import "../src/env.ts";
+import { dbVar } from "../src/env.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const url = process.env["DIRECT_DATABASE_URL"];
-if (!url) throw new Error("DIRECT_DATABASE_URL is not set");
+// `ESCAPEMENT_TEST=1` points this at the test database instead, which is how
+// that one gets its schema.
+const name = dbVar("DIRECT_DATABASE_URL");
+const url = process.env[name];
+if (!url) throw new Error(`${name} is not set`);
 
 const c = new pg.Client({ connectionString: url });
 await c.connect();

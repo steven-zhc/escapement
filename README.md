@@ -195,6 +195,22 @@ The event store must be **its own database**, not one belonging to a managed
 project — Escapement has to keep running while a managed project is the thing
 being changed.
 
+**The tests need a third and fourth string, and refuse to run without them.**
+`TEST_DATABASE_URL` and `TEST_DIRECT_DATABASE_URL` point at a *different*
+database. The suite is not mocked — it appends real events, runs real
+projections and takes real advisory locks — so pointed at your own log it
+leaves work items and board cards behind. It did: twenty-four cards from ten
+throwaway `esctest*` projects, and none from a real one. Cleaning that up is
+not cheap either, because truncating a projection and replaying it brings the
+cards straight back; the only way to remove them is to delete from an
+append-only table.
+
+Give the test database its schema with:
+
+```bash
+ESCAPEMENT_TEST=1 pnpm --filter @escapement/store db:bootstrap
+```
+
 ### Bringing the database up
 
 Prisma 8 splits planning from applying. Planning is offline; only the second
