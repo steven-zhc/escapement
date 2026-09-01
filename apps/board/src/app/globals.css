@@ -22,6 +22,8 @@
   --fail-soft: #f6e1de;
   --held: #63549e;
   --held-soft: #e8e4f4;
+  --sans: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   color-scheme: light;
 }
 
@@ -56,7 +58,7 @@ body {
   margin: 0;
   background: var(--ground);
   color: var(--ink);
-  font: 13.5px/1.5 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 13.5px/1.5 var(--sans);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -74,7 +76,7 @@ body {
 .bar .sep { width: 1px; height: 14px; background: var(--rule-2); }
 
 .chip {
-  font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 10.5px; padding: 2px 7px; border-radius: 2px;
   background: var(--surface-2); border: 1px solid var(--rule); color: var(--muted);
 }
@@ -96,7 +98,7 @@ body {
   font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em;
   color: var(--muted); padding: 0 3px 9px;
 }
-.col-h .ct { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.col-h .ct { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .col.hot .col-h { color: var(--signal); }
 
 .cards { display: flex; flex-direction: column; gap: 7px; }
@@ -105,77 +107,95 @@ body {
 }
 
 /* --- cards ---------------------------------------------------------------
-   Everything below renders a real row of the `board` projection. The card is
-   meant to be workable without leaving it; the diff and the approve / reject
-   controls that finish that promise are #21 and #22. */
+   Everything below renders a real row of the `board` projection.
+
+   This block used to be written against `var(--line, #262a33)` and
+   `var(--dim, #8b93a1)` — two variables that are defined nowhere. Every rule
+   fell through to its hardcoded fallback, and those fallbacks came from an
+   older dark palette, so the cards rendered near-black borders and pink chips
+   on a light background while the bar and columns above them used the real
+   tokens. Two designs in one stylesheet, and the half that was wrong was the
+   half everybody looks at.
+
+   Nothing here hardcodes a colour now. If a token is missing the card should
+   look wrong in a way that is obvious, not plausible.
+
+   The card is meant to be workable without leaving it; the diff and the
+   approve / reject controls that finish that promise are #21 and #22. */
 
 .card {
-  background: var(--surface, #16181d);
-  border: 1px solid var(--line, #262a33);
-  border-radius: 8px;
-  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  /* The state stripe. Colour lives on one edge so the card body stays quiet
+     and a column can still be read at a glance. */
+  border-left: 2px solid var(--rule-2);
+  border-radius: 3px;
+  padding: 9px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
+.card.a-run { border-left-color: var(--accent); }
+.card.a-pass { border-left-color: var(--pass); }
+.card.a-fail { border-left-color: var(--fail); }
+.card.a-sig { border-left-color: var(--signal); }
+.card.a-hold { border-left-color: var(--held); }
 
-.card-h { display: flex; align-items: center; gap: 8px; font-size: 11px; }
-.kind {
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 6px;
-  border-radius: 999px;
-  border: 1px solid var(--line, #262a33);
-  color: var(--dim, #8b93a1);
-}
-.kind.bug { color: #f2a2a2; border-color: #5c3335; }
-.kind.feature { color: #a2c8f2; border-color: #2f4a63; }
-.ref { margin-left: auto; color: var(--dim, #8b93a1); font-variant-numeric: tabular-nums; }
-.title { margin: 0; font-size: 13px; line-height: 1.35; }
-
-.facts, .gates { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.facts li {
+/* Reference and kind on one mono line. They are the same fact — which ticket —
+   and splitting them across the card made the kind read as a status badge. */
+.id {
+  font-family: var(--mono);
   font-size: 11px;
-  color: var(--dim, #8b93a1);
-  border: 1px solid var(--line, #262a33);
-  border-radius: 4px;
-  padding: 0 5px;
-  font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
-/* Guard trips and compactions are warnings, not decoration: they were the two
-   things the old loop generated constantly and never showed anyone. */
-.facts li.warn { color: #e8c07d; border-color: #5c4a2a; }
+.ti { color: var(--ink); }
+/* Quieter than the reference beside it: which repository is context, which
+   ticket is the subject. */
+.proj { color: var(--rule-2); }
 
-.diff { margin: 0; font-size: 11px; color: var(--dim, #8b93a1); font-variant-numeric: tabular-nums; }
-.diff .add { color: #7fc98a; }
-.diff .del { color: #e08b8b; }
-.diff .sha { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-
-.gate {
-  font-size: 11px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--line, #262a33);
-  color: var(--dim, #8b93a1);
+.meta { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin: 0; padding: 0; list-style: none; }
+.pill {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  padding: 1.5px 5px;
+  border-radius: 2px;
+  border: 1px solid var(--rule-2);
+  color: var(--muted);
+  white-space: nowrap;
 }
-.gate.passed { color: #7fc98a; border-color: #2f5c39; }
-.gate.failed { color: #e08b8b; border-color: #5c3335; }
-.gate.waived { color: #e8c07d; border-color: #5c4a2a; }
-.gate.running { color: #a2c8f2; border-color: #2f4a63; }
+.pill.pass { color: var(--pass); border-color: var(--pass); background: var(--pass-soft); }
+.pill.fail { color: var(--fail); border-color: var(--fail); background: var(--fail-soft); }
+.pill.run { color: var(--accent-ink); border-color: var(--accent); background: var(--accent-soft); }
+.pill.hold { color: var(--held); border-color: var(--held); background: var(--held-soft); }
+/* Amber is reserved for "a human is the thing being waited on" — and for the
+   two counters the old loop produced constantly and never showed anyone. */
+.pill.sig { color: var(--signal); border-color: var(--signal); background: var(--signal-soft); }
 /* A verdict about a commit that is no longer the head. Nothing revoked it — a
    force-push simply made it about a different diff. */
-.gate.stale { opacity: 0.45; text-decoration: line-through; }
+.pill.stale { opacity: 0.45; text-decoration: line-through; }
 
-.question { margin: 0; font-size: 12px; color: #e8c07d; }
+.diff {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.diff .add { color: var(--pass); }
+.diff .del { color: var(--fail); }
+
+.question { margin: 0; font-size: 12px; color: var(--signal); }
 .refusal {
   margin: 0;
+  font-family: var(--mono);
   font-size: 11px;
-  color: #e08b8b;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--fail);
 }
 .merge, .regressions {
   margin: 0;
+  font-family: var(--mono);
   font-size: 11px;
-  color: var(--dim, #8b93a1);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
 }
-.regressions { color: #e08b8b; }
+.regressions { color: var(--fail); }

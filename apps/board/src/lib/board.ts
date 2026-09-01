@@ -28,6 +28,15 @@ export interface GateBadge {
 
 export interface BoardCard {
   workItemId: string;
+  /**
+   * Which repository this is from.
+   *
+   * Carried because `ref` is only unique *within* a project. Two projects both
+   * having an issue #122 renders as two cards that look identical and are not,
+   * which is what a board full of `esctest*` fixtures made obvious: eight
+   * cards reading `#122`, one per project, none of them duplicates.
+   */
+  project: string;
   ref: string;
   kind: "bug" | "feature" | "enhancement" | "tech-debt";
   title: string;
@@ -72,6 +81,7 @@ export const COLUMNS: { id: ColumnId; label: string }[] = [
 function toCard(card: ProjectionCard): BoardCard {
   return {
     workItemId: card.workItemId,
+    project: card.project,
     ref: card.externalRef,
     kind: card.kind as BoardCard["kind"],
     title: card.title,
