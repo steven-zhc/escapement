@@ -45,6 +45,8 @@ export interface RunOnceOptions {
   issue: number;
   /** Absolute path to the compiled `esc-hook`. */
   hookBinary: string;
+  /** False wires no hooks and skips the smoke test. See `RenderOptions.guard`. */
+  guard?: boolean;
   /** The ticket prompt. Versioned, and recorded on every `RunPrompted`. */
   prompt: string;
   promptVersion?: string;
@@ -223,13 +225,25 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     log(`worktree ${worktree.path} at ${worktree.baseSha.slice(0, 7)}`);
 
     // ---- 5. the hook, proven to fail closed before anything is dispatched ---
-    const wiring = await writeHookWiring({ runId, hookBinary: options.hookBinary, home });
-    const smoke = await smokeTestFailClosed(options.hookBinary, runBinary);
-    if (!smoke.ok) {
-      // The old loop refused to start when its guard smoke test failed. That
-      // instinct was right and applies to every check.
-      await release("the hook did not fail closed");
-      return { ok: false, workItemId, runId, stage: "hook", detail: smoke.detail };
+    const guardOn = options.guard !== false;
+    const wiring = await writeHookWiring({
+      runId,
+      hookBinary: options.hookBinary,
+      home,
+      guard: guardOn,
+    });
+    if (guardOn) {
+      const smoke = await smokeTestFailClosed(options.hookBinary, runBinary);
+      if (!smoke.ok) {
+        // The old loop refused to start when its guard smoke test failed. That
+        // instinct was right and applies to every check.
+        await release("the hook did not fail closed");
+        return { ok: false, workItemId, runId, stage: "hook", detail: smoke.detail };
+      }
+    } else {
+      // Said out loud every time. A guard that can be turned off quietly is one
+      // that will be found off later by someone who assumed otherwise.
+      log("guard OFF — no tool call is mediated, and no guard trips are recorded");
     }
 
     // ---- 6. prepare: make the worktree workable, or refuse for free --------

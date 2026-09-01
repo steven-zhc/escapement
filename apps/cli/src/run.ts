@@ -30,6 +30,8 @@ export interface RunOptions {
   merge?: boolean;
   /** Defaults to the compiled hook in `packages/hook/bin`. */
   hookBinary?: string;
+  /** False for `--no-guard`: no hooks wired, no binary required. */
+  guard?: boolean;
   promptPath?: string;
 }
 
@@ -49,14 +51,18 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
     return 1;
   }
 
+  const guard = options.guard !== false;
   const hookBinary = options.hookBinary ?? resolve(root, "packages/hook/bin/esc-hook");
-  try {
-    await readFile(hookBinary);
-  } catch {
-    // The hook is a compiled artefact and is not committed. A run without it
-    // would be a run with no guard at all, which must not start.
-    log(`no esc-hook binary at ${hookBinary} — run: pnpm --filter @escapement/hook build`);
-    return 1;
+  if (guard) {
+    try {
+      await readFile(hookBinary);
+    } catch {
+      // The hook is a compiled artefact and is not committed. A run without it
+      // would be a run with no guard at all, which must not start — unless the
+      // operator said so, which is what --no-guard is for.
+      log(`no esc-hook binary at ${hookBinary} — run: pnpm --filter @escapement/hook build`);
+      return 1;
+    }
   }
 
   const promptPath = options.promptPath ?? resolve(root, "prompts/ticket.md");
@@ -85,6 +91,7 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
     token: () => client.token(),
     merge: options.merge,
     hookBinary,
+    guard,
     promptVersion: `ticket@${prompt.length}`,
     log,
   };

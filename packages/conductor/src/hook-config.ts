@@ -78,6 +78,17 @@ export interface RenderOptions {
   home?: string;
   /** Claude Code's extras. Off for a runtime that does not have them. */
   includeClaudeOnly?: boolean;
+  /**
+   * False wires no hooks at all: the settings file is still written, so
+   * `--settings` has somewhere to point, but nothing mediates a tool call.
+   *
+   * For bringing the pipeline up on a machine the operator is watching. The
+   * guard is not one of the three real boundaries (ADR 0007) — the filtered
+   * environment and the disposable worktree still hold with this off — but a
+   * run without it records no guard trips and no touched files, so it proves
+   * less about a run than it looks like it does.
+   */
+  guard?: boolean;
 }
 
 /**
@@ -88,6 +99,11 @@ export interface RenderOptions {
  * runtime's.
  */
 export function renderSettings(options: RenderOptions): unknown {
+  // Explicitly empty rather than absent. `--settings` still points at a real
+  // file, and a settings file with no hooks says "nothing mediates tool calls
+  // here" in a way that reading it makes obvious.
+  if (options.guard === false) return { hooks: {} };
+
   // Absolute, and checked rather than trusted, because a relative path here
   // fails *open*. The caller verifies the binary exists by resolving it against
   // its own cwd; Claude Code spawns it resolved against the worktree. A relative

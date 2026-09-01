@@ -43,6 +43,8 @@ export interface ScheduleOptions {
   client: GitHubClient;
   runtime: Runtime;
   hookBinary: string;
+  /** False wires no hooks and skips the smoke test. See `RenderOptions.guard`. */
+  guard?: boolean;
   prompt: string;
   promptVersion?: string;
   /** The recipe's priority order. Priority is asked, not stored — see `queue`. */
@@ -136,6 +138,7 @@ export async function runQueue(options: ScheduleOptions): Promise<ScheduleResult
       runtime: options.runtime,
       issue,
       hookBinary: options.hookBinary,
+      ...(options.guard === undefined ? {} : { guard: options.guard }),
       // Raw. `runOnce` has the ticket and does the substitution.
       prompt: options.prompt,
       ...(options.promptVersion === undefined ? {} : { promptVersion: options.promptVersion }),

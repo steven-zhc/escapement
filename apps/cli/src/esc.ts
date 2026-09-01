@@ -44,6 +44,7 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
     --max <n>                   stop after n items (--max 2 is Phase 2's bar)
     --once                      the same as --max 1
     --no-merge                  stop after the gates and ask before merging
+    --no-guard                  wire no hooks; nothing mediates a tool call
   esc approve <project> --issue <n>
                                 merge what a held run produced, if its head has
                                 not moved since the approval was asked for
@@ -82,15 +83,28 @@ async function doctor(): Promise<number> {
   return report.failed === 0 ? 0 : 1;
 }
 
-/** `--flag value` pairs plus positionals. Enough for three commands. */
+/**
+ * `--flag value` pairs plus positionals. Enough for three commands.
+ *
+ * A flag whose next token is another flag, or which ends the line, is a boolean
+ * and consumes nothing. Without that rule `--no-merge --no-guard` parsed as
+ * `no-merge: "--no-guard"` and swallowed the second flag whole, so the guard
+ * stayed on while the command line said to turn it off — a flag that reads as
+ * ignored is the one kind that is worse than a flag that errors.
+ */
 function parseFlags(args: string[]): { positional: string[]; flags: Record<string, string> } {
   const positional: string[] = [];
   const flags: Record<string, string> = {};
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a.startsWith("--")) {
-      flags[a.slice(2)] = args[i + 1] ?? "";
-      i++;
+      const next = args[i + 1];
+      if (next === undefined || next.startsWith("--")) {
+        flags[a.slice(2)] = "";
+      } else {
+        flags[a.slice(2)] = next;
+        i++;
+      }
     } else {
       positional.push(a);
     }
@@ -147,7 +161,7 @@ async function projectionCommand(args: string[]): Promise<number> {
     }
     const runner = createProjectionRunner({ projection });
     try {
-      // Truncate, reset the checkpoint, replay. This is what makes a
+      // Drop the table, reset the checkpoint, replay. This is what makes a
       // projection's shape free to change: a rebuild, not a migration.
       await runner.rebuild();
       const lag = await runner.lag();
@@ -175,7 +189,7 @@ async function main(argv: string[]): Promise<number> {
       );
       const project = positional.find((p) => p !== "--once") ?? flags["project"];
       if (!project) {
-        console.error("esc run <project> [--issue <n>] [--max <n>] [--no-merge]");
+        console.error("esc run <project> [--issue <n>] [--max <n>] [--no-merge] [--no-guard]");
         return 2;
       }
 
@@ -198,8 +212,9 @@ async function main(argv: string[]): Promise<number> {
         ...(issue === undefined ? {} : { issue }),
         ...(max === undefined ? {} : { max }),
         // `--no-merge` is absence of merging, so the flag's presence is the
-        // whole signal.
+        // whole signal. Same shape for `--no-guard`.
         merge: !("no-merge" in flags),
+        guard: !("no-guard" in flags),
       });
     }
     case "approve": {
