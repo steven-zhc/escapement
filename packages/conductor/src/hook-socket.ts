@@ -41,6 +41,23 @@ export type HookName =
   | "PreCompact"
   | "Notification";
 
+/**
+ * The tools that change a file, and what to call what they did.
+ *
+ * A list rather than a default, because the failure modes are not symmetric. A
+ * tool missing from here means a real edit goes unrecorded, which shows up as a
+ * diff nobody predicted — visible, and annoying. A default that treats anything
+ * with a `file_path` as a write means reads are recorded as writes, which shows
+ * up as a board that confidently reports work that never happened. Only the
+ * second kind is hard to notice, so the list is the one that is easy to audit.
+ */
+const MUTATIONS: Record<string, "write" | "edit" | undefined> = {
+  Write: "write",
+  Edit: "edit",
+  MultiEdit: "edit",
+  NotebookEdit: "edit",
+};
+
 export interface RegisteredRun {
   runId: string;
   policy: GuardPolicy;
@@ -171,11 +188,18 @@ export function createHookServer(options: HookServerOptions): HookServer {
 
     if (hook === "PostToolUse") {
       // Observation only. Counted, never blocking — the tool already ran.
+      //
+      // Only the tools that actually change a file. This used to record any
+      // call carrying a `file_path` and default the op to "write", which meant
+      // every `Read` was written down as a write. One run logged fifteen
+      // `RunTouchedFile` events with `op: "write"` for a worktree it had not
+      // modified at all — the board showed fifteen changed files, the diff
+      // showed none, and the log was the thing that was wrong. In a system
+      // whose whole claim is that the log is the answer, a plausible fiction is
+      // worse than a gap.
+      const op = MUTATIONS[call.tool];
       const path = (call.input["file_path"] ?? call.input["path"]) as string | undefined;
-      if (path) {
-        const op = call.tool === "Write" ? "write" : call.tool === "Edit" ? "edit" : "write";
-        run.touched.push({ path, op });
-      }
+      if (op && path) run.touched.push({ path, op });
       options.onDecision?.(run.runId, hook, "allow");
       return { allow: true };
     }

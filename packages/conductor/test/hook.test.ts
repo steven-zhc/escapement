@@ -65,6 +65,14 @@ const preToolUse = (command: string) =>
     session_id: "s1",
   });
 
+const postToolUse = (tool: string, filePath: string) =>
+  JSON.stringify({
+    hook_event_name: "PostToolUse",
+    tool_name: tool,
+    tool_input: { file_path: filePath },
+    session_id: "s1",
+  });
+
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), "esc-hook-"));
   binary = join(root, "esc-hook");
@@ -277,6 +285,32 @@ describe("the lifecycle hooks", () => {
     // "Which prompt produced better work" is only answerable if the version is
     // on the event.
     expect((prompted[prompted.length - 1]!.data as { promptVersion: string }).promptVersion).toBe("ticket@3");
+  });
+
+  /**
+   * A run once logged fifteen `RunTouchedFile` events with `op: "write"` for a
+   * worktree it had not modified: every one was a `Read`. The board reported
+   * fifteen changed files against an empty diff, and the log — the thing the
+   * whole design says is the answer — was the part that was wrong.
+   */
+  it("records what changed a file, and not what merely read one", async () => {
+    const before = (await store.read(runId)).filter((e) => e.type === "RunTouchedFile").length;
+
+    await runHook(binary, env(), postToolUse("Read", "/w/only-read.ts"));
+    await runHook(binary, env(), postToolUse("Grep", "/w/searched.ts"));
+    await runHook(binary, env(), postToolUse("Write", "/w/created.ts"));
+    await runHook(binary, env(), postToolUse("Edit", "/w/changed.ts"));
+    await server.flush(runId);
+
+    const touched = (await store.read(runId))
+      .filter((e) => e.type === "RunTouchedFile")
+      .slice(before)
+      .map((e) => e.data as { path: string; op: string });
+
+    expect(touched).toEqual([
+      { path: "/w/created.ts", op: "write" },
+      { path: "/w/changed.ts", op: "edit" },
+    ]);
   });
 
   it("records compaction, because it means the item was scoped too large", async () => {

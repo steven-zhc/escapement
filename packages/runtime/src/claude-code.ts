@@ -167,6 +167,22 @@ export function createClaudeCodeRuntime(options: ClaudeCodeOptions = {}): Runtim
         // configuration has no hook configuration.
         "--settings",
         request.settingsPath,
+        // The guard is the gate, so the runtime's own permission layer must not
+        // be a second one. Without this a run is not merely stricter, it is
+        // impossible: `-p` is non-interactive, so every Write, Edit and most
+        // Bash calls come back as "you haven't granted it yet" and there is no
+        // prompt to grant anything. One real run spent 45 turns and $3.35
+        // reading the repository, designing the change, and then reporting that
+        // it could not write a single file. esc-hook denied none of it — none
+        // of it ever reached esc-hook.
+        //
+        // Not a loosening. `guarded` has always meant the worktree plus the
+        // hook (see `providesTier` below, and ADR 0007): containment is the
+        // filtered environment and the disposable worktree, and the hook is
+        // what makes a tool call refusable. Deferring to it is the design, and
+        // leaving a second layer in front of it only hides the first.
+        "--permission-mode",
+        "bypassPermissions",
         "--session-id",
         sessionId,
         ...(request.model ? ["--model", request.model] : []),
