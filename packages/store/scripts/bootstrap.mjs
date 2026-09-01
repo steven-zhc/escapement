@@ -96,8 +96,17 @@ await listener.end();
 await c.query("alter table events disable rule escapement_events_no_delete");
 await c.query("delete from events where stream_id = 'wi-probe-1'");
 await c.query("alter table events enable rule escapement_events_no_delete");
-const left = await c.query("select count(*)::int n from events");
-check("probe rows removed", left.rows[0].n === 0, `${left.rows[0].n} rows remain`);
+// Scoped to the probe stream, not the whole table.
+//
+// This counted every row in `events` and asserted zero. On an empty database
+// those are the same question; on any database that has recorded a single real
+// event they are not, so a script documented as "run it again any time you
+// doubt the database" would have started failing the moment Escapement did any
+// work at all. It surfaced against a database with a hundred events in it.
+const left = await c.query(
+  "select count(*)::int n from events where stream_id = 'wi-probe-1'",
+);
+check("probe rows removed", left.rows[0].n === 0, `${left.rows[0].n} probe rows remain`);
 
 await c.end();
 
