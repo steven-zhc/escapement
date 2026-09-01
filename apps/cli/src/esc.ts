@@ -20,6 +20,7 @@ import {
 } from "@escapement/store";
 import type { Tier } from "@escapement/core";
 import { boardProjection, taskViewProjection } from "@escapement/conductor";
+import { startDaemon } from "@escapement/daemon";
 import { add } from "./add.ts";
 import { approveCommand } from "./approve.ts";
 import { formatReport, runDoctor } from "./doctor.ts";
@@ -53,7 +54,8 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
   esc status [project]          what is runnable, and what is holding the rest
     --all                       include items that have left the queue
   esc doctor                    check everything that can be checked
-  esc projection run            follow the log and keep every projection current
+  esc daemon                    hold the projections (and, from #43, the conductor)
+  esc projection run            the same thing, kept as an alias
   esc projection lag            how far each projection is behind the log
   esc projection rebuild <name> drop the table, reset the checkpoint, replay
   esc help
@@ -173,89 +175,44 @@ async function projectionCommand(args: string[]): Promise<number> {
     }
   }
 
-  if (sub === "run") return followProjections();
+  // Kept as an alias: following projections is what the daemon does, and two
+  // ways to say it is one more than the number of things it is.
+  if (sub === "run") return daemonCommand();
 
   console.error(USAGE);
   return 2;
 }
 
 /**
- * Hold every projection open and follow the log until told to stop.
+ * `esc daemon` — the process that holds the long-lived work.
  *
- * The runner already knew how to do this — `start()` creates the tables,
- * catches up and then follows. What was missing was a *process* to hold them,
- * so in practice nothing ever advanced a projection: `esc run` appended events,
- * the board's SSE dutifully re-read on every notify, and what it re-read was a
- * table that had not moved since the last manual `rebuild`. Two work items
- * merged into `develop` for real while their cards sat in "waiting on you",
- * which reads as "the button did nothing" and is the worst way to be wrong —
- * the system was right and only its account of itself was stale.
+ * The follower used to live in this file, which meant nothing held it unless
+ * somebody kept a terminal open. It is in `@escapement/daemon` now, behind one
+ * advisory lock, so this is the command and not the mechanism.
  *
- * No timer. Postgres notifies on append, and `subscribe` resumes from the
- * checkpoint, so a process that was asleep or dead catches up on the way back
- * rather than skipping what it missed.
- *
- * A projection whose handler throws stops with its checkpoint intact, and this
- * exits rather than carrying on with the others. Serving three-quarters of a
- * board is how you get a board nobody can trust: the failure has to be as
- * visible as the thing it broke.
+ * Losing the lock exits 0. Running this while launchd's copy is up is a
+ * reasonable thing to do, and answering it with an error would teach people to
+ * ignore errors.
  */
-async function followProjections(): Promise<number> {
-  const names = Object.keys(PROJECTIONS);
-  if (names.length === 0) {
-    console.error("no projections registered");
-    return 2;
-  }
-
-  let stopping = false;
-  // A holder rather than a bare `let`: the only assignment is inside a callback,
-  // which the compiler cannot see, so it narrows the variable to `null` and then
-  // rejects reading it after the await.
-  const outcome: { failed: { name: string; error: unknown } | null } = { failed: null };
-  const runners = names.map((name) =>
-    createProjectionRunner({
-      projection: PROJECTIONS[name]!,
-      onError: (error, phase) => {
-        // A connection error retries inside `subscribe`; a handler error has
-        // already stopped that runner.
-        if (phase !== "handler") return;
-        outcome.failed ??= { name, error };
-        stop();
-      },
-    }),
-  );
-
-  let release: () => void = () => {};
-  const until = new Promise<void>((resolve) => {
-    release = resolve;
+async function daemonCommand(): Promise<number> {
+  const started = await startDaemon({
+    projections: Object.values(PROJECTIONS),
+    log: (line) => console.log(line),
   });
 
-  function stop(): void {
-    if (stopping) return;
-    stopping = true;
-    release();
+  if (!started.ok) {
+    console.log(`another daemon holds the lock${started.holder ? ` (${started.holder})` : ""} — nothing to do`);
+    return 0;
   }
 
+  const stop = () => started.daemon.stop();
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 
-  try {
-    for (const runner of runners) {
-      await runner.start();
-      const lag = await runner.lag();
-      console.log(`${runner.name}\tfollowing at ${lag.lastSeq}/${lag.headSeq}`);
-    }
-    console.log(`following ${runners.length} projection(s) — ctrl-c to stop`);
-    await until;
-  } finally {
-    for (const runner of runners) {
-      await runner.stop().catch(() => {});
-      await runner.close().catch(() => {});
-    }
-  }
-
-  if (outcome.failed) {
-    console.error(`${outcome.failed.name} stopped: ${String(outcome.failed.error)}`);
+  const reason = await started.daemon.stopped;
+  if (reason === "projection-failed") {
+    const failed = started.daemon.failure;
+    console.error(`stopped: ${failed?.projection} failed — ${String(failed?.error)}`);
     return 1;
   }
   console.log("stopped");
@@ -323,6 +280,8 @@ async function main(argv: string[]): Promise<number> {
     }
     case "doctor":
       return doctor();
+    case "daemon":
+      return daemonCommand();
     case "projection":
       return projectionCommand(rest);
     case "version":

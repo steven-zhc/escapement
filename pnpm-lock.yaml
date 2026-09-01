@@ -66,6 +66,9 @@ importers:
       '@escapement/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@escapement/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
       '@escapement/env':
         specifier: workspace:*
         version: link:../../packages/env
@@ -172,6 +175,37 @@ importers:
       '@types/node':
         specifier: ^26.4.0
         version: 26.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/daemon:
+    dependencies:
+      '@escapement/conductor':
+        specifier: workspace:*
+        version: link:../conductor
+      '@escapement/core':
+        specifier: workspace:*
+        version: link:../core
+      '@escapement/env':
+        specifier: workspace:*
+        version: link:../env
+      '@escapement/store':
+        specifier: workspace:*
+        version: link:../store
+      pg:
+        specifier: ^8.16.3
+        version: 8.23.0
+    devDependencies:
+      '@types/node':
+        specifier: ^26.4.0
+        version: 26.4.0
+      '@types/pg':
+        specifier: ^8.15.5
+        version: 8.23.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

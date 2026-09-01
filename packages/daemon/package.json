@@ -1,29 +1,25 @@
 {
-  "name": "@escapement/cli",
+  "name": "@escapement/daemon",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": {
-    "esc": "./src/esc.ts"
+  "exports": {
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@escapement/conductor": "workspace:*",
-    "@escapement/config": "workspace:*",
     "@escapement/core": "workspace:*",
     "@escapement/env": "workspace:*",
-    "@escapement/github": "workspace:*",
-    "@escapement/runtime": "workspace:*",
     "@escapement/store": "workspace:*",
-    "pg": "^8.16.3",
-    "@escapement/daemon": "workspace:*"
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
-    "@types/pg": "^8.15.6",
+    "@types/pg": "^8.15.5",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   }
