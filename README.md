@@ -297,6 +297,18 @@ append-only table.
 Give the test database its schema the same way the main one gets it, with
 `ESCAPEMENT_TEST=1` in front — see [Bringing the database up](#bringing-the-database-up).
 
+**Empty its log now and then.** The suite cleans up its own streams but the log
+only grows, and one test rebuilds a projection — which replays the whole log, so
+its cost is the log's length. After a few weeks that test crossed its 60s
+timeout and started failing for reasons unrelated to the code it covers.
+
+```bash
+ESCAPEMENT_TEST=1 pnpm --filter @escapement/store db:reset-test
+```
+
+It refuses twice over if you point it at anything else: the flag has to be set,
+*and* the string it resolves has to differ from the one without the flag.
+
 ### Bringing the database up
 
 Prisma 8 splits planning from applying. Planning is offline; only the second

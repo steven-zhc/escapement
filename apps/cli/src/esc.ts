@@ -53,6 +53,7 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
   esc status [project]          what is runnable, and what is holding the rest
     --all                       include items that have left the queue
   esc doctor                    check everything that can be checked
+  esc projection run            follow the log and keep every projection current
   esc projection lag            how far each projection is behind the log
   esc projection rebuild <name> drop the table, reset the checkpoint, replay
   esc help
@@ -172,8 +173,93 @@ async function projectionCommand(args: string[]): Promise<number> {
     }
   }
 
+  if (sub === "run") return followProjections();
+
   console.error(USAGE);
   return 2;
+}
+
+/**
+ * Hold every projection open and follow the log until told to stop.
+ *
+ * The runner already knew how to do this — `start()` creates the tables,
+ * catches up and then follows. What was missing was a *process* to hold them,
+ * so in practice nothing ever advanced a projection: `esc run` appended events,
+ * the board's SSE dutifully re-read on every notify, and what it re-read was a
+ * table that had not moved since the last manual `rebuild`. Two work items
+ * merged into `develop` for real while their cards sat in "waiting on you",
+ * which reads as "the button did nothing" and is the worst way to be wrong —
+ * the system was right and only its account of itself was stale.
+ *
+ * No timer. Postgres notifies on append, and `subscribe` resumes from the
+ * checkpoint, so a process that was asleep or dead catches up on the way back
+ * rather than skipping what it missed.
+ *
+ * A projection whose handler throws stops with its checkpoint intact, and this
+ * exits rather than carrying on with the others. Serving three-quarters of a
+ * board is how you get a board nobody can trust: the failure has to be as
+ * visible as the thing it broke.
+ */
+async function followProjections(): Promise<number> {
+  const names = Object.keys(PROJECTIONS);
+  if (names.length === 0) {
+    console.error("no projections registered");
+    return 2;
+  }
+
+  let stopping = false;
+  // A holder rather than a bare `let`: the only assignment is inside a callback,
+  // which the compiler cannot see, so it narrows the variable to `null` and then
+  // rejects reading it after the await.
+  const outcome: { failed: { name: string; error: unknown } | null } = { failed: null };
+  const runners = names.map((name) =>
+    createProjectionRunner({
+      projection: PROJECTIONS[name]!,
+      onError: (error, phase) => {
+        // A connection error retries inside `subscribe`; a handler error has
+        // already stopped that runner.
+        if (phase !== "handler") return;
+        outcome.failed ??= { name, error };
+        stop();
+      },
+    }),
+  );
+
+  let release: () => void = () => {};
+  const until = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  function stop(): void {
+    if (stopping) return;
+    stopping = true;
+    release();
+  }
+
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+
+  try {
+    for (const runner of runners) {
+      await runner.start();
+      const lag = await runner.lag();
+      console.log(`${runner.name}\tfollowing at ${lag.lastSeq}/${lag.headSeq}`);
+    }
+    console.log(`following ${runners.length} projection(s) — ctrl-c to stop`);
+    await until;
+  } finally {
+    for (const runner of runners) {
+      await runner.stop().catch(() => {});
+      await runner.close().catch(() => {});
+    }
+  }
+
+  if (outcome.failed) {
+    console.error(`${outcome.failed.name} stopped: ${String(outcome.failed.error)}`);
+    return 1;
+  }
+  console.log("stopped");
+  return 0;
 }
 
 async function main(argv: string[]): Promise<number> {

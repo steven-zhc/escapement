@@ -15,7 +15,8 @@
     "db:status": "prisma migration status",
     "typecheck": "tsc --noEmit",
     "db:bootstrap": "node scripts/bootstrap.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:reset-test": "node scripts/reset-test-log.mjs"
   },
   "dependencies": {
     "@escapement/core": "workspace:*",

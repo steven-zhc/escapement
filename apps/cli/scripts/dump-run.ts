@@ -21,7 +21,12 @@ if (!id) {
   process.exit(2);
 }
 
-const events = await eventStore.read(id.startsWith("run-") ? id : `run-${id}`);
+// A bare run uuid is the common case and gets the prefix; anything already
+// carrying one — `run-`, `wi-`, `project-` — is passed through. A failed merge
+// appends `WorkItemBlocked` to the *work item* stream, not the run's, so
+// reading only runs makes a run look like it simply stopped.
+const streamId = /^[0-9a-f]{8}-/.test(id) ? `run-${id}` : id;
+const events = await eventStore.read(streamId);
 if (events.length === 0) console.error(`no events for ${id}`);
 
 for (const e of events) {
