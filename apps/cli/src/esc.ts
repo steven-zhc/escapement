@@ -238,4 +238,24 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
-process.exitCode = await main(process.argv.slice(2));
+/**
+ * Every ending is a sentence, not a stack trace.
+ *
+ * The commands report their own refusals and return an exit code, but anything
+ * that *throws* went straight to Node — which printed a stack, a file path and
+ * a version banner over the one line that mattered. `esc add` against a
+ * repository whose default branch has no recipe did exactly that, and the
+ * README's claim that "every refusal names itself" was false for it.
+ *
+ * The stack is still there for the errors that are bugs rather than refusals;
+ * it just has to be asked for.
+ */
+try {
+  process.exitCode = await main(process.argv.slice(2));
+} catch (err) {
+  const error = err as Error;
+  console.error(error.message || String(err));
+  if (process.env["ESCAPEMENT_DEBUG"]) console.error(error.stack);
+  else console.error("\n(ESCAPEMENT_DEBUG=1 for the stack)");
+  process.exitCode = 1;
+}

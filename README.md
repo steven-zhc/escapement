@@ -169,6 +169,40 @@ never reported by anything at all.
 | `apps/board` | The web UI. Real cards, read from the projection. |
 | `doc/` | The design, every decision, and the experiments that back them. |
 
+## What it writes to disk
+
+**Nothing in your checkout of the managed repository.** `esc add` takes a
+GitHub coordinate — `steven-zhc/nextloom-ai-admin` — not a local path, and
+Escapement clones its own copy. Your working tree is never read, never written
+and never looked at, which is the whole reason the integrator exists: the old
+harness merged in the operator's own checkout, and uncommitted work there is
+what made #58 and #59 re-run five times for roughly $29 with nothing reporting
+why.
+
+Everything lives under `ESCAPEMENT_HOME`, which defaults to `~/.escapement`:
+
+```
+~/.escapement/
+├── repos/<project>.git          bare mirror — persistent
+├── worktrees/<project>/<runId>  one per run — disposable
+└── runs/<runId>/settings.json   the hook wiring
+```
+
+| | Lifetime | Why there |
+|---|---|---|
+| `repos/<project>.git` | Persistent | Expensive. The first clone is a network round trip; after that every run is a `fetch`. This is why cutting a worktree took 1.7s in [experiment 005](doc/experiments/005-rung-1-reaches-a-real-repository.md). |
+| `worktrees/<project>/<runId>` | One run | Cheap. Cut from the mirror, removed when the run ends — and removed *before* the integrator runs, because a worktree holding `agent/<n>` checked out stops git updating that ref. |
+| `runs/<runId>/settings.json` | One run | **Outside the worktree, deliberately.** An agent that can edit its own hook configuration has no hook configuration. |
+| `$TMPDIR/escapement/*.sock` | One run | The hook's socket. In `$TMPDIR` rather than under `ESCAPEMENT_HOME` because a unix socket path has a hard 104-byte limit and a home directory plus a run id exceeds it — see [ADR 0011](doc/decisions/0011-hook-latency-is-runtime-startup.md). |
+
+Two things in this repository are also not committed: `.env.local`, and
+`packages/hook/bin/esc-hook` — a 55 MB compiled binary that `pnpm --filter
+@escapement/hook build` produces.
+
+**`rm -rf ~/.escapement` is safe.** Everything in it is either re-clonable from
+GitHub or belongs to a run that is over. The part that matters — the event log —
+is in Postgres, and none of it is here.
+
 [#20]: https://github.com/steven-zhc/escapement/issues/20
 [#21]: https://github.com/steven-zhc/escapement/issues/21
 [#22]: https://github.com/steven-zhc/escapement/issues/22

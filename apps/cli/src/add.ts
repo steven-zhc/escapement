@@ -14,7 +14,7 @@
  * submodule but not the repository itself produced a day of 403s on CI, and
  * nothing anywhere said "wrong scope".
  */
-import { RECIPE_PATH, resolveRecipe } from "@escapement/config";
+import { RECIPE_PATH, RecipeMissingError, resolveRecipe } from "@escapement/config";
 import { type Tier, parsePayload } from "@escapement/core";
 import {
   NotInstalledError,
@@ -73,10 +73,31 @@ export async function add(options: AddOptions, log = console.log): Promise<numbe
   log("permissions: issues, contents, pull requests write; metadata read");
 
   const client = await createGitHubClient({ auth, owner, repo, installation });
+  const fromDefault = options.base === undefined;
   const base = options.base ?? (await client.defaultBranch());
+  // Said *before* the read, not after it. When this is the wrong branch the
+  // failure is otherwise a sentence about a file, and the reader has to work
+  // out for themselves that the branch is the surprising part.
+  log(`base: ${base}${fromDefault ? " (the repository's default branch)" : ""}`);
 
   // 3. The recipe, read from the base branch. Never from anywhere else.
-  const resolved = await resolveRecipe((path, ref) => client.fileAt(path, ref), base);
+  let resolved: Awaited<ReturnType<typeof resolveRecipe>>;
+  try {
+    resolved = await resolveRecipe((path, ref) => client.fileAt(path, ref), base);
+  } catch (err: unknown) {
+    if (!(err instanceof RecipeMissingError)) throw err;
+    log(err.message);
+    if (fromDefault) {
+      // The overwhelmingly common cause: a repository whose default branch is
+      // not the branch it merges into. `nextloom-ai-admin`'s default is a
+      // feature branch, and the recipe lives on `develop`.
+      log("");
+      log(`Nothing named a base, so this used ${base} — the repository's default branch.`);
+      log("If that is not the branch work merges into, say which is:");
+      log(`  esc add ${owner}/${repo} --base <branch>`);
+    }
+    return 1;
+  }
   const fromSha = await client.refSha(base);
   log(`recipe: ${RECIPE_PATH} at ${base}@${fromSha.slice(0, 7)} — hash ${resolved.configHash.slice(0, 12)}`);
   log(`  ${resolved.recipe.gates.length} gate(s): ${resolved.recipe.gates.map((g) => g.name).join(", ")}`);
