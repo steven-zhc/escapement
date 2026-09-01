@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { boardProjection, integrationStream, readBoard, runOnce, workItemStream } from "../src/index.ts";
+import { approve, boardProjection, integrationStream, readBoard, runOnce, workItemStream } from "../src/index.ts";
 import type { ProjectState } from "@escapement/core";
 
 const exec = promisify(execFile);
@@ -386,6 +386,107 @@ git add -A && git commit -q -m "fix the race"
     // over — the same rule every other refusal follows.
     const item = await store.read(workItemStream(PROJECT, 123));
     expect(item.map((e) => e.type)).toContain("WorkItemReleased");
+  }, 180_000);
+
+  /**
+   * `--no-merge` is the only thing standing between a passing gate and a write
+   * to the base branch until the human gate exists (#20). It is also how rung 2
+   * of the ladder runs at all.
+   */
+  it("holds after the gates instead of merging, and asks for approval", async () => {
+    // Unique content. `develop` is shared across these tests and an earlier one
+    // merges `src/fix.ts`; writing the same bytes again produces no commit, and
+    // the run then fails at `diff` for a reason that has nothing to do with
+    // holding.
+    const agent = await agentThat(`
+mkdir -p src && echo "export const held = 124;" > src/fix.ts
+git add -A && git commit -q -m "fix the race"
+`);
+    const before = await g(["rev-parse", "develop"], originPath);
+
+    const result = await runOnce({
+      ...options(agent),
+      issue: 124,
+      merge: false,
+      client: fakeClient({ getIssue: async () => ({ ...issue, number: 124 }) }),
+    });
+
+    expect(result.ok).toBe("held");
+    if (result.ok !== "held") return;
+
+    // Nothing was written to the base branch. That is the entire promise.
+    expect((await g(["rev-parse", "develop"], originPath)).stdout).toBe(before.stdout);
+
+    const events = (await store.read(result.runId)).map((e) => e.type);
+    // The gates ran and their verdicts stand — a hold is not a skip.
+    expect(events).toContain("GatePassed");
+    // And it asked, in the vocabulary the human gate will use, rather than
+    // inventing a second one.
+    expect(events).toContain("ApprovalRequested");
+    expect(events).not.toContain("IntegrationAttempted");
+
+    // "Waiting on you", not back in the queue where another run could claim it
+    // and throw the question away.
+    const item = (await store.read(result.workItemId)).map((e) => e.type);
+    expect(item).toContain("WorkItemBlocked");
+    expect(item).not.toContain("WorkItemReleased");
+
+    // ---- and then approving it merges the thing that was looked at ---------
+    const approved = await approve({
+      project: PROJECT,
+      issue: 124,
+      base: "develop",
+      client: fakeClient({ refSha: async () => result.headSha }),
+      by: "human:test",
+      store,
+      home,
+      gitEnv: { ...process.env, ...authored },
+    });
+
+    expect(approved.ok).toBe(true);
+    if (!approved.ok) return;
+    expect((await g(["rev-parse", "develop"], originPath)).stdout).not.toBe(before.stdout);
+  }, 180_000);
+
+  /**
+   * The reason the approval carries a sha at all. In the old system approval was
+   * a label, and a label survives any amount of rewriting — so a force-push
+   * inherited its own approval.
+   */
+  it("refuses to merge an approval whose branch has moved since", async () => {
+    const agent = await agentThat(`
+mkdir -p src && echo "export const held = 125;" > src/fix.ts
+git add -A && git commit -q -m "fix the race"
+`);
+    const result = await runOnce({
+      ...options(agent),
+      issue: 125,
+      merge: false,
+      client: fakeClient({ getIssue: async () => ({ ...issue, number: 125 }) }),
+    });
+    expect(result.ok).toBe("held");
+    if (result.ok !== "held") return;
+
+    const before = (await g(["rev-parse", "develop"], originPath)).stdout;
+
+    const approved = await approve({
+      project: PROJECT,
+      issue: 125,
+      base: "develop",
+      // The branch head is not what was approved: someone pushed after the ask.
+      client: fakeClient({ refSha: async () => "9".repeat(40) }),
+      by: "human:test",
+      store,
+      home,
+      gitEnv: { ...process.env, ...authored },
+    });
+
+    expect(approved.ok).toBe(false);
+    if (approved.ok) return;
+    expect(approved.reason).toBe("stale");
+    // Nothing merged, and the message names both shas rather than saying "no".
+    expect(approved.detail).toContain(result.headSha.slice(0, 7));
+    expect((await g(["rev-parse", "develop"], originPath)).stdout).toBe(before);
   }, 180_000);
 
   it("refuses before claiming anything when the recipe cannot be read", async () => {

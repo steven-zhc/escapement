@@ -54,11 +54,28 @@ export interface RunOnceOptions {
   gitEnv?: NodeJS.ProcessEnv;
   /** Overrides the clone source. The tests point it at a local repository. */
   remote?: string;
+  /**
+   * False stops after the gates, with the branch pushed and every verdict
+   * recorded, and asks a person for the merge.
+   *
+   * This is not a separate mechanism from the human gate (#20). It requests the
+   * same `ApprovalRequested` the recipe will request once that exists, which is
+   * what keeps it from becoming a second vocabulary for one idea. The hold is
+   * bound to `onSha` like any other verdict, so a force-push invalidates it by
+   * arithmetic rather than by anyone remembering to.
+   */
+  merge?: boolean;
   log?: (line: string) => void;
 }
 
 export type RunOnceResult =
   | { ok: true; workItemId: string; runId: string; mergeCommit: string }
+  /**
+   * Reached the merge and stopped, because a person asked it to. Deliberately
+   * not `ok: false` with a stage — nothing refused, and calling it a failure
+   * would be the kind of convenient fiction the log exists to prevent.
+   */
+  | { ok: "held"; workItemId: string; runId: string; headSha: string; gate: string }
   | { ok: false; workItemId: string | null; runId: string | null; stage: string; detail: string };
 
 /** How a runtime is spawned for the fail-closed smoke test. */
@@ -365,7 +382,55 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       // end-to-end run fail.
       await removeWorktree({ project, runId, home }).catch(() => {});
 
-      // ---- 9. the merge lane ---------------------------------------------
+      // ---- 9. hold, if a person asked to see it first ----------------------
+      // After the push, so the branch is there to look at, and after the gates,
+      // so what is being approved is a diff someone has evidence about.
+      //
+      // The approval is requested even when a gate refused. "The build is red,
+      // merge anyway" is a decision a person is allowed to make — that is what
+      // a waiver is for — and pre-empting it here would mean the flag silently
+      // means something different on a red run than on a green one.
+      if (options.merge === false) {
+        const gate = "merge";
+        const at = (await store.read(runId)).length;
+        await store.append(runId, at, [
+          {
+            type: "ApprovalRequested",
+            actor: "conductor",
+            data: parsePayload("ApprovalRequested", {
+              gate,
+              runId,
+              onSha: headSha,
+              question: pipeline.ok
+                ? `Merge ${branch} into ${base}? Every gate passed.`
+                : `Merge ${branch} into ${base} anyway? The ${pipeline.failedAt} gate refused.`,
+              artifacts: [`${branch}@${headSha}`],
+            }),
+          },
+        ]);
+        // Blocked rather than released, the same as a refusal — a question for
+        // a person belongs in "Waiting on you", not back in the queue where
+        // another run could claim it and throw the question away. It also stops
+        // the claim's lease from quietly expiring while someone thinks.
+        const blockedAt = (await store.read(workItemId)).length;
+        await store.append(workItemId, blockedAt, [
+          {
+            type: "WorkItemBlocked",
+            actor: "conductor",
+            data: parsePayload("WorkItemBlocked", {
+              question: `held for approval to merge ${branch} into ${base}`,
+              needsFrom: "human",
+              runId,
+            }),
+          },
+        ]);
+        released = true;
+
+        log(`held at ${headSha.slice(0, 7)} — asked for approval to merge into ${base}`);
+        return { ok: "held", workItemId, runId, headSha, gate };
+      }
+
+      // ---- 10. the merge lane ---------------------------------------------
       const merged = await integrate({
         project,
         owner: options.client.owner,

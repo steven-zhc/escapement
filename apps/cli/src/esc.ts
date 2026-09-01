@@ -21,6 +21,7 @@ import {
 import type { Tier } from "@escapement/core";
 import { queueProjection } from "@escapement/conductor";
 import { add } from "./add.ts";
+import { approveCommand } from "./approve.ts";
 import { formatReport, runDoctor } from "./doctor.ts";
 import { run as runOnceCommand } from "./run.ts";
 import { status } from "./status.ts";
@@ -39,6 +40,11 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
     --require <gate,gate>       gates the recipe may not remove
   esc run --once <project> --issue <n>
                                 one nominated issue, discovery through merge
+    --no-merge                  stop after the gates and ask before merging
+  esc approve <project> --issue <n>
+                                merge what a held run produced, if its head has
+                                not moved since the approval was asked for
+    --note <text>               recorded with the approval
   esc status [project]          what is runnable, and what is holding the rest
     --all                       include items that have left the queue
   esc doctor                    check everything that can be checked
@@ -171,7 +177,18 @@ async function main(argv: string[]): Promise<number> {
         console.error("esc run --once <project> --issue <n>");
         return 2;
       }
-      return runOnceCommand({ project, issue });
+      // `--no-merge` is absence of merging, so the flag's presence is the
+      // whole signal.
+      return runOnceCommand({ project, issue, merge: !("no-merge" in flags) });
+    }
+    case "approve": {
+      const { positional, flags } = parseFlags(rest);
+      const issue = Number(flags["issue"]);
+      if (!positional[0] || !Number.isInteger(issue)) {
+        console.error("esc approve <project> --issue <n> [--note <text>]");
+        return 2;
+      }
+      return approveCommand({ project: positional[0], issue, note: flags["note"] });
     }
     case "status": {
       const { positional, flags } = parseFlags(rest);

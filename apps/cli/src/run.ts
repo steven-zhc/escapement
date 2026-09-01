@@ -19,6 +19,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 export interface RunOptions {
   project: string;
   issue: number;
+  /** False for `--no-merge`: stop after the gates and ask before writing. */
+  merge?: boolean;
   /** Defaults to the compiled hook in `packages/hook/bin`. */
   hookBinary?: string;
   promptPath?: string;
@@ -75,14 +77,22 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
     // gets a chance to. Passed as the client's token *function*, not a string:
     // an installation token lasts an hour and a run's wall limit is two.
     token: () => client.token(),
+    merge: options.merge,
     hookBinary,
     prompt: prompt.replace("{{issue}}", String(options.issue)),
     promptVersion: `ticket@${prompt.length}`,
     log,
   });
 
-  if (result.ok) {
+  if (result.ok === true) {
     log(`landed ${result.mergeCommit.slice(0, 7)} — ${result.workItemId}`);
+    return 0;
+  }
+  if (result.ok === "held") {
+    // Exit 0: holding is what was asked for, and a non-zero code here would
+    // teach a person to ignore it.
+    log(`held at ${result.headSha.slice(0, 7)} — ${result.workItemId} is waiting on you`);
+    log(`nothing was merged. Re-run without --no-merge to merge it.`);
     return 0;
   }
   // Every stage that can refuse names itself, so "why did nothing happen" has
