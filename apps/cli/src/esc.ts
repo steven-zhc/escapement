@@ -19,7 +19,7 @@ import {
   type Projection,
 } from "@escapement/store";
 import type { Tier } from "@escapement/core";
-import { boardProjection, taskViewProjection } from "@escapement/conductor";
+import { taskViewProjection } from "@escapement/conductor";
 import { createWorkLoop, startDaemon } from "@escapement/daemon";
 import { conductorPass } from "./conduct.ts";
 import { add } from "./add.ts";
@@ -31,7 +31,6 @@ import { status } from "./status.ts";
 /** Every projection the runner knows how to advance, by `checkpoints.name`. */
 const PROJECTIONS: Record<string, Projection> = {
   [taskViewProjection.name]: taskViewProjection,
-  [boardProjection.name]: boardProjection,
   [guardTripsProjection.name]: guardTripsProjection,
 };
 

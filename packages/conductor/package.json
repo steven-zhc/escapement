@@ -5,10 +5,10 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./board": "./src/board.ts",
     "./projects": "./src/projects.ts",
     "./decide": "./src/approve.ts",
-    "./worktree": "./src/worktree.ts"
+    "./worktree": "./src/worktree.ts",
+    "./task-view": "./src/task-view.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

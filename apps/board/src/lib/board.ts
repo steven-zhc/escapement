@@ -1,78 +1,52 @@
 /**
- * The board's data.
+ * The board's data: one query, against one table.
  *
- * Until now `loadBoard` returned empty columns on purpose — a board showing
- * fictional work is worse than one showing none. It now reads the `board`
- * projection, so the columns are empty exactly when the log is.
+ * `task_view` holds what a card shows and nothing else
+ * ([0012](../../../../doc/decisions/0012-one-task-view.md)). Gate evidence,
+ * review findings, guard trips and the diff are **not** here — they are read
+ * from the event stream when somebody opens a task, because a list view and a
+ * detail view have opposite economics and the list is what has to be cheap.
  *
- * The shape is defined here rather than in the projection because the board is
- * the only consumer and a projection's shape follows its reader. Changing it
- * costs a `TRUNCATE` and a replay, not a migration.
+ * That is also why the card got readable. It was heavy because the old
+ * projection made everything available and what is available gets rendered;
+ * moving detail behind a task id makes a card's contents a decision.
  */
-import { type BoardCard as ProjectionCard, readBoard } from "@escapement/conductor/board";
-import type { RefusalReason, Tier } from "@escapement/core";
+// The subpath, not the barrel: importing the barrel pulls in the gate
+// pipeline and its child-process types, which a page rendering cards has no
+// business compiling.
+import { readTasks, type TaskCard } from "@escapement/conductor/task-view";
 
 export type ColumnId = "queued" | "running" | "gates" | "waiting" | "landed";
 
-export interface GateBadge {
-  gate: string;
-  state: "pending" | "running" | "passed" | "failed" | "waived";
-  /**
-   * False when the verdict was made against a commit that is no longer the
-   * head. A force-push does not revoke anything; it simply makes every verdict
-   * about a different diff.
-   */
-  current: boolean;
-  evidence: string | null;
-  /** Each with the concrete failure scenario. Without one it is not a finding. */
-  findings: {
-    file: string;
-    line: number | null;
-    claim: string;
-    failureScenario: string;
-    severity: string;
-  }[];
-}
-
 export interface BoardCard {
-  workItemId: string;
+  taskId: string;
   /**
    * Which repository this is from.
    *
-   * Carried because `ref` is only unique *within* a project. Two projects both
-   * having an issue #122 renders as two cards that look identical and are not,
-   * which is what a board full of `esctest*` fixtures made obvious: eight
+   * Carried because an issue number is only unique *within* a project. Two
+   * projects both having a #122 renders as two cards that look identical and
+   * are not — which a board full of `esctest*` fixtures made obvious: eight
    * cards reading `#122`, one per project, none of them duplicates.
    */
   project: string;
-  /** Which column it is in, so a card only offers a decision where one is
-   *  actually being asked for. */
   column: ColumnId;
-  /** Where the branch was cut from, so the card can render base...head. */
-  baseSha: string | null;
   ref: string;
-  kind: "bug" | "feature" | "enhancement" | "tech-debt";
+  kind: string;
   title: string;
-  gates: GateBadge[];
-  /** Present while running. */
-  run?: {
-    turn: number | null;
-    costUsd: number | null;
-    /** 77% of the old loop's runs tripped the guard and nobody ever saw one. */
-    guardTrips: number;
-    /** Compaction means the item was scoped too large. */
-    compactions: number;
-    tier: Tier;
-  };
-  diff?: { headSha: string; files: number; insertions: number; deletions: number };
-  /** Why the integrator refused, when it did. */
-  refusal?: RefusalReason | string;
-  refusalDetail?: string | null;
-  /** Work items later filed against this one — merged is not the same as correct. */
-  regressions?: string[];
-  /** Set when a human, not a process, is the thing being waited on. */
-  question?: string;
-  mergeCommit?: string;
+  tier: string;
+  /** For the approve/reject controls, which are bound to a specific commit. */
+  headSha: string | null;
+  /** Counts, not verdicts. The verdicts are on the task's own page. */
+  gatesPassed: number;
+  gatesFailed: number;
+  guardTrips: number;
+  turns: number | null;
+  costUsd: number | null;
+  /** One line: what it is waiting on, or why it stopped, or what it merged as. */
+  note: string | null;
+  updatedAt: string;
+  /** Attempts so far, so a card that keeps failing reads as one. */
+  attempts: number;
 }
 
 export interface BoardColumn {
@@ -91,59 +65,45 @@ export const COLUMNS: { id: ColumnId; label: string }[] = [
   { id: "landed", label: "Landed" },
 ];
 
-function toCard(card: ProjectionCard): BoardCard {
+function toCard(t: TaskCard): BoardCard {
   return {
-    workItemId: card.workItemId,
-    project: card.project,
-    column: card.column,
-    baseSha: card.baseSha,
-    ref: card.externalRef,
-    kind: card.kind as BoardCard["kind"],
-    title: card.title,
-    gates: card.gates.map((g) => ({
-      gate: g.gate,
-      state: g.verdict as GateBadge["state"],
-      current: g.current,
-      evidence: g.evidence,
-      findings: g.findings,
-    })),
-    ...(card.run
-      ? {
-          run: {
-            turn: card.run.turns,
-            costUsd: card.run.costUsd,
-            guardTrips: card.run.guardTrips,
-            compactions: card.run.compactions,
-            tier: card.tier as Tier,
-          },
-        }
-      : {}),
-    ...(card.diff ? { diff: card.diff } : {}),
-    ...(card.refusal ? { refusal: card.refusal.reason, refusalDetail: card.refusal.detail } : {}),
-    ...(card.regressions.length ? { regressions: card.regressions } : {}),
-    ...(card.question ? { question: card.question } : {}),
-    ...(card.mergeCommit ? { mergeCommit: card.mergeCommit } : {}),
+    taskId: t.taskId,
+    project: t.project,
+    column: t.state,
+    ref: t.issue,
+    kind: t.kind,
+    title: t.title,
+    tier: t.tier,
+    headSha: t.headSha,
+    gatesPassed: t.gatesPassed,
+    gatesFailed: t.gatesFailed,
+    guardTrips: t.guardTrips,
+    turns: t.turns,
+    costUsd: t.costUsd,
+    note: t.note,
+    updatedAt: t.updatedAt.toISOString(),
+    attempts: t.attempts,
   };
 }
 
 /**
- * Reads the `board` projection into columns.
+ * Reads `task_view` into columns.
  *
- * If the projection has never been built the tables do not exist, and that is
- * reported as empty rather than as a crash — an unbuilt board is a state the
- * system can be in, and it is the state it is in before the first run.
+ * An unbuilt projection is reported as empty rather than as a crash: it is a
+ * state the system can be in, and it is the state it is in before the first
+ * run. Showing fictional work would be worse than showing none.
  */
 export async function loadBoard(project?: string): Promise<BoardColumn[]> {
-  let cards: ProjectionCard[] = [];
+  let tasks: TaskCard[] = [];
   try {
-    cards = await readBoard(project);
+    tasks = await readTasks(project === undefined ? {} : { project });
   } catch (err) {
-    // `relation "board" does not exist` — nothing has run the projection yet.
+    // `relation "task_view" does not exist` — nothing has run the projection.
     if (!/does not exist/i.test((err as Error).message)) throw err;
   }
 
   return COLUMNS.map((c) => ({
     ...c,
-    cards: cards.filter((card) => card.column === c.id).map(toCard),
+    cards: tasks.filter((t) => t.state === c.id).map(toCard),
   }));
 }

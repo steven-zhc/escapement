@@ -80,13 +80,6 @@ export {
   type IntegrateResult,
 } from "./integrate.ts";
 export {
-  boardProjection,
-  readBoard,
-  type BoardCard,
-  type BoardColumnId,
-  type BoardGate,
-} from "./board.ts";
-export {
   DEFAULT_BACKOFF_MS,
   DEFAULT_RETENTION_DAYS,
   TASK_VIEW_TABLE,
