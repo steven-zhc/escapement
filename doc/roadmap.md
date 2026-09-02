@@ -209,7 +209,7 @@ data backfill for any of it. That licence is not available again.
 | **3c′** | Fold `prepare` into the `prepared` point — split out of 3c, because it deletes three events and reroutes the board | `PreparationStarted/Passed/Failed` are gone and the install step is declared at `gates.prepared` |
 | **3d** ✓ | The `end` gate; closing the issue as an action; `labelsFor` out of the outbox | A landed issue is closed, and what closed it is named in the recipe |
 | **3e** ✓ | Board: four states, five points, `skipped` rendered | An unconfigured gate is **visible as skipped**, never omitted — 0016 §4 |
-| **3f** | Re-run one admin ticket end to end | The loop still closes unattended, on the new model |
+| **3f** ✓ | Re-run one admin ticket end to end | The loop still closes unattended, on the new model |
 
 **3e is the one that matters.** If a skipped gate is omitted rather than shown,
 the whole design degrades into the plugin free-for-all

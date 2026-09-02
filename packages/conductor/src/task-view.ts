@@ -642,7 +642,6 @@ export async function readTasks(options: ReadTasksOptions = {}): Promise<TaskCar
     const r = await client.query(
       `select t.*
        from task_view t
-       left join task_view_project p on p.project = t.project
        ${where}
        order by t.project,
          -- "Waiting on you" is oldest first: it is the column that stalls, and

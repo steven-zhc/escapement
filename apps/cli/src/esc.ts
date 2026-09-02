@@ -252,6 +252,18 @@ async function daemonCommand(flags: Record<string, string> = {}): Promise<number
       // Asked from the log every pass. A pause issued while a run is in flight
       // has to land at the next opportunity without anybody restarting this.
       paused: async () => (await readControl()).paused,
+      // A pause stops taking work, never delivering what already happened.
+      // Same deliverer, no conductor pass: `conductorPass({ max: 0 })` builds
+      // the per-project clients and takes nothing.
+      drain: async () => {
+        const idle = await conductorPass({ max: 0, log: () => {} });
+        const sent = await deliverOutbox({
+          deliverer: deliverer(idle.clients),
+          log: (line) => console.log(line),
+        });
+        if (sent.delivered > 0) console.log(`paused — ${sent.delivered} delivered anyway`);
+      },
+
       pass: async (reason) => {
         const outcome = await conductorPass({
           merge: !("no-merge" in flags),

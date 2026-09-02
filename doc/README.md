@@ -42,6 +42,7 @@ Three kinds of thing live here, and the distinction matters.
 | [006](experiments/006-the-loop-closes-unattended.md) | Does the loop close with nobody running a command? | yes — admin #156, 15 turns, $0.83 |
 | [007](experiments/007-the-log-before-the-reset.md) | What was in the log before ADR 0016 reset it? | 106 events, Phase 0 through 2a, kept because it is the only copy |
 | [008](experiments/008-deny-survives-bypass.md) | Does `permissions.deny` survive `bypassPermissions`? | yes, by removing the tool — so the guard is deleted, not renamed |
+| [009](experiments/009-the-end-gate-closes-its-own-issue.md) | Does the new model land and close a ticket by itself? | yes — admin #157, 8 turns, $0.63, closed with its label intact |
 
 ## Open
 

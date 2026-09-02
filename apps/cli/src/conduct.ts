@@ -136,6 +136,13 @@ export async function conductorPass(options: ConductOptions = {}): Promise<PassO
         repo: name,
       });
       outcome.clients.set(name, client);
+
+      // `max: 0` means "build the clients and take nothing". The daemon uses it
+      // to drain the outbox while paused: a pause stops work being taken, never
+      // effects that already happened from going out. Returning here rather
+      // than relying on `runQueue({ max: 0 })` because a nominated issue would
+      // otherwise still jump the queue and run.
+      if (options.max === 0) continue;
       const resolved = await currentRecipe(project, client);
 
       // Ask GitHub first. Without this the queue is whatever the last pass saw,
