@@ -10,17 +10,19 @@ examples instead of pretending to be exhaustive.
 **Counted 2026-09-02.**
 
 > **This describes the code as it is, not [ADR 0016](decisions/0016-the-settled-model.md).**
-> **Steps 3a and 3b have landed** and is reflected below: the guard is gone, and with it
+> **Steps 3a, 3b and 3c have landed** and is reflected below: the guard is gone, and with it
 > `GuardTripped`, the `guard_trips` projection and the `--no-guard` flag; and the
-> policy concept is gone, with `tier` now the recipe's. Still ahead: four gate
-> *kinds* become five gate *points* (3c–3e). This file is updated as each step lands, never ahead of it. A
+> policy concept is gone, with `tier` now the recipe's; and gates are five fixed
+> *points* rather than four *kinds*. Still ahead: the `end` gate's actions (3d),
+> the board's four states with `skipped` rendered (3e), and folding `prepare`
+> into the `prepared` point, which was split out of 3c. This file is updated as each step lands, never ahead of it. A
 > reference that documents intent instead of behaviour is the defect this
 > repository hit four times on 2026-09-02, and it is the one thing this file
 > exists not to do.
 
 ---
 
-## event — 39 types
+## event — 40 types
 
 One fact that already happened, past tense. Never edited, never deleted.
 Source: the registry at the bottom of `packages/core/src/events.ts`.
@@ -31,7 +33,7 @@ Source: the registry at the bottom of `packages/core/src/events.ts`.
 | dispatch (1) | `DispatchRefused` |
 | preparation (3) | `PreparationStarted` `PreparationPassed` `PreparationFailed` |
 | run (9) | `RunStarted` `RunPrompted` `RunTouchedFile` `RunContextExhausted` `RunAwaitingInput` `RunProducedDiff` `RunProposedCompletion` `RunFinished` `RunFailed` |
-| gate (5) | `GateRequested` `GateStarted` `GatePassed` `GateFailed` `GateWaived` |
+| gate (6) | `GatesResolved` `GateRequested` `GateStarted` `GatePassed` `GateFailed` `GateWaived` |
 | approval (3) | `ApprovalRequested` `ApprovalGranted` `ApprovalRevoked` |
 | integration (3) | `IntegrationAttempted` `IntegrationRefused` `IntegrationSucceeded` |
 | control (2) | `ConductorPaused` `ConductorResumed` |
@@ -124,23 +126,60 @@ process startup alone was 17ms.
 **Four tools count as mutations** (`hook-socket.ts`), and only these produce
 `RunTouchedFile`: `Write` · `Edit` · `MultiEdit` · `NotebookEdit`.
 
-## gate kind — 4, and 3 verdicts
+## gate point — 5, closed forever
 
-A named check producing a verdict about **one commit**. Source: `GateSpec` in
-`packages/config/src/recipe.ts`, dispatched in `packages/gates/src/from-recipe.ts`.
+A gate is a **place in the loop**, not a kind of check. The set may never grow.
+Source: `GatePoint` and `GATE_POINTS` in `packages/core/src/events.ts`.
 
-| Kind | Verdict from | Needs from the caller |
+| Point | When | May refuse? |
 |---|---|---|
-| `process` | a command's exit code (`run:`) | nothing |
-| `agent` | a cold reviewer reading the diff | a reviewer runtime |
-| `policy` | globs in `watch:` against the diff's file list, then `request-approval` or `fail` | the diff's file list |
-| `human` | a person, later, on the same stream | nothing |
+| `admit` | the queue offers an item, before it is claimed | yes |
+| `prepared` | after the worktree exists, before the agent starts | yes |
+| `diff` | the agent stopped and there are commits | yes |
+| `merge` | after `diff` passes, before the merge lane | yes |
+| `end` | the work item reached any terminal outcome | **no** |
 
-`run-once.ts` supplies both dependencies, so all four run. A kind whose
-dependency is missing is refused by name, never skipped.
+Today only `diff` and `merge` have anything wired: `diff` runs the recipe's
+actions, `merge` holds when a `human` action asks or when `--no-merge` does.
+`admit`, `prepared` and `end` are declared and empty, which is what an
+unconfigured point *is* rather than a gap.
+
+## gate action — 4 kinds
+
+What runs at a point. Source: `GateAction` in `packages/config/src/recipe.ts`.
+
+| Key | Verdict comes from | Needs |
+|---|---|---|
+| `run:` | a command's exit code | nothing |
+| `agent:` | a cold reviewer reading the diff, given this prompt | a reviewer runtime |
+| `watch:` | globs against the diff's file list, then `request-approval` or `fail` | the diff's file list |
+| `human:` | a person, later, on the same stream; the string is the question | nothing |
+
+The shape is GitHub Actions': a `name`, exactly one of the keys above, and its
+parameters beside it. Order within a point is the array's, the first refusal
+wins, and the actions after it do not run.
 
 Verdicts: `passed` · `failed` · `needs-approval`. The third is not a flavour of
 failure — nothing is wrong, and nothing may proceed until a person says so.
+
+**Verdicts are keyed `point:action`** in `task_view`, the board and `reduceRun`.
+Two points may run an action of the same name, and a bare name would let the
+second silently overwrite the first.
+
+`onSha` is load-bearing: a verdict is about a diff, so a force-push invalidates
+it by arithmetic rather than by anybody noticing.
+
+## what the log says was *supposed* to happen
+
+`GatesResolved`, one per run, appended before anything is claimed. It names all
+five points and the ordered actions resolved for each — empty arrays included.
+
+Without it the log could not distinguish "nothing was configured here" from
+"this point does not exist", because `ProjectConfigured` carries a config *hash*
+and not the configuration. That distinction is what [ADR 0016](decisions/0016-the-settled-model.md)
+§4 rests on: an unconfigured gate is skipped and that is the user's call; a gate
+that *was* configured and did not run is Escapement's bug, and comparing this
+event to the verdicts that follow is how the second becomes detectable.
 
 ## tier — 3
 
