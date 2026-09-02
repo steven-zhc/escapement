@@ -129,13 +129,24 @@ whether it would have made that visible.
 
 | Stage | What it delivers | Done when |
 |---|---|---|
-| **2a** | The minimum runnable daemon: one lock, the projection follower, `TaskView`, the UI reading it | An issue goes queue → landed and the card moves on its own, with nobody running a command |
-| **2b** | Control and liveness: drain / pause / stop / run-now through the log, `daemon_status` heartbeat on the board | The board can stop the daemon taking work, and always says whether it is up |
-| **2c** | Robustness: attempt backoff, `Reconciled` at startup, webhooks | A failed ticket does not re-run in a loop, and a crash leaves nothing stuck |
+| **2a** | The minimum runnable daemon: one lock, the projection follower, `TaskView`, the UI reading it · **built** | An issue goes queue → landed and the card moves on its own, with nobody running a command — *the pieces are verified; the full loop has not been run once end to end* |
+| **2b** | Control and liveness: pause / resume / run-now through the log, `daemon_status` heartbeat · **done** | The board can stop the daemon taking work, and always says whether it is up |
+| **2c** | Robustness: attempt backoff, `Reconciled` at startup, webhooks · **done** | A failed ticket does not re-run in a loop, and a crash leaves nothing stuck |
 | **2d** | Everything deferred on purpose: caching, retention, notifications, the outbox | — |
 
 Stage 2a is the bar for "the model is running". Nothing that is an optimisation
 belongs before it.
+
+**Status, 2026-09-01.** 2a, 2b and 2c are built; 314 tests. What has *not*
+happened is one uninterrupted queue-to-landed run with nobody typing a command —
+every piece of it is verified separately and the whole has not been watched
+once, which is a different claim and the phase is not done until it is made.
+
+The cutover is also outstanding and is deliberately not a code task. 35 of
+`nextloom-ai-admin`'s 37 open issues still carry `agent:*` labels, and that
+exclusion is the only thing keeping the daemon off them — removing it hands a
+35-item backlog to something that spends money per item, on the strength of two
+successful runs. Watch it work first ([#29](https://github.com/steven-zhc/escapement/issues/29)).
 
 **Cutover.** `agent-loop.sh` is retired at the end, not the start. Both systems
 run in parallel first, with Escapement on a subset of labels, so a failure has
