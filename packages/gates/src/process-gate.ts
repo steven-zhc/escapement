@@ -33,7 +33,7 @@ export function createProcessGate(spec: ProcessGateSpec): Gate {
 
   return {
     name: spec.name,
-    kind: "process",
+    kind: "run",
 
     async run(context: GateContext): Promise<GateResult> {
       const outcome = await runCommand({

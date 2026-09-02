@@ -21,31 +21,74 @@
 import { z } from "zod";
 import { Tier, WorkKind, RuntimeId } from "@escapement/core";
 
-export const GateSpec = z.discriminatedUnion("kind", [
+/**
+ * One thing that runs at a gate.
+ *
+ * The shape is GitHub Actions' — an optional `name`, exactly one key saying
+ * *what kind of thing this is*, and that kind's parameters beside it. Copied
+ * rather than invented because [ADR 0005](../../../doc/decisions/0005-config-in-target-repo.md)
+ * already frames a recipe as a workflow file, and a second dialect for the same
+ * idea is a second thing to learn for no gain.
+ *
+ * A union rather than a discriminated union: the discriminator is *which key is
+ * present*, which zod cannot switch on. The cost is a worse error message on a
+ * malformed action; the alternative was a `uses:` field on every entry,
+ * including the ones where it says nothing.
+ */
+export const GateAction = z.union([
+  /** A command. Its exit code is the verdict. */
   z.object({
-    kind: z.literal("process"),
     name: z.string(),
     run: z.string(),
     timeout: z.string().default("15m"),
   }),
+  /** A cold reviewer, given the diff and this prompt. */
   z.object({
-    kind: z.literal("agent"),
     name: z.string(),
-    prompt: z.string(),
+    agent: z.string(),
   }),
+  /** Globs against the diff's file list; a match holds or fails. */
   z.object({
-    kind: z.literal("policy"),
     name: z.string(),
-    /** Globs matched against the diff's file list. */
     watch: z.array(z.string()).min(1),
     then: z.enum(["request-approval", "fail"]).default("request-approval"),
   }),
+  /** Waits for a person. The string is the question they are asked. */
   z.object({
-    kind: z.literal("human"),
     name: z.string(),
+    human: z.string(),
   }),
 ]);
-export type GateSpec = z.infer<typeof GateSpec>;
+export type GateAction = z.infer<typeof GateAction>;
+
+/**
+ * What runs at each of the five points.
+ *
+ * Every point is present and defaults to empty, which is the whole design in
+ * one line: **an unconfigured gate is skipped, and the skip is visible.** A
+ * missing key here is not "undefined", it is "nothing runs, and the board says
+ * so" (ADR 0016 §4).
+ *
+ * Order within a point is the array's. The first refusal wins and the actions
+ * after it do not run — continuing would spend money producing verdicts about a
+ * diff that is not going anywhere.
+ */
+export const GateMap = z.object({
+  admit: z.array(GateAction).default([]),
+  prepared: z.array(GateAction).default([]),
+  diff: z.array(GateAction).default([]),
+  merge: z.array(GateAction).default([]),
+  end: z.array(GateAction).default([]),
+});
+export type GateMap = z.infer<typeof GateMap>;
+
+/** The action's kind, for an event and for dispatch. Exactly one key decides it. */
+export function kindOfAction(action: GateAction): "run" | "agent" | "watch" | "human" {
+  if ("run" in action) return "run";
+  if ("agent" in action) return "agent";
+  if ("watch" in action) return "watch";
+  return "human";
+}
 
 export const Recipe = z.object({
   version: z.literal(1),
@@ -99,7 +142,9 @@ export const Recipe = z.object({
     plantAt: z.string(),
   }),
 
-  gates: z.array(GateSpec).min(1),
+  // Spelled out rather than `.default({})`: all five points exist whether or
+  // not a recipe mentions them, and writing that here says so once.
+  gates: GateMap.default({ admit: [], prepared: [], diff: [], merge: [], end: [] }),
 
   runtime: z.object({
     agent: RuntimeId.default("claude-code"),

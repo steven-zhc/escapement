@@ -299,9 +299,11 @@ export const taskViewProjection: Projection = {
         case "ApprovalRequested":
         case "ApprovalGranted":
         case "ApprovalRevoked": {
-          const d = event.data as { gate: string; question?: string };
+          // Keyed `point:action`, because two points can run an action of the
+          // same name and a bare name would let the second overwrite the first.
+          const d = event.data as { gate: string; action: string; question?: string };
           const verdict = VERDICT[event.type];
-          if (verdict) await setGate(ctx, event.streamId, seq, at, d.gate, verdict);
+          if (verdict) await setGate(ctx, event.streamId, seq, at, `${d.gate}:${d.action}`, verdict);
           if (event.type === "ApprovalRequested") {
             await viaRun(ctx, event.streamId, seq, at, {
               state: "waiting",

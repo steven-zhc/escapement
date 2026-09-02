@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  GateKindNotImplementedError,
+  GateActionUnavailableError,
   type GateEvent,
   createProcessGate,
   gatesFromRecipe,
@@ -112,6 +112,7 @@ describe("the pipeline", () => {
   it("puts onSha on every verdict", async () => {
     const { events, emit } = collector();
     await runGatePipeline({
+      point: "diff",
       gates: [createProcessGate({ name: "build", run: "exit 0" })],
       context,
       emit,
@@ -127,6 +128,7 @@ describe("the pipeline", () => {
   it("runs in recipe order", async () => {
     const { events, emit } = collector();
     await runGatePipeline({
+      point: "diff",
       gates: [
         createProcessGate({ name: "build", run: "exit 0" }),
         createProcessGate({ name: "lint", run: "exit 0" }),
@@ -135,10 +137,12 @@ describe("the pipeline", () => {
       emit,
     });
 
-    expect(events.filter((e) => e.type === "GateStarted").map((e) => e.data.gate)).toEqual([
-      "build",
-      "lint",
-    ]);
+    // `gate` is the point and `action` is what ran there — two fields, because
+    // "the build failed" and "something at the diff point failed" are different
+    // questions and one name could not answer both.
+    const started = events.filter((e) => e.type === "GateStarted");
+    expect(started.map((e) => e.data.action)).toEqual(["build", "lint"]);
+    expect(started.map((e) => e.data.gate)).toEqual(["diff", "diff"]);
   });
 
   /**
@@ -149,6 +153,7 @@ describe("the pipeline", () => {
   it("stops at the first failure and names what it skipped", async () => {
     const { events, emit } = collector();
     const result = await runGatePipeline({
+      point: "diff",
       gates: [
         createProcessGate({ name: "build", run: "exit 0" }),
         createProcessGate({ name: "lint", run: "echo nope; exit 1" }),
@@ -168,10 +173,11 @@ describe("the pipeline", () => {
   it("turns a gate that throws into a failure rather than an escaped exception", async () => {
     const { emit } = collector();
     const result = await runGatePipeline({
+      point: "diff",
       gates: [
         {
           name: "broken",
-          kind: "process" as const,
+          kind: "run" as const,
           run: () => Promise.reject(new Error("the gate itself is broken")),
         },
       ],
@@ -186,7 +192,7 @@ describe("the pipeline", () => {
 
   it("emits nothing at all for an empty pipeline", async () => {
     const { events, emit } = collector();
-    const result = await runGatePipeline({ gates: [], context, emit });
+    const result = await runGatePipeline({ point: "diff", gates: [], context, emit });
     expect(result.ok).toBe(true);
     expect(events).toEqual([]);
   });
@@ -195,7 +201,7 @@ describe("the pipeline", () => {
 describe("gatesFromRecipe", () => {
   it("builds the process gates", () => {
     const gates = gatesFromRecipe([
-      { kind: "process", name: "build", run: "pnpm verify", timeout: "15m" },
+      { name: "build", run: "pnpm verify", timeout: "15m" },
     ]);
     expect(gates.map((g) => g.name)).toEqual(["build"]);
   });
@@ -208,9 +214,9 @@ describe("gatesFromRecipe", () => {
     // All four exist now. The factory has an exhaustiveness check against the
     // schema union, so a fifth kind is a type error rather than a gate that
     // falls through and silently does nothing.
-    expect(gatesFromRecipe([{ kind: "human", name: "approval" }])).toHaveLength(1);
+    expect(gatesFromRecipe([{ name: "approval", human: "Merge?" }])).toHaveLength(1);
     expect(
-      gatesFromRecipe([{ kind: "policy", name: "tamper", watch: ["**/x"], then: "fail" }], {
+      gatesFromRecipe([{ name: "tamper", watch: ["**/x"], then: "fail" }], {
         policy: { changedFiles: async () => [] },
       }),
     ).toHaveLength(1);
@@ -221,14 +227,14 @@ describe("gatesFromRecipe", () => {
     // callers that only want to know whether a recipe *parses* do not have
     // them. Absent deps refuse for the same reason an unbuilt kind does: a gate
     // that is silently not run is worse than a run that will not start.
-    expect(() => gatesFromRecipe([{ kind: "agent", name: "review", prompt: "p" }])).toThrow(
-      GateKindNotImplementedError,
+    expect(() => gatesFromRecipe([{ name: "review", agent: "p" }])).toThrow(
+      GateActionUnavailableError,
     );
-    expect(() => gatesFromRecipe([{ kind: "agent", name: "review", prompt: "p" }])).toThrow(
+    expect(() => gatesFromRecipe([{ name: "review", agent: "p" }])).toThrow(
       /no reviewer was supplied/,
     );
     expect(() =>
-      gatesFromRecipe([{ kind: "policy", name: "tamper", watch: ["**/x"], then: "fail" }]),
+      gatesFromRecipe([{ name: "tamper", watch: ["**/x"], then: "fail" }]),
     ).toThrow(/no file list was supplied/);
   });
 });

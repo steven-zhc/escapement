@@ -1,12 +1,12 @@
 /**
- * Turning a recipe's `gates:` list into gates that can run.
+ * Turning a point's action list into gates that can run.
  *
- * Kinds that are not built yet are **refused loudly**, naming the issue. A
- * pipeline that silently skipped the `human` gate because nothing implements it
- * would produce a green board for a change nobody approved — which is worse than
- * a run that will not start.
+ * An action whose dependency is missing is **refused loudly**, naming what is
+ * absent. A pipeline that silently skipped a `human` action because nothing
+ * supplied it would produce a green board for a change nobody approved — which
+ * is worse than a run that will not start.
  */
-import type { GateSpec } from "@escapement/config";
+import { type GateAction, kindOfAction } from "@escapement/config";
 import { type AgentGateDeps, createAgentGate } from "./agent-gate.ts";
 import type { Gate } from "./gate.ts";
 import { createHumanGate } from "./human-gate.ts";
@@ -14,73 +14,58 @@ import { createPolicyGate, type PolicyGateDeps } from "./policy-gate.ts";
 import { createProcessGate } from "./process-gate.ts";
 
 /**
- * What the kinds that are not pure processes need from the caller.
+ * What the actions that are not pure processes need from the caller.
  *
  * Optional, because `esc doctor` and the config tests build gates purely to
- * check that a recipe *can* be built. Absent deps make an `agent` gate refuse
- * for the same reason an unimplemented kind does — loudly, rather than by
- * quietly not running.
+ * check that a recipe *can* be built. Absent deps make an `agent` action refuse
+ * loudly, rather than by quietly not running.
  */
 export interface GateDeps {
   agent?: AgentGateDeps;
   policy?: PolicyGateDeps;
 }
 
-export class GateKindNotImplementedError extends Error {
-  override readonly name = "GateKindNotImplementedError";
+export class GateActionUnavailableError extends Error {
+  override readonly name = "GateActionUnavailableError";
   readonly kind: string;
-  readonly gate: string;
+  readonly action: string;
 
-  constructor(gate: string, kind: string, issue: string) {
+  constructor(action: string, kind: string, missing: string) {
     super(
-      `the "${gate}" gate is kind "${kind}", which is not implemented yet (${issue}). ` +
-        "Refusing to run rather than skipping it: a gate that is silently absent is worse than a run that will not start.",
+      `the "${action}" action is a "${kind}", and ${missing}. ` +
+        "Refusing to run rather than skipping it: an action that is silently absent is worse than a run that will not start.",
     );
-    this.gate = gate;
+    this.action = action;
     this.kind = kind;
   }
 }
 
-export function gatesFromRecipe(specs: readonly GateSpec[], deps: GateDeps = {}): Gate[] {
-  return specs.map((spec) => {
-    if (spec.kind === "process") {
-      return createProcessGate({ name: spec.name, run: spec.run, timeout: spec.timeout });
+export function gatesFromRecipe(actions: readonly GateAction[], deps: GateDeps = {}): Gate[] {
+  return actions.map((action) => {
+    const kind = kindOfAction(action);
+
+    if ("run" in action) {
+      return createProcessGate({ name: action.name, run: action.run, timeout: action.timeout });
     }
-    if (spec.kind === "agent") {
+
+    if ("agent" in action) {
       if (!deps.agent) {
-        throw new GateKindNotImplementedError(
-          spec.name,
-          spec.kind,
-          "no reviewer was supplied to gatesFromRecipe",
-        );
+        throw new GateActionUnavailableError(action.name, kind, "no reviewer was supplied to gatesFromRecipe");
       }
-      return createAgentGate({ name: spec.name, prompt: spec.prompt }, deps.agent);
+      return createAgentGate({ name: action.name, prompt: action.agent }, deps.agent);
     }
-    if (spec.kind === "policy") {
+
+    if ("watch" in action) {
       if (!deps.policy) {
-        throw new GateKindNotImplementedError(
-          spec.name,
-          spec.kind,
-          "no file list was supplied to gatesFromRecipe",
-        );
+        throw new GateActionUnavailableError(action.name, kind, "no file list was supplied to gatesFromRecipe");
       }
       // Compiles the globs here, so a bad pattern refuses at configuration time
       // rather than becoming a watch that quietly matches nothing.
-      return createPolicyGate({ name: spec.name, watch: spec.watch, then: spec.then }, deps.policy);
-    }
-    if (spec.kind === "human") {
-      // Needs nothing: it asks, and the answer arrives later on the same stream.
-      return createHumanGate({ name: spec.name });
+      return createPolicyGate({ name: action.name, watch: action.watch, then: action.then }, deps.policy);
     }
 
-    // Every kind in the schema is handled, so this is `never` and the compiler
-    // says so. Kept rather than deleted: adding a fifth kind should be a type
-    // error here, not a gate that falls through and does nothing.
-    const unreachable: never = spec;
-    throw new GateKindNotImplementedError(
-      (unreachable as { name: string }).name,
-      (unreachable as { kind: string }).kind,
-      "Phase 2",
-    );
+    // `human` needs nothing: it asks, and the answer arrives later on the same
+    // stream. The question is the action's own string.
+    return createHumanGate({ name: action.name, question: action.human });
   });
 }

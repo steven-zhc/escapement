@@ -31,7 +31,7 @@ import { smokeTestFailClosed, writeHookWiring } from "./hook-config.ts";
 import { createHookServer } from "./hook-socket.ts";
 import { integrate } from "./integrate.ts";
 import { prepareWorktree } from "./prepare.ts";
-import type { ProjectState } from "@escapement/core";
+import { GATE_POINTS, type ProjectState } from "@escapement/core";
 import { DEFAULT_PRODUCTION_PATTERNS, type TokenSource, filterEnv, git, provisionWorktree, removeWorktree, runnableEnv, stateDir } from "./worktree.ts";
 import { spawn } from "node:child_process";
 
@@ -304,7 +304,35 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
           }),
         },
       ]);
-      server.register(runId, prepared.version + 1, promptVersion);
+      // ---- the plan, before anything runs at any point --------------------
+      // The log could not otherwise say what was *supposed* to happen: a point
+      // with nothing configured looked exactly like a point that did not exist,
+      // and `ProjectConfigured` carries a hash rather than the configuration.
+      //
+      // This is what ADR 0016 §4 rests on. It buys the board its `skipped`
+      // slots, and it makes "configured but did not run" — the half of the
+      // responsibility that is ours — detectable by comparing this to the
+      // verdicts that follow.
+      {
+        const at = (await store.read(runId)).length;
+        await store.append(runId, at, [
+          {
+            type: "GatesResolved",
+            actor: "conductor",
+            data: parsePayload("GatesResolved", {
+              runId,
+              configHash: resolved.configHash,
+              points: GATE_POINTS.map((gate) => ({
+                gate,
+                actions: recipe.gates[gate].map((a) => a.name),
+              })),
+            }),
+          },
+        ]);
+      }
+
+      server.register(runId, (await store.read(runId)).length, promptVersion);
+
 
       // The ticket itself, which the implementer was never given. The prompt
       // said "read the issue" and handed over a number: no title, no body, and
@@ -398,7 +426,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       // ---- 8. the gates ---------------------------------------------------
       // The reviewer sees the ticket and the diff, and gets the diff from here
       // because the gates package does not know about git and should not learn.
-      const gates = gatesFromRecipe(recipe.gates, {
+      const gateDeps = {
         agent: {
           runtime: options.runtime,
           issue: async () => ({
@@ -426,8 +454,14 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
             return names.split("\n").filter(Boolean);
           },
         },
-      });
+      };
+
+      // The `diff` point: the agent stopped and there are commits. `admit`,
+      // `prepared` and `end` are declared and empty for now — 3d fills `end`,
+      // and `prepared` takes over from `prepare` in its own step.
+      const gates = gatesFromRecipe(recipe.gates.diff, gateDeps);
       const pipeline = await runGatePipeline({
+        point: "diff",
         gates,
         context: { runId, onSha: headSha, cwd: worktree.path, env: runnableEnv(env.values) },
         emit: async (event) => {
@@ -470,7 +504,11 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       // waiver is for — and pre-empting it would make the flag mean something
       // different on a red run than on a green one.
       if (pipeline.heldAt !== null || options.merge === false) {
-        const gate = pipeline.heldAt ?? "merge";
+        // `heldAt` is an *action* name; the point it ran at is `diff`. The
+        // operator's `--no-merge` is a hold at the `merge` point instead, and
+        // names itself as the action, so the two are told apart on the card.
+        const gate = pipeline.heldAt === null ? "merge" : "diff";
+        const action = pipeline.heldAt ?? "no-merge";
 
         if (pipeline.heldAt === null) {
           const at = (await store.read(runId)).length;
@@ -480,6 +518,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
               actor: "conductor",
               data: parsePayload("ApprovalRequested", {
                 gate,
+                action,
                 runId,
                 onSha: headSha,
                 question: pipeline.ok

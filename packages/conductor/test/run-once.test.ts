@@ -58,7 +58,8 @@ repo: { base: develop, submodules: false }
 source: { kinds: [bug], exclude: [blocked] }
 env: { allow: [ESC_TEST_VALUE], plantAt: .env.local }
 gates:
-  - { kind: process, name: build, run: "test -f src/fix.ts", timeout: 2m }
+  diff:
+    - { name: build, run: "test -f src/fix.ts", timeout: 2m }
 runtime: { agent: claude-code, limits: { turns: 10, wall: 2m } }
 `;
 
@@ -217,7 +218,7 @@ git -c user.name=agent -c user.email=a@example.invalid commit -qm 'fix the race'
     expect(wi).toEqual(["WorkItemClaimed", "WorkItemLanded"]);
 
     const run = (await store.read(result.runId)).map((e) => e.type);
-    expect(run.slice(0, 2)).toEqual(["RunStarted", "RunFinished"]);
+    expect(run.slice(0, 3)).toEqual(["RunStarted", "GatesResolved", "RunFinished"]);
     expect(run).toContain("RunProducedDiff");
     expect(run).toContain("RunProposedCompletion");
     expect(run).toContain("GateRequested");
@@ -514,7 +515,7 @@ git add -A && git commit -q -m "fix the race"
       const outcome = await waive({
         project: PROJECT,
         issue: 130,
-        gate: "build",
+        gate: "merge:no-merge",
         by: "human:test",
         reason: "   ",
         store,
@@ -530,7 +531,7 @@ git add -A && git commit -q -m "fix the race"
       const outcome = await waive({
         project: PROJECT,
         issue: 131,
-        gate: "build",
+        gate: "merge:no-merge",
         by: "human:test",
         reason: "unrelated flake in the importer suite",
         store,
@@ -551,7 +552,7 @@ git add -A && git commit -q -m "fix the race"
       const outcome = await waive({
         project: PROJECT,
         issue: 132,
-        gate: "build",
+        gate: "merge:no-merge",
         by: "human:test",
         reason: "looks fine",
         // What a stale card would send.

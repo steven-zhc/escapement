@@ -59,7 +59,7 @@ export function createPolicyGate(spec: PolicyGateSpec, deps: PolicyGateDeps): Ga
 
   return {
     name: spec.name,
-    kind: "policy",
+    kind: "watch",
 
     async run(_context: GateContext): Promise<GateResult> {
       const changed = await deps.changedFiles();

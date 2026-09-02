@@ -95,7 +95,13 @@ export async function add(options: AddOptions, log = console.log): Promise<numbe
   }
   const fromSha = await client.refSha(base);
   log(`recipe: ${RECIPE_PATH} at ${base}@${fromSha.slice(0, 7)} — hash ${resolved.configHash.slice(0, 12)}`);
-  log(`  ${resolved.recipe.gates.length} gate(s): ${resolved.recipe.gates.map((g) => g.name).join(", ")}`);
+  // All five points, including the empty ones. Onboarding is the first place a
+  // person sees the shape of their workflow, and a point that is not mentioned
+  // is exactly the thing that must not be invisible (ADR 0016 §4).
+  for (const point of ["admit", "prepared", "diff", "merge", "end"] as const) {
+    const actions = resolved.recipe.gates[point];
+    log(`  ${point.padEnd(9)} ${actions.length ? actions.map((a) => a.name).join(", ") : "(skipped)"}`);
+  }
   log(`  runtime ${resolved.recipe.runtime.agent}, kinds ${resolved.recipe.source.kinds.join(" > ")}`);
 
   // Tier is the recipe's now (ADR 0016 §7). There is no policy to write here:
@@ -123,7 +129,7 @@ export async function add(options: AddOptions, log = console.log): Promise<numbe
 
   log(
     existing.length === 0
-      ? `added ${repo} — tier ${resolved.recipe.runtime.tier}, ${resolved.recipe.gates.length} gate(s)`
+      ? `added ${repo} — tier ${resolved.recipe.runtime.tier}, ${Object.values(resolved.recipe.gates).flat().length} action(s) across 5 gates`
       : `updated ${repo} — its ${existing.length} earlier event(s) are still on the record`,
   );
   return 0;

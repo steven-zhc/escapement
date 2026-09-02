@@ -254,7 +254,7 @@ export function applyRun(state: RunState, event: Envelope): RunState {
         ...state,
         ...at,
         gates: withGate(state, {
-          gate: d.gate,
+          gate: `${d.gate}:${d.action}`,
           verdict: event.type === "GateRequested" ? "requested" : "running",
           onSha: d.onSha,
           evidence: null,
@@ -271,7 +271,7 @@ export function applyRun(state: RunState, event: Envelope): RunState {
         ...state,
         ...at,
         gates: withGate(state, {
-          gate: d.gate,
+          gate: `${d.gate}:${d.action}`,
           verdict: "passed",
           onSha: d.onSha,
           evidence: d.evidence,
@@ -288,7 +288,7 @@ export function applyRun(state: RunState, event: Envelope): RunState {
         ...state,
         ...at,
         gates: withGate(state, {
-          gate: d.gate,
+          gate: `${d.gate}:${d.action}`,
           verdict: "failed",
           onSha: d.onSha,
           evidence: d.evidence,
@@ -305,7 +305,7 @@ export function applyRun(state: RunState, event: Envelope): RunState {
         ...state,
         ...at,
         gates: withGate(state, {
-          gate: d.gate,
+          gate: `${d.gate}:${d.action}`,
           verdict: "waived",
           onSha: d.onSha,
           evidence: null,
@@ -321,9 +321,9 @@ export function applyRun(state: RunState, event: Envelope): RunState {
       return {
         ...state,
         ...at,
-        lifecycle: { status: "awaiting-approval", gate: d.gate, onSha: d.onSha, question: d.question },
+        lifecycle: { status: "awaiting-approval", gate: `${d.gate}:${d.action}`, onSha: d.onSha, question: d.question },
         gates: withGate(state, {
-          gate: d.gate,
+          gate: `${d.gate}:${d.action}`,
           verdict: "requested",
           onSha: d.onSha,
           evidence: null,
@@ -341,7 +341,7 @@ export function applyRun(state: RunState, event: Envelope): RunState {
         ...at,
         lifecycle: { status: "gating", headSha: d.onSha },
         gates: withGate(state, {
-          gate: d.gate,
+          gate: `${d.gate}:${d.action}`,
           verdict: "passed",
           onSha: d.onSha,
           evidence: null,
@@ -370,12 +370,12 @@ export function applyRun(state: RunState, event: Envelope): RunState {
         ...at,
         lifecycle: {
           status: "awaiting-approval",
-          gate: d.gate,
+          gate: `${d.gate}:${d.action}`,
           onSha: d.onSha,
           question: `${d.by} withdrew the approval: ${d.reason}`,
         },
         gates: withGate(state, {
-          gate: d.gate,
+          gate: `${d.gate}:${d.action}`,
           verdict: "requested",
           onSha: d.onSha,
           evidence: null,

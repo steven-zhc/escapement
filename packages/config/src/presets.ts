@@ -44,14 +44,16 @@ export const PRESETS: Record<string, Preset> = {
   "pnpm-workspace": {
     repo: { submodules: true },
     prepare: [{ name: "install", run: "pnpm install --frozen-lockfile", timeout: "10m" }],
-    gates: [
-      {
-        kind: "process",
-        name: "build",
-        run: "pnpm typecheck && pnpm lint && pnpm test",
-        timeout: "15m",
-      },
-    ],
+    // Only `diff` is filled. The other four points are empty and stay empty
+    // until a project says otherwise — which the board renders as `skipped`
+    // rather than omitting (ADR 0016 §4).
+    gates: {
+      admit: [],
+      prepared: [],
+      diff: [{ name: "build", run: "pnpm typecheck && pnpm lint && pnpm test", timeout: "15m" }],
+      merge: [],
+      end: [],
+    },
     runtime: { agent: "claude-code" },
   },
 };

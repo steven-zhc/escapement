@@ -86,8 +86,8 @@ async function seed(): Promise<void> {
     started(3),
     { type: "RunProducedDiff", actor: "conductor", data: { branch: "agent/3", headSha: "sha-a", files: 3, insertions: 40, deletions: 2 } },
     { type: "RunProposedCompletion", actor: "conductor", data: { headSha: "sha-a" } },
-    { type: "GatePassed", actor: "conductor", data: { gate: "build", runId: run(3), onSha: "sha-a", evidence: "exit 0" } },
-    { type: "GateFailed", actor: "conductor", data: { gate: "review", runId: run(3), onSha: "sha-a", evidence: "two findings", findings: [] } },
+    { type: "GatePassed", actor: "conductor", data: { gate: "diff", action: "build", runId: run(3), onSha: "sha-a", evidence: "exit 0" } },
+    { type: "GateFailed", actor: "conductor", data: { gate: "diff", action: "review", runId: run(3), onSha: "sha-a", evidence: "two findings", findings: [] } },
   ]);
 
   // 4 — refused by the integrator.

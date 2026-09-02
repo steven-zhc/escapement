@@ -26,6 +26,34 @@ export type WorkKind = z.infer<typeof WorkKind>;
 export const Tier = z.enum(["open", "guarded", "sandboxed"]);
 export type Tier = z.infer<typeof Tier>;
 
+/**
+ * The five points in the loop where the conductor waits for a verdict.
+ *
+ * **Closed forever** ([ADR 0016](../../../doc/decisions/0016-the-settled-model.md)
+ * §3). Four of them name a branch the loop already had — dispatch, preparation,
+ * the gate pipeline, the merge hold — and `end` was added for the things that
+ * must happen once an item is finished, which had nowhere to be declared before.
+ *
+ * A gate is a *place*, not a kind of check. What runs there is open and comes
+ * from the recipe; where it can run is not. That is what lets extension be
+ * unbounded while the core stays finite.
+ *
+ * `end` is the one that cannot refuse — nothing can be stopped once a merge has
+ * landed. Recorded as an imprecision rather than smoothed over: a separate
+ * concept for it would cost more than the imprecision does.
+ */
+export const GatePoint = z.enum(["admit", "prepared", "diff", "merge", "end"]);
+export type GatePoint = z.infer<typeof GatePoint>;
+
+/**
+ * The five, in the order the loop reaches them.
+ *
+ * Exported as a tuple because "every point, in order" is a thing several places
+ * need to iterate — `GatesResolved`, the board, `esc add` — and each writing its
+ * own list is how one of them ends up missing a point and nobody notices.
+ */
+export const GATE_POINTS = GatePoint.options;
+
 export const RuntimeId = z.enum(["claude-code", "codex"]);
 export type RuntimeId = z.infer<typeof RuntimeId>;
 
@@ -208,7 +236,36 @@ export const RunFailed = z.object({
  * verdict about a diff rather than about a ticket — so a force-push invalidates
  * an approval instead of inheriting it, which a label could never do.
  */
-const gateBase = { gate: z.string(), runId: z.string(), onSha: z.string() };
+/**
+ * `gate` is the point; `action` is what ran there.
+ *
+ * Two fields rather than one because "the build failed" and "something at the
+ * diff point failed" are different questions, and a single name could not answer
+ * both. `onSha` binds the verdict to a commit, which is what makes a force-push
+ * invalidate it by arithmetic rather than by anybody noticing.
+ */
+const gateBase = { gate: GatePoint, action: z.string(), runId: z.string(), onSha: z.string() };
+
+/**
+ * The plan for a run: all five points, and what will run at each.
+ *
+ * One event, appended before anything is claimed. It exists because the log
+ * could not otherwise say what was *supposed* to happen — `ProjectConfigured`
+ * carries a `configHash`, not the configuration, so a point with nothing
+ * configured was indistinguishable from a point that did not exist.
+ *
+ * That distinction is what the whole model rests on ([ADR 0016](../../../doc/decisions/0016-the-settled-model.md)
+ * §4). A gate nobody configured is skipped, and that is the user's decision; a
+ * gate that *was* configured and did not run is Escapement's bug. Comparing this
+ * to the verdicts that follow is how the second is detectable, and rendering it
+ * is how the board shows an empty point as `skipped` rather than omitting it.
+ */
+export const GatesResolved = z.object({
+  runId: z.string(),
+  configHash: z.string(),
+  /** Every point, in order, with the ordered action names resolved for it. */
+  points: z.array(z.object({ gate: GatePoint, actions: z.array(z.string()) })).length(5),
+});
 
 export const GateRequested = z.object(gateBase);
 export const GateStarted = z.object(gateBase);
@@ -432,6 +489,7 @@ export const EVENTS = {
   RunProposedCompletion,
   RunFinished,
   RunFailed,
+  GatesResolved,
   GateRequested,
   GateStarted,
   GatePassed,

@@ -24,6 +24,20 @@ import { workItemStream } from "./discover.ts";
 import { integrate } from "./integrate.ts";
 import type { TokenSource } from "./worktree.ts";
 
+/**
+ * `diff:build` → the point and the action.
+ *
+ * A person decides about the thing the card names, which is the composite key
+ * (`point:action`); the event carries the two fields separately, because "the
+ * build failed" and "something at the diff point failed" are different
+ * questions. Splitting at the first colon, since a point never contains one.
+ */
+function splitGate(key: string): { gate: string; action: string } {
+  const cut = key.indexOf(":");
+  if (cut < 0) return { gate: "merge", action: key };
+  return { gate: key.slice(0, cut), action: key.slice(cut + 1) };
+}
+
 export interface ApproveOptions {
   project: string;
   issue: number;
@@ -119,7 +133,7 @@ export async function approve(options: ApproveOptions): Promise<ApproveResult> {
       // payload readable without the two ever disagreeing.
       actor: options.by,
       data: parsePayload("ApprovalGranted", {
-        gate,
+        ...splitGate(gate),
         runId,
         onSha,
         by: options.by,
@@ -211,7 +225,7 @@ export async function reject(
     {
       type: "ApprovalRevoked",
       actor: options.by,
-      data: parsePayload("ApprovalRevoked", { gate, runId, onSha, by: options.by, reason: options.reason }),
+      data: parsePayload("ApprovalRevoked", { ...splitGate(gate), runId, onSha, by: options.by, reason: options.reason }),
     },
   ]);
 
@@ -272,7 +286,7 @@ export async function waive(options: {
       type: "GateWaived",
       actor: options.by,
       data: parsePayload("GateWaived", {
-        gate: options.gate,
+        ...splitGate(options.gate),
         runId,
         onSha: run.headSha,
         by: options.by,

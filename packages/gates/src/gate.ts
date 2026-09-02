@@ -19,8 +19,7 @@
  * name rather than skipped — see `from-recipe.ts`. The pipeline, the events and
  * `onSha` are the same for all four.
  */
-import type { GateSpec } from "@escapement/config";
-import type { PayloadOf } from "@escapement/core";
+import type { GatePoint, PayloadOf } from "@escapement/core";
 
 /**
  * `needs-approval` is a third outcome, not a flavour of failure.
@@ -64,7 +63,8 @@ export interface GateContext {
 
 export interface Gate {
   readonly name: string;
-  readonly kind: GateSpec["kind"];
+  /** Which action shape produced it: `run`, `agent`, `watch` or `human`. */
+  readonly kind: "run" | "agent" | "watch" | "human";
   run(context: GateContext): Promise<GateResult>;
 }
 
@@ -90,6 +90,8 @@ export interface PipelineResult {
 }
 
 export interface PipelineOptions {
+  /** Which of the five points this pipeline is. Stamped on every verdict. */
+  point: GatePoint;
   gates: readonly Gate[];
   context: GateContext;
   /**
@@ -111,11 +113,11 @@ export interface PipelineOptions {
  * reading that it is three-quarters fine.
  */
 export async function runGatePipeline(options: PipelineOptions): Promise<PipelineResult> {
-  const { gates, context, emit } = options;
+  const { gates, point, context, emit } = options;
   const results: PipelineResult["results"] = [];
 
   for (const [index, gate] of gates.entries()) {
-    const base = { gate: gate.name, runId: context.runId, onSha: context.onSha };
+    const base = { gate: point, action: gate.name, runId: context.runId, onSha: context.onSha };
 
     await emit({ type: "GateRequested", data: base });
     await emit({ type: "GateStarted", data: base });

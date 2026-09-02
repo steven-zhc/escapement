@@ -17,9 +17,9 @@ env:
   allow: [DATABASE_URL, CLERK_SECRET_KEY]
   plantAt: apps/web/.env.local
 gates:
-  - kind: process
-    name: build
-    run: pnpm verify
+  diff:
+    - name: build
+      run: pnpm verify
 runtime:
   agent: claude-code
 `;
@@ -34,7 +34,11 @@ describe("resolveRecipe", () => {
 
     expect(resolved.ref).toBe("develop");
     expect(resolved.recipe.repo.base).toBe("develop");
-    expect(resolved.recipe.gates).toHaveLength(1);
+    expect(resolved.recipe.gates.diff).toHaveLength(1);
+    // The four a recipe did not mention are present and empty — which is what
+    // makes "nothing is configured here" visible rather than absent.
+    expect(resolved.recipe.gates.admit).toEqual([]);
+    expect(resolved.recipe.gates.end).toEqual([]);
     expect(resolved.recipe.repo.submodules).toBe(true);
   });
 
@@ -43,19 +47,19 @@ describe("resolveRecipe", () => {
    * gates at all; resolving against the base branch must not see it.
    */
   it("does not read the agent's branch, even when it has one", async () => {
-    const tampered = VALID.replace("- kind: process\n    name: build\n    run: pnpm verify", "- kind: process\n    name: nothing\n    run: 'true'");
+    const tampered = VALID.replace("- name: build\n      run: pnpm verify", "- name: nothing\n      run: 'true'");
     const files = {
       [`develop:${RECIPE_PATH}`]: VALID,
       [`agent/117:${RECIPE_PATH}`]: tampered,
     };
 
     const resolved = await resolveRecipe(reader(files), "develop");
-    expect(resolved.recipe.gates[0]!.name).toBe("build");
+    expect(resolved.recipe.gates.diff[0]!.name).toBe("build");
 
     // And the tampered one really would have resolved differently, so the test
     // is not passing because both branches say the same thing.
     const other = await resolveRecipe(reader(files), "agent/117");
-    expect(other.recipe.gates[0]!.name).toBe("nothing");
+    expect(other.recipe.gates.diff[0]!.name).toBe("nothing");
     expect(other.configHash).not.toBe(resolved.configHash);
   });
 
@@ -99,9 +103,9 @@ repo:
 runtime:
   agent: claude-code
 gates:
-  - kind: process
-    run: pnpm verify
-    name: build
+  diff:
+    - run: pnpm verify
+      name: build
 env:
   plantAt: apps/web/.env.local
   allow: [DATABASE_URL, CLERK_SECRET_KEY]

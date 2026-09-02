@@ -108,8 +108,11 @@ export async function loadTask(taskId: string): Promise<TaskDetail | null> {
     }
     const verdict = VERDICT[e.type];
     if (verdict && typeof d["gate"] === "string") {
-      gates.set(d["gate"], {
-        gate: d["gate"],
+      // `point:action` — see task-view. Two points may run an action of the
+      // same name, and the card has to show both.
+      const key = `${String(d["gate"])}:${String(d["action"] ?? "")}`;
+      gates.set(key, {
+        gate: key,
         state: verdict,
         current: true,
         evidence: (d["evidence"] as string) ?? null,

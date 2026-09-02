@@ -70,11 +70,11 @@ describe("reduceRun", () => {
     const s = reduceRun([
       e("RunStarted", started),
       e("RunProposedCompletion", { headSha: "sha-a" }),
-      e("GateRequested", { gate: "build", runId: "run-01JX", onSha: "sha-a" }),
-      e("GateStarted", { gate: "build", runId: "run-01JX", onSha: "sha-a" }),
-      e("GatePassed", { gate: "build", runId: "run-01JX", onSha: "sha-a", evidence: "exit 0" }),
+      e("GateRequested", { gate: "diff", action: "build", runId: "run-01JX", onSha: "sha-a" }),
+      e("GateStarted", { gate: "diff", action: "build", runId: "run-01JX", onSha: "sha-a" }),
+      e("GatePassed", { gate: "diff", action: "build", runId: "run-01JX", onSha: "sha-a", evidence: "exit 0" }),
       e("GateFailed", {
-        gate: "review",
+        gate: "diff", action: "review",
         runId: "run-01JX",
         onSha: "sha-a",
         evidence: "1 finding",
@@ -91,10 +91,10 @@ describe("reduceRun", () => {
     ]);
 
     expect(s.lifecycle).toEqual({ status: "gating", headSha: "sha-a" });
-    expect(s.gates["build"]!.verdict).toBe("passed");
-    expect(s.gates["review"]!.verdict).toBe("failed");
-    expect(s.gates["review"]!.findings[0]!.failureScenario).toContain("increment is lost");
-    expect(gatesOn(s).map((g) => g.gate).sort()).toEqual(["build", "review"]);
+    expect(s.gates["diff:build"]!.verdict).toBe("passed");
+    expect(s.gates["diff:review"]!.verdict).toBe("failed");
+    expect(s.gates["diff:review"]!.findings[0]!.failureScenario).toContain("increment is lost");
+    expect(gatesOn(s).map((g) => g.gate).sort()).toEqual(["diff:build", "diff:review"]);
   });
 
   /**
@@ -107,9 +107,10 @@ describe("reduceRun", () => {
     const approved = [
       e("RunStarted", started),
       e("RunProposedCompletion", { headSha: "sha-a" }),
-      e("GatePassed", { gate: "build", runId: "run-01JX", onSha: "sha-a", evidence: "exit 0" }),
+      e("GatePassed", { gate: "diff", action: "build", runId: "run-01JX", onSha: "sha-a", evidence: "exit 0" }),
       e("ApprovalGranted", {
-        gate: "human",
+        gate: "merge",
+        action: "human",
         runId: "run-01JX",
         onSha: "sha-a",
         by: "human:steven",
@@ -118,14 +119,14 @@ describe("reduceRun", () => {
     ];
 
     const before = reduceRun(approved);
-    expect(gatesOn(before).map((g) => g.gate).sort()).toEqual(["build", "human"]);
+    expect(gatesOn(before).map((g) => g.gate).sort()).toEqual(["diff:build", "merge:human"]);
 
     const after = reduceRun([...approved, e("RunProposedCompletion", { headSha: "sha-b" })]);
     expect(after.headSha).toBe("sha-b");
     // The verdicts are still on the record — they were made, and about what —
     // but none of them is about the diff now on the table.
     expect(gatesOn(after)).toEqual([]);
-    expect(after.gates["human"]!.onSha).toBe("sha-a");
+    expect(after.gates["merge:human"]!.onSha).toBe("sha-a");
   });
 
   it("records a waiver with who and why — never silently", () => {
@@ -134,7 +135,7 @@ describe("reduceRun", () => {
       e("RunStarted", started),
       e("RunProposedCompletion", { headSha: "sha-a" }),
       e("GateWaived", {
-        gate: "review",
+        gate: "diff", action: "review",
         runId: "run-01JX",
         onSha: "sha-a",
         by: "human:steven",
@@ -142,9 +143,9 @@ describe("reduceRun", () => {
       }),
     ]);
 
-    expect(s.gates["review"]!.verdict).toBe("waived");
-    expect(s.gates["review"]!.by).toBe("human:steven");
-    expect(s.gates["review"]!.reason).toContain("docs typo");
+    expect(s.gates["diff:review"]!.verdict).toBe("waived");
+    expect(s.gates["diff:review"]!.by).toBe("human:steven");
+    expect(s.gates["diff:review"]!.reason).toContain("docs typo");
   });
 
   it("waits on a person, then proceeds when they answer", () => {
@@ -153,7 +154,8 @@ describe("reduceRun", () => {
       e("RunStarted", started),
       e("RunProposedCompletion", { headSha: "sha-a" }),
       e("ApprovalRequested", {
-        gate: "human",
+        gate: "merge",
+        action: "human",
         runId: "run-01JX",
         onSha: "sha-a",
         question: "Merge into develop?",
@@ -163,7 +165,7 @@ describe("reduceRun", () => {
 
     expect(reduceRun(asked).lifecycle).toEqual({
       status: "awaiting-approval",
-      gate: "human",
+      gate: "merge:human",
       onSha: "sha-a",
       question: "Merge into develop?",
     });
@@ -171,7 +173,8 @@ describe("reduceRun", () => {
     const granted = reduceRun([
       ...asked,
       e("ApprovalGranted", {
-        gate: "human",
+        gate: "merge",
+        action: "human",
         runId: "run-01JX",
         onSha: "sha-a",
         by: "human:steven",
@@ -179,7 +182,7 @@ describe("reduceRun", () => {
       }),
     ]);
     expect(granted.lifecycle).toEqual({ status: "gating", headSha: "sha-a" });
-    expect(granted.gates["human"]!.verdict).toBe("passed");
+    expect(granted.gates["merge:human"]!.verdict).toBe("passed");
   });
 
   /**
@@ -195,14 +198,16 @@ describe("reduceRun", () => {
       e("RunStarted", started),
       e("RunProposedCompletion", { headSha: "sha-a" }),
       e("ApprovalGranted", {
-        gate: "human",
+        gate: "merge",
+        action: "human",
         runId: "run-01JX",
         onSha: "sha-a",
         by: "human:steven",
         note: "",
       }),
       e("ApprovalRevoked", {
-        gate: "human",
+        gate: "merge",
+        action: "human",
         runId: "run-01JX",
         onSha: "sha-a",
         by: "human:steven",
@@ -210,10 +215,10 @@ describe("reduceRun", () => {
       }),
     ]);
 
-    expect(s.gates["human"]!.verdict).toBe("requested");
+    expect(s.gates["merge:human"]!.verdict).toBe("requested");
     // And the run is waiting again, on the same commit, with the reason the
     // person gave — not merged, not queued, not failed.
-    expect(s.lifecycle).toMatchObject({ status: "awaiting-approval", gate: "human", onSha: "sha-a" });
+    expect(s.lifecycle).toMatchObject({ status: "awaiting-approval", gate: "merge:human", onSha: "sha-a" });
     expect(s.lifecycle).toHaveProperty("question", expect.stringContaining("spotted a migration"));
   });
 
