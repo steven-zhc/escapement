@@ -10,16 +10,17 @@ examples instead of pretending to be exhaustive.
 **Counted 2026-09-02.**
 
 > **This describes the code as it is, not [ADR 0016](decisions/0016-the-settled-model.md).**
-> 0016 rewrites much of what is below — four gate *kinds* become five gate
-> *points*, `guard` becomes `tools`, `GuardTripped` becomes `ToolCallRefused`,
-> and the whole policy section is deleted. This file is updated as each
-> implementation step lands, never ahead of it. A reference that documents
-> intent instead of behaviour is the defect this repository hit four times on
-> 2026-09-02, and it is the one thing this file exists not to do.
+> **Step 3a has landed** and is reflected below: the guard is gone, and with it
+> `GuardTripped`, the `guard_trips` projection and the `--no-guard` flag. Still
+> ahead: four gate *kinds* become five gate *points*, and the policy section is
+> deleted (3b–3e). This file is updated as each step lands, never ahead of it. A
+> reference that documents intent instead of behaviour is the defect this
+> repository hit four times on 2026-09-02, and it is the one thing this file
+> exists not to do.
 
 ---
 
-## event — 41 types
+## event — 40 types
 
 One fact that already happened, past tense. Never edited, never deleted.
 Source: the registry at the bottom of `packages/core/src/events.ts`.
@@ -29,7 +30,7 @@ Source: the registry at the bottom of `packages/core/src/events.ts`.
 | work item (7) | `WorkItemDiscovered` `WorkItemClaimed` `WorkItemReleased` `WorkItemBlocked` `WorkItemUnblocked` `WorkItemLinked` `WorkItemLanded` |
 | dispatch (1) | `DispatchRefused` |
 | preparation (3) | `PreparationStarted` `PreparationPassed` `PreparationFailed` |
-| run (10) | `RunStarted` `RunPrompted` `RunTouchedFile` `GuardTripped` `RunContextExhausted` `RunAwaitingInput` `RunProducedDiff` `RunProposedCompletion` `RunFinished` `RunFailed` |
+| run (9) | `RunStarted` `RunPrompted` `RunTouchedFile` `RunContextExhausted` `RunAwaitingInput` `RunProducedDiff` `RunProposedCompletion` `RunFinished` `RunFailed` |
 | gate (5) | `GateRequested` `GateStarted` `GatePassed` `GateFailed` `GateWaived` |
 | approval (3) | `ApprovalRequested` `ApprovalGranted` `ApprovalRevoked` |
 | integration (3) | `IntegrationAttempted` `IntegrationRefused` `IntegrationSucceeded` |
@@ -68,7 +69,7 @@ Source: `UPCASTERS` in `packages/core/src/upcast.ts`.
 
 Every other type is still at version 1.
 
-## projection — 3
+## projection — 2
 
 A regular Postgres table built by replaying the log. Holds no truth of its own.
 Source: `PROJECTIONS` in `apps/cli/src/esc.ts`.
@@ -77,7 +78,6 @@ Source: `PROJECTIONS` in `apps/cli/src/esc.ts`.
 |---|---|---|
 | `task_view` | what is the current state of every task the board shows | yes — `create`/`reset` build and drop it |
 | `outbox` | what still has to be said to GitHub | **no** — the contract owns `outbox`, so `create`/`reset` are no-ops. Dropping it would take it out from under `db verify`. |
-| `guard_trips` | which guard rules are firing, and were they right to | yes |
 
 ## task state — 5
 
@@ -88,23 +88,41 @@ Source: `TaskState` in `packages/conductor/src/task-view.ts:50`.
 `queued` is the only one not driven by an event — it comes from GitHub, because
 Escapement never decided which issues exist ([ADR 0012](decisions/0012-one-task-view.md)).
 
-## guard rule — 8
+## tool restriction — none
 
-Allow/deny on one tool call. Every decision, allow or deny, is a `GuardTripped`.
-Source: `packages/conductor/src/guard.ts`.
+Escapement restricts no tool call. There were eight rules; they are gone (ADR
+0016 §6), and so is the `PreToolUse` wiring that evaluated them.
 
-| Rule | Because |
+Tool limits belong to the agent runtime's own configuration — `permissions.deny`
+in `~/.claude/settings.json` or a managed repository's `.claude/settings.json`.
+It holds even under `--permission-mode bypassPermissions`, and it holds by
+**removing the tool from the model's list**, so the agent never attempts it
+([experiment 008](experiments/008-deny-survives-bypass.md)).
+
+Containment is the filtered environment and the disposable worktree. Neither was
+ever the guard's.
+
+## hook — 7
+
+What the runtime calls, and the only channel between a run and the log.
+Source: `INTERSECTION_HOOKS` and `CLAUDE_ONLY_HOOKS` in `packages/conductor/src/hook-config.ts`.
+
+| Hook | What Escapement does with it |
 |---|---|
-| `production-host` | an agent must never reach production. Matched by host *segment*, not substring — `reproducible.dev.example.com` contains "prod" and is not a false positive. |
-| `executed-ddl` | schema changes belong in a reviewed migration file. admin #117 was a migration applied by hand. |
-| `db-push` | `prisma db push` changes a schema with no migration and no review. |
-| `pr-merge` | merging is the integrator's job, under the merge lane's advisory lock. |
-| `push-to-base` | the agent pushes `agent/*`; the base is only ever written by the integrator. |
-| `force-push` | rewrites history that gate verdicts were made against. |
-| `recursive-delete` | `rm -rf` outside the worktree is unrecoverable. |
-| `read-dotenv` | `.env` holds values the agent is deliberately not given. `.env.local` is the one it is. |
+| `SessionStart` | lifecycle; the event is `RunStarted`, written by the conductor |
+| `UserPromptSubmit` | `RunPrompted`, with the prompt version |
+| `PostToolUse` | `RunTouchedFile`, for the four mutating tools only |
+| `Stop` | hands back to the conductor, which fires the gates |
+| `SessionEnd` | Claude-only; `RunFinished` comes from the process outcome |
+| `PreCompact` | Claude-only; `RunContextExhausted` |
+| `Notification` | Claude-only; `RunAwaitingInput` |
 
-A recipe may add rules through `deny`. It cannot remove any of these.
+`PreToolUse` was the eighth and is gone with the guard. It was the only hook on
+the hot path — one round trip per tool call, against a 20ms budget of which
+process startup alone was 17ms.
+
+**Four tools count as mutations** (`hook-socket.ts`), and only these produce
+`RunTouchedFile`: `Write` · `Edit` · `MultiEdit` · `NotebookEdit`.
 
 ## gate kind — 4, and 3 verdicts
 
@@ -202,7 +220,7 @@ Source: the switch in `apps/cli/src/esc.ts`.
 `add` · `run` · `approve` · `status` · `doctor` · `daemon` · `pause` ·
 `resume` · `now` · `projection` · `version`
 
-## doctor check — 15 live, 6 deferred
+## doctor check — 16 live, 6 deferred
 
 Source: `apps/cli/src/doctor.ts`. This list is `pnpm esc doctor`'s own output,
 not a reading of the file — grepping the constructors missed six of them.
@@ -215,6 +233,12 @@ not a reading of the file — grepping the constructors missed six of them.
 | schema (5) | `schema: tables` · `schema: optimistic concurrency` · `schema: append-only` · `schema: notify trigger` · `schema: payload columns` |
 | running system (4) | `projections: lag` · `daemon: liveness` · `worktrees: reconciliation` · `outbox: depth` |
 | credentials (2) | `github: app credentials` · `runtime: signed in` |
+| visibility (1) | `runtime: other settings in scope` — reports what configures a run besides the recipe |
+
+Four statuses: `ok`, **`warn`** (nothing is wrong and you should know anyway),
+`fail`, `skip`. `warn` was added with the check above: folding it into `ok`
+hides it in a wall of green, and into `fail` makes doctor red for a file
+everybody has.
 
 Deferred checks each name the issue that will implement them, and are reported
 rather than hidden — a check quietly dropped is indistinguishable from one that

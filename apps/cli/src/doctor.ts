@@ -28,9 +28,20 @@ import { REQUIRED_PERMISSIONS } from "@escapement/github";
 import { createClaudeCodeRuntime } from "@escapement/runtime";
 import { projectionLag } from "@escapement/store";
 import { createPublicKey } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import pg from "pg";
 
-export type CheckStatus = "ok" | "fail" | "skip";
+/**
+ * `warn` is not a weak `fail`. It means **nothing is wrong and you should know
+ * anyway** — the case the vocabulary had no room for until something needed to
+ * report what it could see but not control (`settings: other sources`, ADR 0016
+ * §6). Folding that into `ok` hides it in a wall of green; folding it into
+ * `fail` makes doctor red for a file everybody has, and a check that is always
+ * red is a check nobody reads.
+ */
+export type CheckStatus = "ok" | "warn" | "fail" | "skip";
 
 export interface CheckResult {
   name: string;
@@ -337,6 +348,64 @@ async function projections(url: string): Promise<CheckResult> {
  * API. Its exit code is 0 whether or not you are signed in, so the field is the
  * answer.
  */
+/**
+ * What else is configuring the agent, besides the recipe.
+ *
+ * Reports rather than enforces, and that is the whole point. Escapement does not
+ * set `HOME` — it cannot, because the runtime's credentials live under it — so
+ * the operator's own `~/.claude/settings.json` is in scope for every run, along
+ * with any `.claude/settings.json` the managed repository has committed. Both
+ * merge with the settings Escapement writes; hooks from every source run, and
+ * `permissions.deny` from any of them holds.
+ *
+ * That means **the recipe is not a complete description of a run**, and since
+ * deleting the guard (ADR 0016 §6) this is the only visibility that exists into
+ * the difference. Being unable to control it is acceptable. Being unable to see
+ * it is not — which is exactly the failure the old loop's 132 invisible blocks
+ * were.
+ *
+ * Never a `fail`: none of this is wrong, and a check that goes red for a
+ * `settings.json` everyone has is a check people learn to skip.
+ */
+async function settingsSources(): Promise<CheckResult> {
+  const name = "runtime: other settings in scope";
+  const path = join(homedir(), ".claude", "settings.json");
+
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch {
+    return { name, status: "ok", detail: "no ~/.claude/settings.json — the recipe is the whole story" };
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw) as Record<string, unknown>;
+  } catch (err) {
+    return { name, status: "warn", detail: `~/.claude/settings.json does not parse: ${(err as Error).message}` };
+  }
+
+  // Only the keys that change what a run does. Everything else there is the
+  // operator's business and is not worth naming.
+  const carries: string[] = [];
+  if (parsed["hooks"]) carries.push("hooks");
+  if (parsed["permissions"]) carries.push("permissions");
+  if (parsed["mcpServers"] || parsed["enabledMcpjsonServers"]) carries.push("MCP servers");
+  if (parsed["env"]) carries.push("env");
+
+  if (carries.length === 0) {
+    return { name, status: "ok", detail: "~/.claude/settings.json carries nothing that changes a run" };
+  }
+  return {
+    name,
+    status: "warn",
+    detail:
+      `~/.claude/settings.json carries ${carries.join(", ")}, and every run sees it. ` +
+      "Escapement cannot set HOME (the runtime's credentials live there), so this is " +
+      "reported rather than removed — the recipe alone does not describe a run on this machine.",
+  };
+}
+
 async function runtimeAuth(): Promise<CheckResult> {
   const name = "runtime: signed in";
   const runtime = createClaudeCodeRuntime();
@@ -410,6 +479,8 @@ export interface DoctorReport {
   ok: number;
   failed: number;
   skipped: number;
+  /** Reported, not wrong. See `CheckStatus`. */
+  warned: number;
 }
 
 /**
@@ -554,6 +625,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
   }
 
   results.push(githubCredentials(env));
+  results.push(await settingsSources());
   results.push(await runtimeAuth());
   for (const d of DEFERRED) results.push({ ...d, status: "skip", deferred: true });
 
@@ -562,19 +634,22 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
     ok: results.filter((r) => r.status === "ok").length,
     failed: results.filter((r) => r.status === "fail").length,
     skipped: results.filter((r) => r.status === "skip").length,
+    warned: results.filter((r) => r.status === "warn").length,
   };
 }
 
 export function formatReport(report: DoctorReport): string {
+  const notes = report.warned > 0 ? `, ${report.warned} to note` : "";
   const lines = report.results.map((r) => {
-    const tag = r.status === "ok" ? "  ok  " : r.status === "fail" ? " FAIL " : " skip ";
+    const tag =
+      r.status === "ok" ? "  ok  " : r.status === "fail" ? " FAIL " : r.status === "warn" ? " note " : " skip ";
     return `${tag} ${r.name}\n         ${r.detail}`;
   });
   lines.push("");
   lines.push(
     report.failed === 0
-      ? `${report.ok} ok, ${report.skipped} not implemented yet, 0 failed`
-      : `${report.failed} check(s) FAILED — ${report.ok} ok, ${report.skipped} not implemented yet`,
+      ? `${report.ok} ok${notes}, ${report.skipped} not implemented yet, 0 failed`
+      : `${report.failed} check(s) FAILED — ${report.ok} ok${notes}, ${report.skipped} not implemented yet`,
   );
   return lines.join("\n");
 }

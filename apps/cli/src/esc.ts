@@ -14,7 +14,6 @@ import {
   createProjectionRunner,
   databaseUrl,
   directDatabaseUrl,
-  guardTripsProjection,
   projectionLag,
   type Projection,
 } from "@escapement/store";
@@ -46,7 +45,6 @@ import { status } from "./status.ts";
 const PROJECTIONS: Record<string, Projection> = {
   [taskViewProjection.name]: taskViewProjection,
   [outboxProjection.name]: outboxProjection,
-  [guardTripsProjection.name]: guardTripsProjection,
 };
 
 const USAGE = `esc — event-sourced scheduler for autonomous code agents
@@ -60,8 +58,7 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
     --max <n>                   stop after n items (--max 2 is Phase 2's bar)
     --once                      the same as --max 1
     --no-merge                  stop after the gates and ask before merging
-    --no-guard                  wire no hooks; nothing mediates a tool call
-  esc approve <project> --issue <n>
+    esc approve <project> --issue <n>
                                 merge what a held run produced, if its head has
                                 not moved since the approval was asked for
     --note <text>               recorded with the approval
@@ -71,7 +68,7 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
   esc doctor                    check everything that can be checked
   esc daemon                    hold the projections current and take work
     --no-conduct                projections only, take nothing
-    --no-merge / --no-guard     as for esc run
+    --no-merge                  as for esc run
   esc pause <why>               stop taking new work; a run in flight finishes
   esc resume                    take work again
   esc now <project> --issue <n> ask for one ahead of the queue
@@ -110,8 +107,8 @@ async function doctor(): Promise<number> {
  * `--flag value` pairs plus positionals. Enough for three commands.
  *
  * A flag whose next token is another flag, or which ends the line, is a boolean
- * and consumes nothing. Without that rule `--no-merge --no-guard` parsed as
- * `no-merge: "--no-guard"` and swallowed the second flag whole, so the guard
+ * and consumes nothing. Without that rule `--no-merge --no-conduct` parsed as
+ * `no-merge: "--no-conduct"` and swallowed the second flag whole, so the second
  * stayed on while the command line said to turn it off — a flag that reads as
  * ignored is the one kind that is worse than a flag that errors.
  */
@@ -269,7 +266,6 @@ async function daemonCommand(flags: Record<string, string> = {}): Promise<number
       paused: async () => (await readControl()).paused,
       pass: async (reason) => {
         const outcome = await conductorPass({
-          guard: !("no-guard" in flags),
           merge: !("no-merge" in flags),
           log: (line) => console.log(line),
         });
@@ -373,7 +369,7 @@ async function main(argv: string[]): Promise<number> {
       );
       const project = positional.find((p) => p !== "--once") ?? flags["project"];
       if (!project) {
-        console.error("esc run <project> [--issue <n>] [--max <n>] [--no-merge] [--no-guard]");
+        console.error("esc run <project> [--issue <n>] [--max <n>] [--no-merge]");
         return 2;
       }
 
@@ -396,9 +392,7 @@ async function main(argv: string[]): Promise<number> {
         ...(issue === undefined ? {} : { issue }),
         ...(max === undefined ? {} : { max }),
         // `--no-merge` is absence of merging, so the flag's presence is the
-        // whole signal. Same shape for `--no-guard`.
-        merge: !("no-merge" in flags),
-        guard: !("no-guard" in flags),
+              merge: !("no-merge" in flags),
       });
     }
     case "approve": {

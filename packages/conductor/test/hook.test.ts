@@ -19,10 +19,10 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createHookServer,
-  type GuardPolicy,
   type HookServer,
   renderSettings,
   smokeTestFailClosed,
+  redact,
   socketPathFor,
   SUN_PATH_MAX,
   writeHookWiring,
@@ -32,7 +32,6 @@ const exec = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const hookSource = resolve(here, "../../hook/src/esc-hook.ts");
 
-const policy: GuardPolicy = { base: "develop", productionPatterns: ["prod", "production"] };
 
 let root: string;
 let binary: string;
@@ -90,7 +89,7 @@ beforeAll(async () => {
     onLifecycle: (_runId, hook) => void lifecycle.push(hook),
   });
   await server.listen();
-  server.register(runId, policy, 0, "ticket@3");
+  server.register(runId, 0, "ticket@3");
 }, 180_000);
 
 afterAll(async () => {
@@ -146,37 +145,24 @@ describe("esc-hook fails closed", () => {
   });
 });
 
-describe("esc-hook carries the verdict", () => {
+describe("esc-hook refuses nothing", () => {
   it("allows an ordinary command", async () => {
     const { code } = await runHook(binary, env(), preToolUse("pnpm verify"));
     expect(code).toBe(0);
   });
 
-  it("refuses a guarded command, names the rule, and records the trip", async () => {
-    const before = server.get(runId)!.trips;
-    const { code, stderr } = await runHook(binary, env(), preToolUse("git push --force origin agent/1"));
-
-    expect(code).toBe(2);
-    expect(stderr).toContain("force-push");
-    // The agent is told why, not merely refused.
-    expect(stderr).toContain("rewrites history");
-    expect(server.get(runId)!.trips).toBe(before + 1);
-
-    // And it is on the record — 132 of these were invisible in the old loop.
-    const trips = (await store.read(runId)).filter((e) => e.type === "GuardTripped");
-    expect(trips.length).toBeGreaterThan(0);
-    const last = trips[trips.length - 1]!.data as { pattern: string; redactedCommand: string };
-    expect(last.pattern).toBe("force-push");
-    expect(last.redactedCommand).toContain("git push --force");
-  });
-
-  it("redacts the credential out of a refused command", async () => {
-    await runHook(binary, env(), preToolUse("psql postgresql://u:hunter2@db.prod.example.com/app"));
-
-    const trips = (await store.read(runId)).filter((e) => e.type === "GuardTripped");
-    const last = trips[trips.length - 1]!.data as { redactedCommand: string };
-    expect(last.redactedCommand).not.toContain("hunter2");
-    expect(last.redactedCommand).toContain("***@db.prod.example.com");
+  /**
+   * The contract, pinned. Escapement restricts no tool call (ADR 0016 §6) —
+   * tool limits are the runtime's own configuration, where `permissions.deny`
+   * removes the tool from the model's list instead of refusing the call it
+   * already decided to make ([experiment 008](../../../doc/experiments/008-deny-survives-bypass.md)).
+   *
+   * This used to refuse `git push --force` by rule. If a rule engine ever comes
+   * back, this test is what should fail first.
+   */
+  it("allows what the guard used to refuse", async () => {
+    const { code } = await runHook(binary, env(), preToolUse("git push --force origin agent/1"));
+    expect(code).toBe(0);
   });
 
   it("counts allowed calls in memory rather than appending one event each", async () => {
@@ -189,6 +175,23 @@ describe("esc-hook carries the verdict", () => {
     // The event store's availability must never gate a tool call, and five
     // allowed calls must not cost five appends.
     expect((await store.read(runId)).length).toBe(eventsBefore);
+  });
+});
+
+describe("redact", () => {
+  /**
+   * Moved out of the deleted `guard.ts` with its caller. The error path in the
+   * hook server puts a thrown message on the wire, and a thrown message is
+   * exactly where a connection string turns up.
+   */
+  it("strips a password out of a connection string", () => {
+    expect(redact("psql postgresql://u:hunter2@db.prod.example.com/app")).not.toContain("hunter2");
+    expect(redact("psql postgresql://u:hunter2@db.prod.example.com/app")).toContain("***@db.prod.example.com");
+  });
+
+  it("strips tokens and assigned secrets", () => {
+    expect(redact("gh auth --token ghp_abcdefghijklmnop")).not.toContain("abcdefghijklmnop");
+    expect(redact("DATABASE_PASSWORD=hunter2 pnpm test")).toBe("DATABASE_PASSWORD=*** pnpm test");
   });
 });
 
@@ -356,13 +359,14 @@ describe("hook wiring", () => {
     expect(wiring.env).toEqual({ ESC_HOOK_SOCKET: wiring.socketPath, ESC_RUN_ID: "run-w" });
   });
 
-  it("wires the five shared hooks, and Claude Code's extras only when asked", () => {
+  it("wires the four shared hooks, and Claude Code's extras only when asked", () => {
     const shared = renderSettings({ runId: "r", hookBinary: "/bin/esc-hook", includeClaudeOnly: false });
     const all = renderSettings({ runId: "r", hookBinary: "/bin/esc-hook" });
 
+    // No `PreToolUse`: nothing refuses a tool call any more, and it was the
+    // only hook on the hot path (ADR 0016 §6).
     expect(Object.keys((shared as { hooks: object }).hooks).sort()).toEqual([
       "PostToolUse",
-      "PreToolUse",
       "SessionStart",
       "Stop",
       "UserPromptSubmit",
@@ -372,15 +376,15 @@ describe("hook wiring", () => {
   });
 
   /**
-   * A relative hook path fails open, which is the worst way for a guard to
-   * fail: the run looks normal and is unguarded.
+   * A relative hook path fails silently, which is the worst way for a recorder
+   * to fail: the run looks normal and produces no events.
    *
    * The caller checks the binary exists by resolving it against its own cwd.
    * The runtime spawns it resolved against the worktree. A relative path can
    * satisfy the first and miss the second, and a command that is not found
-   * exits 127 — not the 2 that means deny — so the tool is allowed to run.
+   * exits 127, which the runtime carries on past.
    */
-  it("refuses a relative hook path rather than writing a guard that fails open", () => {
+  it("refuses a relative hook path rather than writing a hook that never runs", () => {
     expect(() => renderSettings({ runId: "r", hookBinary: "packages/hook/bin/esc-hook" })).toThrow(
       /must be absolute/,
     );

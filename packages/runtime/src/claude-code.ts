@@ -213,7 +213,7 @@ export function createClaudeCodeRuntime(options: ClaudeCodeOptions = {}): Runtim
           resolve(outcome);
         };
 
-        const kill = (kind: "timeout" | "guard-hard-stop", detail: string) => {
+        const kill = (kind: "timeout" | "aborted", detail: string) => {
           child.kill("SIGTERM");
           // A SIGTERM the agent ignores must not become a hang. The event is the
           // point; a process that will not die is a detail for the next line.
@@ -234,7 +234,7 @@ export function createClaudeCodeRuntime(options: ClaudeCodeOptions = {}): Runtim
           () => kill("timeout", `no result within ${request.limits.wallMs}ms`),
           request.limits.wallMs,
         );
-        const onAbort = () => kill("guard-hard-stop", "the conductor aborted the run");
+        const onAbort = () => kill("aborted", "the conductor aborted the run");
         request.signal?.addEventListener("abort", onAbort, { once: true });
 
         child.on("error", (err) =>

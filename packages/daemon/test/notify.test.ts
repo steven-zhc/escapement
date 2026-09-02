@@ -40,7 +40,7 @@ describeTest("what is worth interrupting somebody for", () => {
   it("drops everything the conductor will handle by itself", () => {
     // A landed task is good news that needed nobody. Interrupting for it is how
     // the ones that do need somebody stop being read.
-    for (const type of ["WorkItemLanded", "GatePassed", "RunFinished", "GuardTripped"]) {
+    for (const type of ["WorkItemLanded", "GatePassed", "RunFinished", "RunTouchedFile"]) {
       expect(subscribed(event(type, {}), everything), type).toBe(false);
     }
   });

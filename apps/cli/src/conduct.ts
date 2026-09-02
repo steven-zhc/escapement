@@ -25,8 +25,6 @@ import { createClaudeCodeRuntime } from "@escapement/runtime";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 export interface ConductOptions {
-  /** False wires no hooks. See `RenderOptions.guard`. */
-  guard?: boolean;
   /** False holds every item at the merge instead of landing it. */
   merge?: boolean;
   hookBinary?: string;
@@ -104,18 +102,15 @@ export async function conductorPass(options: ConductOptions = {}): Promise<PassO
     return outcome;
   }
 
-  const guard = options.guard !== false;
   const hookBinary = options.hookBinary ?? resolve(root, "packages/hook/bin/esc-hook");
-  if (guard) {
-    try {
-      await readFile(hookBinary);
-    } catch {
-      // A run with no guard must not start unless somebody said so. Refusing
-      // the pass rather than the daemon: the projections stay current, which
-      // is what makes the reason visible on the board.
-      outcome.refused.push({ project: "*", detail: `no esc-hook binary at ${hookBinary}` });
-      return outcome;
-    }
+  try {
+    await readFile(hookBinary);
+  } catch {
+    // A run that records nothing must not start. Refusing the pass rather than
+    // the daemon: the projections stay current, which is what makes the reason
+    // visible on the board.
+    outcome.refused.push({ project: "*", detail: `no esc-hook binary at ${hookBinary}` });
+    return outcome;
   }
 
   const promptPath = options.promptPath ?? resolve(root, "prompts/ticket.md");
@@ -151,7 +146,6 @@ export async function conductorPass(options: ConductOptions = {}): Promise<PassO
         // run's wall limit is two.
         token: () => client.token(),
         hookBinary,
-        guard,
         prompt,
         promptVersion: `ticket@${prompt.length}`,
         ...(options.merge === undefined ? {} : { merge: options.merge }),

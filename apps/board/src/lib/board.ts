@@ -3,7 +3,7 @@
  *
  * `task_view` holds what a card shows and nothing else
  * ([0012](../../../../doc/decisions/0012-one-task-view.md)). Gate evidence,
- * review findings, guard trips and the diff are **not** here — they are read
+ * review findings and the diff are **not** here — they are read
  * from the event stream when somebody opens a task, because a list view and a
  * detail view have opposite economics and the list is what has to be cheap.
  *
@@ -39,7 +39,6 @@ export interface BoardCard {
   /** Counts, not verdicts. The verdicts are on the task's own page. */
   gatesPassed: number;
   gatesFailed: number;
-  guardTrips: number;
   turns: number | null;
   costUsd: number | null;
   /** One line: what it is waiting on, or why it stopped, or what it merged as. */
@@ -77,7 +76,6 @@ function toCard(t: TaskCard): BoardCard {
     headSha: t.headSha,
     gatesPassed: t.gatesPassed,
     gatesFailed: t.gatesFailed,
-    guardTrips: t.guardTrips,
     turns: t.turns,
     costUsd: t.costUsd,
     note: t.note,

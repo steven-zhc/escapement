@@ -27,7 +27,6 @@ import { type EventStore, eventStore } from "@escapement/store";
 import { mkdir, rm } from "node:fs/promises";
 import { type Server, createServer } from "node:net";
 import { dirname } from "node:path";
-import { type GuardPolicy, type ToolCall, evaluate, redact } from "./guard.ts";
 
 /** What the runtimes call the five hooks both of them have. */
 export type HookName =
@@ -51,6 +50,31 @@ export type HookName =
  * up as a board that confidently reports work that never happened. Only the
  * second kind is hard to notice, so the list is the one that is easy to audit.
  */
+/**
+ * Strip anything credential-shaped out of a string bound for the wire.
+ *
+ * Moved here when the guard was deleted (ADR 0016 §6) rather than deleted with
+ * it: the error path in `handle` puts a thrown message into a reply, and a
+ * thrown message is exactly where a connection string turns up.
+ */
+export function redact(command: string): string {
+  return command
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s"']*@/gi, "$1***@")
+    .replace(/\b(sk|pk|ghp|ghs|gho|github_pat)_[A-Za-z0-9_]{8,}/g, "$1_***")
+    .replace(/(-{1,2}(?:password|token|secret|key)[= ])\S+/gi, "$1***")
+    .replace(/\b[A-Za-z0-9_]*(?:SECRET|TOKEN|PASSWORD|KEY)[A-Za-z0-9_]*=\S+/g, (m) =>
+      `${m.split("=")[0]}=***`,
+    )
+    .slice(0, 500);
+}
+
+/** Just enough of a tool call to tell whether it changed a file. */
+interface ToolCall {
+  /** `Bash`, `Read`, `Write`, … as the runtime names it. */
+  tool: string;
+  input: Record<string, unknown>;
+}
+
 const MUTATIONS: Record<string, "write" | "edit" | undefined> = {
   Write: "write",
   Edit: "edit",
@@ -60,14 +84,12 @@ const MUTATIONS: Record<string, "write" | "edit" | undefined> = {
 
 export interface RegisteredRun {
   runId: string;
-  policy: GuardPolicy;
   /** Recorded on every prompt, so "which prompt produced better work" is answerable. */
   promptVersion: string;
   /** Tool calls seen. Used where the runtime gives no turn number of its own. */
   calls: number;
   /** Counted in memory, flushed as events rather than one append per call. */
   allowed: number;
-  trips: number;
   touched: { path: string; op: "edit" | "write" | "delete" }[];
   /** The stream version the next append expects. */
   version: number;
@@ -89,12 +111,7 @@ export interface HookServerOptions {
 export interface HookServer {
   readonly socketPath: string;
   /** Teaches the server about a run. Until this, its calls are denied. */
-  register(
-    runId: string,
-    policy: GuardPolicy,
-    version: number,
-    promptVersion?: string,
-  ): RegisteredRun;
+  register(runId: string, version: number, promptVersion?: string): RegisteredRun;
   unregister(runId: string): RegisteredRun | undefined;
   get(runId: string): RegisteredRun | undefined;
   /** Writes the counted-in-memory facts to the log. Called at the end of a run. */
@@ -204,48 +221,29 @@ export function createHookServer(options: HookServerOptions): HookServer {
       return { allow: true };
     }
 
-    if (hook !== "PreToolUse") {
-      options.onDecision?.(run.runId, hook, "allow");
-      return { allow: true };
-    }
-
+    // Everything else, `PreToolUse` included. Escapement refuses no tool call
+    // (ADR 0016 §6): tool restrictions are the runtime's own configuration, and
+    // `permissions.deny` is enforced even under `bypassPermissions` — by
+    // removing the tool from the model's list, so nothing is ever attempted.
+    //
+    // `PreToolUse` is not wired at all any more, so this is defensive rather
+    // than a path anything takes. It counts, because a run's tool-call count is
+    // what `RunContextExhausted` reports a turn number from.
     run.calls += 1;
-    const verdict = evaluate(call, run.policy);
-    if (verdict.allow) {
-      run.allowed += 1;
-      options.onDecision?.(run.runId, hook, "allow");
-      return { allow: true };
-    }
-
-    run.trips += 1;
-    options.onDecision?.(run.runId, hook, "deny");
-    // Synchronous, deliberately. The decision is already made, so this delays
-    // only a call that was going to be refused — and 132 of these were invisible
-    // in the old loop precisely because nobody paid for writing them down.
-    try {
-      await append(run, "GuardTripped", {
-        tool: call.tool,
-        pattern: verdict.rule,
-        redactedCommand: verdict.redacted,
-      });
-    } catch {
-      // A store that is down must not turn a denial into an allow. The refusal
-      // stands; the record is what is lost, and that is the right way round.
-    }
-    return { allow: false, reason: `esc-hook: ${verdict.rule} — ${verdict.why}` };
+    run.allowed += 1;
+    options.onDecision?.(run.runId, hook, "allow");
+    return { allow: true };
   }
 
   return {
     socketPath: options.socketPath,
 
-    register(runId, policy, version, promptVersion = "unknown") {
+    register(runId, version, promptVersion = "unknown") {
       const run: RegisteredRun = {
         runId,
-        policy,
         promptVersion,
         calls: 0,
         allowed: 0,
-        trips: 0,
         touched: [],
         version,
       };

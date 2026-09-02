@@ -1,14 +1,14 @@
 /**
  * `task_view` — the one projection.
  *
- * It replaces `board`, `queue` and `guard_trips`. One row per task Escapement
+ * It replaces `board` and `queue`. One row per task Escapement
  * has touched, holding the latest state and the metadata a card shows, and
  * nothing else: the board's list view is a `select` against this table and no
  * second query ([0012](../../../doc/decisions/0012-one-task-view.md)).
  *
  * ## What is deliberately not here
  *
- * **Gate evidence, review findings, guard trips themselves, the diff.** All of
+ * **Gate evidence, review findings, the diff.** All of
  * it is read from the event stream when somebody opens one task. A list view
  * and a detail view have opposite economics — the list is read constantly and
  * needs to be cheap, the detail is read rarely by one person about one task,
@@ -73,7 +73,6 @@ export const taskViewProjection: Projection = {
         run_id       text,
         turns        int,
         cost_usd     double precision,
-        guard_trips  int not null default 0,
 
         base_sha     text,
         head_sha     text,
@@ -273,9 +272,6 @@ export const taskViewProjection: Projection = {
           break;
         }
 
-        case "GuardTripped":
-          await bump(ctx, event.streamId, seq, at);
-          break;
 
         case "RunAwaitingInput": {
           const d = event.data as PayloadOf<"RunAwaitingInput">;
@@ -483,21 +479,6 @@ async function viaRun(
   if (taskId) await set(ctx, taskId, seq, at, values);
 }
 
-/** Strictly `<`, so a replay lands on the same number rather than double-counting. */
-async function bump(ctx: ProjectionContext, runId: string, seq: string, at: Date): Promise<void> {
-  const rows = await ctx.query<{ task_id: string }>(
-    "select task_id from task_view_run where run_id = $1",
-    [runId],
-  );
-  const taskId = rows[0]?.task_id;
-  if (!taskId) return;
-  await ctx.query(
-    `update task_view set guard_trips = guard_trips + 1, updated_at = $3, updated_seq = $2::bigint
-     where task_id = $1 and updated_seq < $2::bigint`,
-    [taskId, seq, at],
-  );
-}
-
 /** Assignment into a keyed map, so replaying is idempotent without a guard. */
 async function setGate(
   ctx: ProjectionContext,
@@ -580,7 +561,6 @@ export interface TaskCard {
   runId: string | null;
   turns: number | null;
   costUsd: number | null;
-  guardTrips: number;
   gatesPassed: number;
   gatesFailed: number;
   baseSha: string | null;
@@ -703,7 +683,6 @@ export async function readTasks(options: ReadTasksOptions = {}): Promise<TaskCar
         runId: row.run_id,
         turns: row.turns,
         costUsd: row.cost_usd,
-        guardTrips: row.guard_trips,
         gatesPassed: verdicts.filter((v) => v === "passed" || v === "waived").length,
         gatesFailed: verdicts.filter((v) => v === "failed").length,
         baseSha: row.base_sha,

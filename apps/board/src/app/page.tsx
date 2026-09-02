@@ -60,13 +60,6 @@ function Card({ card, showProject }: { card: BoardCard; showProject: boolean }) 
         {card.costUsd !== null ? <li className="pill">${card.costUsd.toFixed(2)}</li> : null}
         {card.gatesPassed > 0 ? <li className="pill pass">{card.gatesPassed} passed</li> : null}
         {card.gatesFailed > 0 ? <li className="pill fail">{card.gatesFailed} failed</li> : null}
-        {/* 77% of the old loop's runs tripped the guard and nobody ever saw one.
-            The count is here; the trips themselves are on the task's page. */}
-        {card.guardTrips > 0 ? (
-          <li className="pill sig" title="guard trips — open the task to see them">
-            {card.guardTrips} guard
-          </li>
-        ) : null}
         {/* A card that keeps failing should read as one rather than looking new
             every time it comes back round. */}
         {card.attempts > 1 ? (

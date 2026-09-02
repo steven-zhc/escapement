@@ -34,21 +34,12 @@ export interface GateVerdict {
   findings: Finding[];
 }
 
-export interface GuardTrip {
-  tool: string;
-  pattern: string;
-  /** Already redacted where it was recorded. Never re-derived here. */
-  command: string;
-  at: string;
-}
-
 export interface TaskDetail {
   taskId: string;
   runId: string | null;
   headSha: string | null;
   baseSha: string | null;
   gates: GateVerdict[];
-  guardTrips: GuardTrip[];
   /** Everything, in order, for the question a summary did not anticipate. */
   history: { at: string; type: string; actor: string; summary: string }[];
 }
@@ -80,8 +71,6 @@ function summarise(event: Envelope): string {
       return `${String(d["kind"])}: ${String(d["detail"] ?? "")}`;
     case "RunProducedDiff":
       return `${String(d["files"])} files +${String(d["insertions"])} −${String(d["deletions"])}`;
-    case "GuardTripped":
-      return `${String(d["tool"])} matched ${String(d["pattern"])}`;
     case "PreparationPassed":
       return `${String(d["step"])} in ${(Number(d["durationMs"] ?? 0) / 1000).toFixed(1)}s`;
     case "PreparationFailed":
@@ -110,21 +99,12 @@ export async function loadTask(taskId: string): Promise<TaskDetail | null> {
   let headSha: string | null = null;
   let baseSha: string | null = null;
   const gates = new Map<string, GateVerdict>();
-  const guardTrips: GuardTrip[] = [];
 
   for (const e of run) {
     const d = (e.data ?? {}) as Record<string, unknown>;
     if (e.type === "RunStarted") baseSha = String(d["baseSha"] ?? "") || null;
     if (e.type === "RunProducedDiff" || e.type === "RunProposedCompletion") {
       headSha = String(d["headSha"] ?? "") || null;
-    }
-    if (e.type === "GuardTripped") {
-      guardTrips.push({
-        tool: String(d["tool"] ?? ""),
-        pattern: String(d["pattern"] ?? ""),
-        command: String(d["redactedCommand"] ?? ""),
-        at: e.at.toISOString(),
-      });
     }
     const verdict = VERDICT[e.type];
     if (verdict && typeof d["gate"] === "string") {
@@ -158,5 +138,5 @@ export async function loadTask(taskId: string): Promise<TaskDetail | null> {
       summary: summarise(e),
     }));
 
-  return { taskId, runId, headSha, baseSha, gates: [...gates.values()], guardTrips, history };
+  return { taskId, runId, headSha, baseSha, gates: [...gates.values()], history };
 }

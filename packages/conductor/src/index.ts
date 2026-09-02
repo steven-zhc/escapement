@@ -46,20 +46,12 @@ export {
   type Worktree,
 } from "./worktree.ts";
 export {
-  evaluate,
-  hostLooksProduction,
-  redact,
-  RULES,
-  type GuardPolicy,
-  type GuardVerdict,
-  type ToolCall,
-} from "./guard.ts";
-export {
   createHookServer,
   type HookName,
   type HookServer,
   type HookServerOptions,
   type RegisteredRun,
+  redact,
 } from "./hook-socket.ts";
 export {
   CLAUDE_ONLY_HOOKS,

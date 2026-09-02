@@ -18,8 +18,6 @@ import {
   createProjectionRunner,
   type Db,
   type EventStore,
-  guardTripsByPattern,
-  guardTripsProjection,
   type Projection,
   type ProjectionRunner,
   projectionLag,
@@ -30,15 +28,74 @@ let client: Db;
 let store: EventStore;
 const openRunners: ProjectionRunner[] = [];
 
-/** A run stream, so a `GuardTripped` lands where the projection expects it. */
 function runStream(): string {
   return streamId("run");
 }
 
-const tripped = (pattern: string, tool = "Bash") => ({
-  type: "GuardTripped",
+/**
+ * A projection that exists only here.
+ *
+ * These tests are about the *runner* — catch-up, checkpoints, rebuild
+ * determinism, a failing apply — and not about any particular projection. They
+ * used `guard_trips`, which coupled the store's tests to a projection that was
+ * later deleted outright (ADR 0016 §6) and took a day's worth of machinery
+ * coverage with it. Owning the subject here means the next deletion cannot.
+ */
+const TEST_TABLE = "esc_test_touches";
+
+const testProjection: Projection = {
+  name: TEST_TABLE,
+  async create(ctx) {
+    await ctx.query(
+      `create table if not exists ${TEST_TABLE} (
+         seq     bigint primary key,
+         run_id  text not null,
+         path    text not null
+       )`,
+    );
+  },
+  async reset(ctx) {
+    await ctx.query(`drop table if exists ${TEST_TABLE}`);
+  },
+  async apply(events, ctx) {
+    for (const event of events) {
+      if (event.type !== "RunTouchedFile") continue;
+      const d = event.data as { path: string };
+      await ctx.query(
+        `insert into ${TEST_TABLE} (seq, run_id, path) values ($1::bigint, $2, $3)
+         on conflict (seq) do nothing`,
+        [event.seq.toString(), event.streamId, d.path],
+      );
+    }
+  },
+};
+
+/**
+ * Was `guardTripsByPattern`; the same question, asked of the table above.
+ *
+ * Two counts rather than one, and that is the point of the test: "how often"
+ * and "across how many runs" are different questions, and a projection makes
+ * both a plain `select` instead of a fold over thousands of events.
+ */
+async function touchesByPath(): Promise<{ path: string; trips: number; runs: number }[]> {
+  return direct((c) =>
+    c
+      .query<{ path: string; trips: number; runs: number }>(
+        `select path,
+                count(*)::int          as trips,
+                count(distinct run_id)::int as runs
+         from ${TEST_TABLE}
+         group by path
+         order by trips desc`,
+      )
+      .then((r) => r.rows),
+  );
+}
+
+const tripped = (path: string, op = "write") => ({
+  type: "RunTouchedFile",
   actor: "conductor",
-  data: { tool, pattern, redactedCommand: `${pattern} ***` },
+  data: { path, op },
 });
 
 async function direct<T>(fn: (c: pg.Client) => Promise<T>): Promise<T> {
@@ -78,11 +135,11 @@ afterEach(async () => {
 afterAll(async () => {
   await client.close();
   await cleanupStreams();
-  // Leave the database as it was found: the projection's table stays (it is a
-  // real projection now) but holds nothing, and its checkpoint is gone.
+  // Leave the database as it was found. The subject is this file's own table,
+  // so it goes entirely rather than being emptied.
   await direct(async (c) => {
-    await c.query("truncate table guard_trips");
-    await c.query("delete from checkpoints where name in ('guard_trips', 'esc_test_boom')");
+    await c.query(`drop table if exists ${TEST_TABLE}`);
+    await c.query("delete from checkpoints where name in ('esc_test_touches', 'esc_test_boom')");
     await c.query("drop table if exists esc_test_boom");
   });
 });
@@ -92,17 +149,17 @@ describe("projection runner", () => {
     const run = runStream();
     const written = await store.append(run, 0, [tripped("rm -rf"), tripped("curl")]);
 
-    const runner = track(createProjectionRunner({ projection: guardTripsProjection, store }));
+    const runner = track(createProjectionRunner({ projection: testProjection, store }));
     await runner.start();
 
     const rows = await direct((c) =>
       c
-        .query<{ pattern: string }>("select pattern from guard_trips where run_id = $1 order by seq", [
+        .query<{ pattern: string }>(`select path from ${TEST_TABLE} where run_id = $1 order by seq`, [
           run,
         ])
         .then((r) => r.rows),
     );
-    expect(rows.map((r) => r.pattern)).toEqual(["rm -rf", "curl"]);
+    expect(rows.map((r) => r.path)).toEqual(["rm -rf", "curl"]);
 
     const lag = await runner.lag();
     expect(lag.lastSeq).toBe(written[1]!.seq);
@@ -111,7 +168,7 @@ describe("projection runner", () => {
   });
 
   it("follows the log live, after catching up", async () => {
-    const runner = track(createProjectionRunner({ projection: guardTripsProjection, store }));
+    const runner = track(createProjectionRunner({ projection: testProjection, store }));
     await runner.start();
 
     const run = runStream();
@@ -120,18 +177,18 @@ describe("projection runner", () => {
     await waitFor(
       async () =>
         (await direct((c) =>
-          c.query("select 1 from guard_trips where seq = $1", [written!.seq.toString()]),
+          c.query(`select 1 from ${TEST_TABLE} where seq = $1`, [written!.seq.toString()]),
         )).rowCount === 1,
       () => "the live event never reached the projection",
     );
   });
 
   it("reports lag for every projection with a checkpoint", async () => {
-    const runner = track(createProjectionRunner({ projection: guardTripsProjection, store }));
+    const runner = track(createProjectionRunner({ projection: testProjection, store }));
     await runner.start();
 
     const all = await projectionLag();
-    const mine = all.find((p) => p.name === "guard_trips");
+    const mine = all.find((p) => p.name === TEST_TABLE);
     expect(mine).toBeDefined();
     expect(mine!.lag).toBeGreaterThanOrEqual(0n);
     expect(mine!.headSeq).toBeGreaterThanOrEqual(mine!.lastSeq);
@@ -148,7 +205,7 @@ describe("projection runner", () => {
     await store.append(runA, 0, [tripped("rm -rf"), tripped("curl"), tripped("rm -rf")]);
     await store.append(runB, 0, [tripped("sudo"), tripped("curl")]);
 
-    const runner = track(createProjectionRunner({ projection: guardTripsProjection, store }));
+    const runner = track(createProjectionRunner({ projection: testProjection, store }));
     await runner.start();
 
     // A second incremental batch, so the incremental path is genuinely
@@ -157,17 +214,17 @@ describe("projection runner", () => {
     await waitFor(
       async () =>
         (await direct((c) =>
-          c.query("select 1 from guard_trips where seq = $1", [live!.seq.toString()]),
+          c.query(`select 1 from ${TEST_TABLE} where seq = $1`, [live!.seq.toString()]),
         )).rowCount === 1,
       () => "the incremental event never landed",
     );
 
-    const incremental = await snapshot("guard_trips", "seq");
+    const incremental = await snapshot(TEST_TABLE, "seq");
     expect(incremental.length).toBeGreaterThan(0);
 
     await runner.rebuild();
 
-    const rebuilt = await snapshot("guard_trips", "seq");
+    const rebuilt = await snapshot(TEST_TABLE, "seq");
     expect(rebuilt).toBe(incremental);
 
     // And the checkpoint is back where it was, not left at zero.
@@ -180,14 +237,14 @@ describe("projection runner", () => {
     await store.append(runA, 0, [tripped("rm -rf"), tripped("rm -rf"), tripped("curl")]);
     await store.append(runB, 0, [tripped("rm -rf")]);
 
-    const runner = track(createProjectionRunner({ projection: guardTripsProjection, store }));
+    const runner = track(createProjectionRunner({ projection: testProjection, store }));
     await runner.start();
 
-    const tally = await guardTripsByPattern();
-    const rm = tally.find((t) => t.pattern === "rm -rf");
+    const tally = await touchesByPath();
+    const rm = tally.find((t) => t.path === "rm -rf");
     expect(rm).toBeDefined();
-    // Three trips across two runs — the shape of question nobody could ask of
-    // the old loop's 132 invisible blocks.
+    // Three touches across two runs — the shape of question a projection makes
+    // a plain `select` instead of a fold over thousands of events.
     expect(rm!.trips).toBeGreaterThanOrEqual(3);
     expect(rm!.runs).toBeGreaterThanOrEqual(2);
   });
@@ -208,7 +265,7 @@ describe("projection runner", () => {
       },
       async apply(events: readonly Envelope[], ctx) {
         for (const e of events) {
-          if ((e.data as { pattern?: string }).pattern === "poison") {
+          if ((e.data as { path?: string }).path === "poison") {
             throw new Error("this projection cannot handle that");
           }
           await ctx.query("insert into esc_test_boom (seq) values ($1) on conflict do nothing", [
@@ -247,17 +304,17 @@ describe("projection runner", () => {
     const run = runStream();
     await store.append(run, 0, [tripped("rm -rf"), tripped("curl")]);
 
-    const runner = track(createProjectionRunner({ projection: guardTripsProjection, store }));
+    const runner = track(createProjectionRunner({ projection: testProjection, store }));
     await runner.start();
-    const once = await snapshot("guard_trips", "seq");
+    const once = await snapshot(TEST_TABLE, "seq");
 
     // Rewind the checkpoint by hand — what a process killed after Postgres
     // committed but before the runner noticed would leave behind — and let it
     // re-consume the same events.
-    await direct((c) => c.query("update checkpoints set last_seq = 0 where name = 'guard_trips'"));
+    await direct((c) => c.query(`update checkpoints set last_seq = 0 where name = '${TEST_TABLE}'`));
     await runner.stop();
     await runner.start();
 
-    expect(await snapshot("guard_trips", "seq")).toBe(once);
+    expect(await snapshot(TEST_TABLE, "seq")).toBe(once);
   });
 });

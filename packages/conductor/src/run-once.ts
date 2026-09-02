@@ -27,7 +27,6 @@ import { type Runtime, missingForTier } from "@escapement/runtime";
 import { type EventStore, eventStore } from "@escapement/store";
 import { claimWorkItem, releaseWorkItem } from "./claim.ts";
 import { refreshQueue, workItemStream } from "./discover.ts";
-import type { GuardPolicy } from "./guard.ts";
 import { smokeTestFailClosed, writeHookWiring } from "./hook-config.ts";
 import { createHookServer } from "./hook-socket.ts";
 import { integrate } from "./integrate.ts";
@@ -237,25 +236,16 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     log(`worktree ${worktree.path} at ${worktree.baseSha.slice(0, 7)}`);
 
     // ---- 5. the hook, proven to fail closed before anything is dispatched ---
-    const guardOn = options.guard !== false;
-    const wiring = await writeHookWiring({
-      runId,
-      hookBinary: options.hookBinary,
-      home,
-      guard: guardOn,
-    });
-    if (guardOn) {
-      const smoke = await smokeTestFailClosed(options.hookBinary, runBinary);
-      if (!smoke.ok) {
-        // The old loop refused to start when its guard smoke test failed. That
-        // instinct was right and applies to every check.
-        await release("the hook did not fail closed");
-        return { ok: false, workItemId, runId, stage: "hook", detail: smoke.detail };
-      }
-    } else {
-      // Said out loud every time. A guard that can be turned off quietly is one
-      // that will be found off later by someone who assumed otherwise.
-      log("guard OFF — no tool call is mediated, and no guard trips are recorded");
+    // It refuses nothing (ADR 0016 §6) and carries everything: the prompt, the
+    // files touched, compaction, and the Stop that fires the gates. Proving it
+    // fails closed is therefore about the *record*, not about mediation — a
+    // hook that cannot reach the conductor must stop the run rather than let it
+    // produce nothing and look like it produced everything.
+    const wiring = await writeHookWiring({ runId, hookBinary: options.hookBinary, home });
+    const smoke = await smokeTestFailClosed(options.hookBinary, runBinary);
+    if (!smoke.ok) {
+      await release("the hook did not fail closed");
+      return { ok: false, workItemId, runId, stage: "hook", detail: smoke.detail };
     }
 
     // ---- 6. prepare: make the worktree workable, or refuse for free --------
@@ -285,7 +275,6 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       };
     }
 
-    const guard: GuardPolicy = { base, productionPatterns: DEFAULT_PRODUCTION_PATTERNS };
     let proposedSha: string | null = null;
 
     const server = createHookServer({
@@ -316,7 +305,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
           }),
         },
       ]);
-      server.register(runId, guard, prepared.version + 1, promptVersion);
+      server.register(runId, prepared.version + 1, promptVersion);
 
       // The ticket itself, which the implementer was never given. The prompt
       // said "read the issue" and handed over a number: no title, no body, and

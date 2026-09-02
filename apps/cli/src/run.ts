@@ -30,8 +30,6 @@ export interface RunOptions {
   merge?: boolean;
   /** Defaults to the compiled hook in `packages/hook/bin`. */
   hookBinary?: string;
-  /** False for `--no-guard`: no hooks wired, no binary required. */
-  guard?: boolean;
   promptPath?: string;
 }
 
@@ -51,18 +49,16 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
     return 1;
   }
 
-  const guard = options.guard !== false;
   const hookBinary = options.hookBinary ?? resolve(root, "packages/hook/bin/esc-hook");
-  if (guard) {
-    try {
-      await readFile(hookBinary);
-    } catch {
-      // The hook is a compiled artefact and is not committed. A run without it
-      // would be a run with no guard at all, which must not start — unless the
-      // operator said so, which is what --no-guard is for.
-      log(`no esc-hook binary at ${hookBinary} — run: pnpm --filter @escapement/hook build`);
-      return 1;
-    }
+  try {
+    await readFile(hookBinary);
+  } catch {
+    // The hook is a compiled artefact and is not committed. It refuses nothing
+    // now (ADR 0016 §6) but carries every event a run produces, so a run
+    // without it is a run that records nothing — which must not start. There is
+    // no flag to skip this any more: there is nothing left to skip.
+    log(`no esc-hook binary at ${hookBinary} — run: pnpm --filter @escapement/hook build`);
+    return 1;
   }
 
   const promptPath = options.promptPath ?? resolve(root, "prompts/ticket.md");
@@ -91,7 +87,6 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
     token: () => client.token(),
     merge: options.merge,
     hookBinary,
-    guard,
     promptVersion: `ticket@${prompt.length}`,
     log,
   };

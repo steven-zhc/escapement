@@ -56,23 +56,6 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           )}
         </section>
 
-        {task.guardTrips.length > 0 ? (
-          <section>
-            <h2>Guard trips</h2>
-            {/* 132 of these were invisible in the old loop. The command is
-                stored already redacted and is never re-derived here. */}
-            <ul className="trips">
-              {task.guardTrips.map((t, i) => (
-                <li key={i}>
-                  <span className="pill fail">{t.tool}</span>
-                  <span className="mono">{t.pattern}</span>
-                  <code>{t.command}</code>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
         <section>
           <h2>History</h2>
           <ol className="history">

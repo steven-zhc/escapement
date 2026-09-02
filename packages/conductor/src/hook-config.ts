@@ -18,11 +18,18 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { stateDir } from "./worktree.ts";
 
-/** The five both runtimes have, then Claude Code's extras. */
+/**
+ * The four both runtimes have, then Claude Code's extras.
+ *
+ * `PreToolUse` was here and is not any more. Escapement refuses no tool call
+ * (ADR 0016 §6), so it had no job left — and it was the only hook on the hot
+ * path, one round trip per tool call against a 20ms budget of which process
+ * startup alone was 17ms ([ADR 0011](../../../doc/decisions/0011-hook-latency-is-runtime-startup.md)).
+ * Dropping it removes the hot path rather than optimising it.
+ */
 export const INTERSECTION_HOOKS = [
   "SessionStart",
   "UserPromptSubmit",
-  "PreToolUse",
   "PostToolUse",
   "Stop",
 ] as const;
@@ -78,40 +85,23 @@ export interface RenderOptions {
   home?: string;
   /** Claude Code's extras. Off for a runtime that does not have them. */
   includeClaudeOnly?: boolean;
-  /**
-   * False wires no hooks at all: the settings file is still written, so
-   * `--settings` has somewhere to point, but nothing mediates a tool call.
-   *
-   * For bringing the pipeline up on a machine the operator is watching. The
-   * guard is not one of the three real boundaries (ADR 0007) — the filtered
-   * environment and the disposable worktree still hold with this off — but a
-   * run without it records no guard trips and no touched files, so it proves
-   * less about a run than it looks like it does.
-   */
-  guard?: boolean;
 }
 
 /**
  * Claude Code's settings shape: a matcher per hook with a list of commands.
  *
- * `matcher: "*"` on `PreToolUse` is deliberate — every tool call goes through
- * the guard, and a matcher that lists tools is a list that will fall behind the
- * runtime's.
+ * `matcher: "*"` is deliberate — a matcher that lists tools is a list that will
+ * fall behind the runtime's.
  */
 export function renderSettings(options: RenderOptions): unknown {
-  // Explicitly empty rather than absent. `--settings` still points at a real
-  // file, and a settings file with no hooks says "nothing mediates tool calls
-  // here" in a way that reading it makes obvious.
-  if (options.guard === false) return { hooks: {} };
-
   // Absolute, and checked rather than trusted, because a relative path here
-  // fails *open*. The caller verifies the binary exists by resolving it against
-  // its own cwd; Claude Code spawns it resolved against the worktree. A relative
-  // path can therefore pass the existence check and then not be found — and a
-  // hook command that is not found exits 127, which is not the 2 that means
-  // deny, so the runtime treats it as a non-blocking error and runs the tool
-  // anyway. The result is a run with no guard that looks exactly like a run
-  // with one. Refusing here costs nothing and removes the whole class.
+  // fails *silently*. The caller verifies the binary exists by resolving it
+  // against its own cwd; Claude Code spawns it resolved against the worktree. A
+  // relative path can therefore pass the existence check and then not be found —
+  // and a hook command that is not found exits 127, which the runtime treats as
+  // a non-blocking error and carries on. The result is a run that records
+  // nothing and looks exactly like a run that recorded everything. Refusing
+  // here costs nothing and removes the whole class.
   const command = options.hookBinary;
   if (!isAbsolute(command)) {
     throw new Error(`esc-hook path must be absolute, got: ${command}`);
@@ -147,12 +137,20 @@ export async function writeHookWiring(options: RenderOptions): Promise<HookWirin
 }
 
 /**
- * Proves the hook denies when the conductor is not there.
+ * Proves the hook fails closed when the conductor is not there.
+ *
+ * [ADR 0016](../../../doc/decisions/0016-the-settled-model.md) §6 listed this
+ * for deletion along with the guard. That was wrong, and the correction is
+ * recorded rather than made quietly: the guard is gone, but the hook still
+ * carries every lifecycle event a run produces, and the failure this catches
+ * has simply changed shape. It is no longer "a tool call went unmediated"; it
+ * is **"a run produced no events and nothing said so"** — which in a system
+ * whose whole claim is that the log is the answer is the worse of the two.
  *
  * The old loop refused to start when `test-guard.sh` failed, and that instinct
- * was right: a guard that fails *open* is worse than no guard, because it is
- * trusted. This runs the real binary against a socket path that does not exist
- * and requires exit 2. The conductor calls it before dispatching anything.
+ * was right for the same reason it is right here. This runs the real binary
+ * against a socket path that does not exist and requires exit 2. The conductor
+ * calls it before dispatching anything.
  */
 export async function smokeTestFailClosed(
   hookBinary: string,
@@ -176,6 +174,8 @@ export async function smokeTestFailClosed(
     ok: false,
     detail:
       `esc-hook exited ${code} with no conductor listening — it must exit 2. ` +
-      "A guard that fails open is worse than no guard.",
+      "A recorder that fails open silently is worse than one that stops: the run " +
+      "continues and produces no events, and in a system whose whole claim is that " +
+      "the log is the answer, that is the failure with no symptom.",
   };
 }

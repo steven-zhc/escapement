@@ -59,18 +59,11 @@ export type RunLifecycle =
    */
   | {
       status: "failed";
-      kind: "timeout" | "crash" | "no-commits" | "guard-hard-stop" | "prepare-failed";
+      kind: "timeout" | "crash" | "no-commits" | "aborted" | "prepare-failed";
       detail: string;
     };
 
 export type RunStatus = RunLifecycle["status"];
-
-export interface GuardTrip {
-  tool: string;
-  pattern: string;
-  /** Redacted at the source: what trips the guard is often what should not be stored. */
-  redactedCommand: string;
-}
 
 export interface RunState {
   lifecycle: RunLifecycle;
@@ -91,8 +84,6 @@ export interface RunState {
 
   /** Files the agent wrote, in order, so the card can show them live. */
   touched: readonly { path: string; op: "edit" | "write" | "delete" }[];
-  /** Every one of these was invisible in the old loop. */
-  guardTrips: readonly GuardTrip[];
   /**
    * Turns at which the context was compacted. Compaction means the work item was
    * scoped too large — a metric, not noise.
@@ -128,7 +119,6 @@ export const emptyRun: RunState = {
   branch: null,
   diff: null,
   touched: [],
-  guardTrips: [],
   compactedAtTurns: [],
   prompts: 0,
   gates: {},
@@ -205,11 +195,6 @@ export function applyRun(state: RunState, event: Envelope): RunState {
     case "RunTouchedFile": {
       const d = event.data as PayloadOf<"RunTouchedFile">;
       return { ...state, ...at, touched: [...state.touched, d] };
-    }
-
-    case "GuardTripped": {
-      const d = event.data as PayloadOf<"GuardTripped">;
-      return { ...state, ...at, guardTrips: [...state.guardTrips, d] };
     }
 
     case "RunContextExhausted": {

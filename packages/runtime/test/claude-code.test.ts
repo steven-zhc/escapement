@@ -163,7 +163,7 @@ describe("run", () => {
     expect(outcome.failure?.detail).toContain("400ms");
   });
 
-  it("turns an abort into guard-hard-stop", async () => {
+  it("turns an abort into aborted", async () => {
     const binary = await fakeClaude("sleep 30");
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 200);
@@ -171,7 +171,7 @@ describe("run", () => {
     const outcome = await createClaudeCodeRuntime({ binary }).run(
       request({ signal: controller.signal }),
     );
-    expect(outcome.failure?.kind).toBe("guard-hard-stop");
+    expect(outcome.failure?.kind).toBe("aborted");
   });
 
   it("turns a missing binary into a crash rather than a stack trace", async () => {

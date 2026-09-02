@@ -30,20 +30,6 @@ describe("reduceRun", () => {
    * 132 guard trips across 56 of 73 runs — 77% of runs — went to stderr inside a
    * log nobody parsed. Counting them is the entire reason the event exists.
    */
-  it("counts guard trips and keeps their redacted commands", () => {
-    const e = makeStream("run-01JX");
-    const s = reduceRun([
-      e("RunStarted", started),
-      e("GuardTripped", { tool: "Bash", pattern: "rm -rf", redactedCommand: "rm -rf ***" }),
-      e("GuardTripped", { tool: "Bash", pattern: "curl", redactedCommand: "curl ***" }),
-    ]);
-
-    expect(s.guardTrips).toHaveLength(2);
-    expect(s.guardTrips[0]!.pattern).toBe("rm -rf");
-    // Still running: tripping the guard is a refusal, not a failure.
-    expect(s.lifecycle.status).toBe("running");
-  });
-
   it("records compaction as a metric, not as noise", () => {
     const e = makeStream("run-01JX");
     const s = reduceRun([

@@ -95,8 +95,6 @@ async function seed(): Promise<void> {
   await store.append(wi(2), 0, [discovered(2, "a race in the importer"), claimed(2)]);
   await store.append(run(2), 0, [
     started(2),
-    { type: "GuardTripped", actor: `agent:${run(2)}`, data: { tool: "Bash", pattern: "rm -rf", redactedCommand: "rm -rf ***" } },
-    { type: "GuardTripped", actor: `agent:${run(2)}`, data: { tool: "Bash", pattern: "curl", redactedCommand: "curl ***" } },
     { type: "RunFinished", actor: "conductor", data: { exitCode: 0, turns: 63, durationMs: 100, costUsd: 5.42 } },
   ]);
 
@@ -182,7 +180,6 @@ describe("task_view", () => {
     expect(two.tier).toBe("guarded");
     // The count reaches the card. The trips themselves do not — they are read
     // from the stream when somebody opens the task.
-    expect(two.guardTrips).toBe(2);
 
     const three = card(tasks, 3)!;
     expect(three.gatesPassed).toBe(1);

@@ -57,7 +57,7 @@ export interface RunOutcome {
    * old loop's failures produced no event at all, which is the thing this type
    * exists to make impossible.
    */
-  failure: { kind: "timeout" | "crash" | "no-commits" | "guard-hard-stop"; detail: string } | null;
+  failure: { kind: "timeout" | "crash" | "no-commits" | "aborted"; detail: string } | null;
   /**
    * The model's final message.
    *

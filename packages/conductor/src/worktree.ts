@@ -23,7 +23,6 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { hostLooksProduction } from "./guard.ts";
 
 const exec = promisify(execFile);
 
@@ -107,6 +106,27 @@ export class ProductionValueError extends Error {
  * for one. See `hostLooksProduction`.
  */
 export const DEFAULT_PRODUCTION_PATTERNS = ["prod", "production"];
+
+/**
+ * Whether a host is a production one, by **segment** rather than by substring.
+ *
+ * Substring matching looked right and was not: `reproducible.dev.example.com`
+ * contains "prod", and a tripwire that refuses a development host trains people
+ * to turn it off. The host is split on `.` and `-` and a segment has to match
+ * outright — `db.prod.example.com` and `prod-db.example.com` both do,
+ * `reproducible.dev.example.com` does not.
+ *
+ * Lived in `guard.ts` and moved here when the guard was deleted (ADR 0016 §6).
+ * It was never the guard's: the filtered environment is one of the three real
+ * boundaries, and this is what makes it refuse rather than warn.
+ */
+export function hostLooksProduction(host: string, patterns: readonly string[]): string | null {
+  const segments = host.toLowerCase().split(/[.\-]/);
+  for (const pattern of patterns) {
+    if (segments.includes(pattern.toLowerCase())) return pattern;
+  }
+  return null;
+}
 
 export interface FilteredEnv {
   values: Record<string, string>;

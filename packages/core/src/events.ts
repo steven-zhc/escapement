@@ -124,9 +124,9 @@ export const DispatchRefused = z.object({
  * reproduce a failure and cannot check its own work — and the first thing that
  * says so is a gate failing at the end, after the money is spent.
  *
- * The command is recorded in full, unlike `GuardTripped`'s. That one is redacted
- * because an agent composed it; this one was written by a person and committed
- * to the repository under a hash that is already in the log.
+ * The command is recorded in full. It was written by a person and committed to
+ * the repository under a hash that is already in the log — unlike anything an
+ * agent composes, which is why this needs no redaction.
  */
 export const PreparationStarted = z.object({
   /**
@@ -172,17 +172,6 @@ export const RunPrompted = z.object({ promptVersion: z.string(), bytes: z.number
 
 export const RunTouchedFile = z.object({ path: z.string(), op: z.enum(["edit", "write", "delete"]) });
 
-/**
- * 132 of these across 56 of 73 runs in the old loop, all invisible — they went
- * to stderr inside a log file nobody parsed. The command is redacted because
- * the thing that tripped the guard is frequently the thing worth not storing.
- */
-export const GuardTripped = z.object({
-  tool: z.string(),
-  pattern: z.string(),
-  redactedCommand: z.string(),
-});
-
 /** Compaction means the ticket was scoped too large. That is a metric, not noise. */
 export const RunContextExhausted = z.object({ turn: z.number().int() });
 
@@ -207,7 +196,7 @@ export const RunFinished = z.object({
 });
 
 export const RunFailed = z.object({
-  kind: z.enum(["timeout", "crash", "no-commits", "guard-hard-stop"]),
+  kind: z.enum(["timeout", "crash", "no-commits", "aborted"]),
   detail: z.string(),
 });
 
@@ -447,7 +436,6 @@ export const EVENTS = {
   RunStarted,
   RunPrompted,
   RunTouchedFile,
-  GuardTripped,
   RunContextExhausted,
   RunAwaitingInput,
   RunProducedDiff,

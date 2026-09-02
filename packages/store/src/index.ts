@@ -18,12 +18,6 @@ export {
   type ProjectionRunnerOptions,
 } from "./projection.ts";
 export {
-  GUARD_TRIPS_TABLE,
-  guardTripsByPattern,
-  guardTripsProjection,
-  type GuardPatternTally,
-} from "./projections/guard-trips.ts";
-export {
   CHANNEL,
   subscribe,
   type SubscribeOptions,

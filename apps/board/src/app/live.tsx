@@ -24,7 +24,7 @@ import { useEffect, useRef, useState } from "react";
 /**
  * How long to coalesce a burst before re-reading.
  *
- * A run appends steadily — a touched file, a guard trip, a gate verdict — and
+ * A run appends steadily — a touched file, a gate verdict — and
  * one round trip per event would make the board re-render dozens of times a
  * second while saying the same thing. This is not polling: nothing fires unless
  * an event arrived.
