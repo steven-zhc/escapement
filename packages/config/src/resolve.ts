@@ -16,7 +16,6 @@
  */
 import { createHash } from "node:crypto";
 import { parse as parseYaml } from "yaml";
-import { type Policy, assertAllowedByPolicy, effectiveTier } from "./policy.ts";
 import { applyPreset } from "./presets.ts";
 import { Recipe } from "./recipe.ts";
 
@@ -65,11 +64,8 @@ export interface ResolvedRecipe {
   ref: string;
   /** The raw file, kept so a diff against a later version is possible. */
   source: string;
-  /**
-   * The tier this run will execute at — the stricter of the recipe's request and
-   * the policy's floor. Null when no policy was supplied.
-   */
-  tier: ReturnType<typeof effectiveTier> | null;
+  /** The tier this run will execute at. The recipe's, and now nobody else's. */
+  tier: Recipe["runtime"]["tier"];
   /** Which preset it extended, if any. Provenance; not part of the hash. */
   preset: string | null;
 }
@@ -98,12 +94,6 @@ export function hashRecipe(recipe: Recipe): string {
 export async function resolveRecipe(
   read: ReadAtRef,
   ref: string,
-  /**
-   * When given, the recipe is checked against it and rejected if it would
-   * weaken the run. Omitted at `esc add` time, where the policy is being
-   * written rather than enforced.
-   */
-  policy?: Policy,
 ): Promise<ResolvedRecipe> {
   const source = await read(RECIPE_PATH, ref);
   if (source === null) throw new RecipeMissingError(ref);
@@ -132,16 +122,14 @@ export async function resolveRecipe(
     );
   }
 
-  // The resolved form is what gets hashed and what gets judged, so the preset is
-  // inside the hash and a preset change is a configuration change.
-  if (policy) assertAllowedByPolicy(parsed.data, policy);
-
+  // The resolved form is what gets hashed, so the preset is inside the hash and
+  // a preset change is a configuration change.
   return {
     recipe: parsed.data,
     configHash: hashRecipe(parsed.data),
     ref,
     source,
-    tier: policy ? effectiveTier(parsed.data, policy) : null,
+    tier: parsed.data.runtime.tier,
     preset: applied.preset,
   };
 }

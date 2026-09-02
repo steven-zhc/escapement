@@ -462,7 +462,6 @@ function githubCredentials(env: NodeJS.ProcessEnv): CheckResult {
 
 const DEFERRED: { name: string; detail: string }[] = [
   { name: "recipe: schema", detail: "no project is onboarded yet — run esc add <owner>/<repo> (#9)" },
-  { name: "recipe vs policy conflict", detail: "no project has a policy yet — esc add writes the first one (#9)" },
   { name: "repository, base branch, submodules", detail: "needs a registered project and its worktree (#10)" },
   { name: "environment allowlist and production tripwire", detail: "needs the recipe's env block (#8)" },
   {

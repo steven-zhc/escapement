@@ -9,10 +9,11 @@
  * the diff, the `tamper` gate catches it, and it takes effect only after a
  * human approves and merges it.
  *
- * What is *not* here is policy — the tier floor, which gates are mandatory, who
- * may approve, the production host patterns. That lives in Escapement's own
- * database as `ProjectPolicySet` events, out of the repo's reach entirely, the
- * same way branch protection lives outside a workflow file. A recipe may add
+ * There is no policy above it any more (ADR 0016 §7): the workflow is the
+ * repository's to define, and Escapement does not second-guess it. What still
+ * holds from [0005](../../../doc/decisions/0005-config-in-target-repo.md) is
+ * where it is read from — `origin/<base>`, never the agent's branch, so a branch
+ * cannot change the rules of the run it is part of. A recipe may add
  * strictness; it can never remove it.
  *
  * See doc/decisions/0005-config-in-target-repo.md.
@@ -103,11 +104,15 @@ export const Recipe = z.object({
   runtime: z.object({
     agent: RuntimeId.default("claude-code"),
     /**
-     * Containment this project *asks* for. Policy sets the floor, so this can
-     * only ever be used to raise it — a recipe asking for less than the policy's
-     * tier is rejected by name. Omitted means "whatever policy says".
+     * How contained the runtime must be. `run-once` refuses to dispatch when the
+     * runtime cannot meet it, which is the whole of the enforcement.
+     *
+     * Defaulted rather than optional since policy was deleted: there is no floor
+     * underneath it to fall back to, and an absent tier that meant "unspecified"
+     * would be a run whose containment nothing states. `guarded` is what every
+     * run has actually used ([ADR 0007](../../../doc/decisions/0007-dual-runtime.md)).
      */
-    tier: Tier.optional(),
+    tier: Tier.default("guarded"),
     prompt: z.string().optional(),
     limits: z
       .object({ turns: z.number().int().positive().default(300), wall: z.string().default("2h") })

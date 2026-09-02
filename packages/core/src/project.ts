@@ -29,16 +29,6 @@ export interface ProjectState {
    */
   base: string | null;
 
-  /** The containment floor. A recipe may raise it and never lower it. */
-  tier: Tier;
-  /** Gate names a recipe may not drop. */
-  requiredGates: readonly string[];
-  approvers: readonly string[];
-  concurrent: number;
-  /** Who set the policy, and why. */
-  policyBy: string | null;
-  policyReason: string | null;
-
   /** The last resolved recipe hash, and the commit it was resolved from. */
   configHash: string | null;
   fromSha: string | null;
@@ -51,14 +41,6 @@ export const emptyProject: ProjectState = {
   project: null,
   owner: null,
   base: null,
-  // Not `open`: an unconfigured project must not read as the least contained
-  // one. `guarded` is what the first project runs at (doc/decisions/0007).
-  tier: "guarded",
-  requiredGates: [],
-  approvers: [],
-  concurrent: 1,
-  policyBy: null,
-  policyReason: null,
   configHash: null,
   fromSha: null,
   version: 0,
@@ -69,20 +51,6 @@ export function applyProject(state: ProjectState, event: Envelope): ProjectState
   const at = { version: event.version, lastSeq: event.seq };
 
   switch (event.type) {
-    case "ProjectPolicySet": {
-      const d = event.data as PayloadOf<"ProjectPolicySet">;
-      return {
-        ...state,
-        ...at,
-        project: d.project,
-        tier: d.tier,
-        requiredGates: d.requiredGates,
-        approvers: d.approvers,
-        concurrent: d.concurrent,
-        policyBy: d.by,
-        policyReason: d.reason,
-      };
-    }
 
     case "ProjectConfigured": {
       const d = event.data as PayloadOf<"ProjectConfigured">;

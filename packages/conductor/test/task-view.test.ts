@@ -70,24 +70,6 @@ const started = (n: number) => ({
 });
 
 async function seed(): Promise<void> {
-  const prj = `prj-${PROJECT}`;
-  created.add(prj);
-  await store.append(prj, 0, [
-    {
-      type: "ProjectPolicySet",
-      actor: "human:test",
-      data: {
-        project: PROJECT,
-        tier: "guarded",
-        requiredGates: [],
-        approvers: [],
-        concurrent: 1,
-        by: "human:test",
-        reason: "test",
-      },
-    },
-  ]);
-
   // 1 — queued and nothing else.
   await store.append(wi(1), 0, [discovered(1, "still waiting")]);
 
@@ -177,9 +159,8 @@ describe("task_view", () => {
     const two = card(tasks, 2)!;
     expect(two.turns).toBe(63);
     expect(two.costUsd).toBeCloseTo(5.42);
-    expect(two.tier).toBe("guarded");
-    // The count reaches the card. The trips themselves do not — they are read
-    // from the stream when somebody opens the task.
+    // No tier on the card any more: it is the recipe's (ADR 0016 §7), and the
+    // board does not read recipes.
 
     const three = card(tasks, 3)!;
     expect(three.gatesPassed).toBe(1);

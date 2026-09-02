@@ -19,7 +19,7 @@
  * with a question. The old loop could end in silence in at least seven places;
  * that is the thing being replaced, so `finally` blocks here are not tidiness.
  */
-import { type ResolvedRecipe, effectiveTier, parseDuration } from "@escapement/config";
+import { type ResolvedRecipe, parseDuration } from "@escapement/config";
 import { type Tier, parsePayload } from "@escapement/core";
 import { gatesFromRecipe, runGatePipeline } from "@escapement/gates";
 import type { GitHubClient } from "@escapement/github";
@@ -31,7 +31,6 @@ import { smokeTestFailClosed, writeHookWiring } from "./hook-config.ts";
 import { createHookServer } from "./hook-socket.ts";
 import { integrate } from "./integrate.ts";
 import { prepareWorktree } from "./prepare.ts";
-import { policyOf } from "./projects.ts";
 import type { ProjectState } from "@escapement/core";
 import { DEFAULT_PRODUCTION_PATTERNS, type TokenSource, filterEnv, git, provisionWorktree, removeWorktree, runnableEnv, stateDir } from "./worktree.ts";
 import { spawn } from "node:child_process";
@@ -129,7 +128,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     const from = options.project.base ?? (await options.client.defaultBranch());
     resolved = await (
       await import("@escapement/config")
-    ).resolveRecipe((p, r) => options.client.fileAt(p, r), from, policyOf(options.project));
+    ).resolveRecipe((p, r) => options.client.fileAt(p, r), from);
   } catch (err) {
     // Refusing here is the point of 0005: an unreadable or non-compliant recipe
     // must stop the run rather than fall back to a default.
@@ -137,10 +136,10 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   }
   const recipe = resolved.recipe;
   const base = recipe.repo.base;
-  log(`recipe ${resolved.configHash.slice(0, 12)} from ${resolved.ref}, tier ${resolved.tier ?? "?"}`);
+  log(`recipe ${resolved.configHash.slice(0, 12)} from ${resolved.ref}, tier ${resolved.tier}`);
 
   // ---- 2. capability matching, before anything is claimed ------------------
-  const tier: Tier = effectiveTier(recipe, policyOf(options.project));
+  const tier: Tier = resolved.tier;
   const missing = missingForTier(options.runtime.capabilities, tier);
   const workItemId = workItemStream(project, options.issue);
 

@@ -5,7 +5,7 @@
  * events, is a stream to fold rather than a projection to maintain. If that ever
  * stops being true it becomes one, which costs a truncate and a replay.
  */
-import { type Policy, type ResolvedRecipe, resolveRecipe } from "@escapement/config";
+import { type ResolvedRecipe, resolveRecipe } from "@escapement/config";
 import { type ProjectState, isRegistered, reduceProject } from "@escapement/core";
 import { databaseUrl } from "@escapement/env";
 import type { GitHubClient } from "@escapement/github";
@@ -49,16 +49,6 @@ export async function loadProjects(store: EventStore = eventStore): Promise<Proj
   return states.filter(isRegistered);
 }
 
-/** A project's policy in the shape `@escapement/config` checks a recipe against. */
-export function policyOf(state: ProjectState): Policy {
-  return {
-    project: state.project ?? "",
-    tier: state.tier,
-    requiredGates: state.requiredGates,
-    approvers: state.approvers,
-    concurrent: state.concurrent,
-  };
-}
 
 /**
  * The recipe governing this project's next run.
@@ -75,5 +65,5 @@ export async function currentRecipe(
   // Recorded base first; GitHub's default branch only when a project predates
   // it being recorded.
   const ref = base ?? state.base ?? (await client.defaultBranch());
-  return resolveRecipe((path, r) => client.fileAt(path, r), ref, policyOf(state));
+  return resolveRecipe((path, r) => client.fileAt(path, r), ref);
 }

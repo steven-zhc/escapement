@@ -349,16 +349,6 @@ export const RunRequested = z.object({
 
 // --------------------------------------------------------------- project ----
 
-/** Policy lives here, not in the managed repo. See doc/decisions/0005. */
-export const ProjectPolicySet = z.object({
-  project: z.string(),
-  tier: Tier,
-  requiredGates: z.array(z.string()),
-  approvers: z.array(z.string()),
-  concurrent: z.number().int().positive(),
-  by: z.string(),
-  reason: z.string(),
-});
 
 /**
  * The recipe as resolved from origin/<base>, hashed so replays can be compared.
@@ -457,7 +447,6 @@ export const EVENTS = {
   ConductorResumed,
   OutboxDelivered,
   OutboxFailed,
-  ProjectPolicySet,
   QueueChanged,
   RunRequested,
   ProjectConfigured,

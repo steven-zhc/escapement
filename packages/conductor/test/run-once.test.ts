@@ -69,12 +69,6 @@ const project: ProjectState = {
   // so this test would pass either way — which is exactly why the real repo
   // (whose default is a feature branch) is the one that found the bug.
   base: "develop",
-  tier: "guarded",
-  requiredGates: ["build"],
-  approvers: [],
-  concurrent: 1,
-  policyBy: "human:test",
-  policyReason: "test",
   configHash: "seeded",
   fromSha: "0".repeat(40),
   version: 1,
@@ -590,21 +584,6 @@ git add -A && git commit -q -m "fix the race"
       expect(item).not.toContain("WorkItemReleased");
     }, 180_000);
 
-    it("refuses someone the project's policy did not name", async () => {
-      await held(134, "134");
-      const outcome = await waive({
-        project: PROJECT,
-        issue: 134,
-        gate: "build",
-        by: "human:someone-else",
-        approvers: ["human:steven"],
-        reason: "trust me",
-        store,
-      });
-
-      expect(outcome.ok).toBe(false);
-      expect(outcome.detail).toContain("not in this project's approvers");
-    }, 180_000);
   });
 
   /**

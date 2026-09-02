@@ -10,17 +10,17 @@ examples instead of pretending to be exhaustive.
 **Counted 2026-09-02.**
 
 > **This describes the code as it is, not [ADR 0016](decisions/0016-the-settled-model.md).**
-> **Step 3a has landed** and is reflected below: the guard is gone, and with it
-> `GuardTripped`, the `guard_trips` projection and the `--no-guard` flag. Still
-> ahead: four gate *kinds* become five gate *points*, and the policy section is
-> deleted (3b–3e). This file is updated as each step lands, never ahead of it. A
+> **Steps 3a and 3b have landed** and is reflected below: the guard is gone, and with it
+> `GuardTripped`, the `guard_trips` projection and the `--no-guard` flag; and the
+> policy concept is gone, with `tier` now the recipe's. Still ahead: four gate
+> *kinds* become five gate *points* (3c–3e). This file is updated as each step lands, never ahead of it. A
 > reference that documents intent instead of behaviour is the defect this
 > repository hit four times on 2026-09-02, and it is the one thing this file
 > exists not to do.
 
 ---
 
-## event — 40 types
+## event — 39 types
 
 One fact that already happened, past tense. Never edited, never deleted.
 Source: the registry at the bottom of `packages/core/src/events.ts`.
@@ -36,7 +36,7 @@ Source: the registry at the bottom of `packages/core/src/events.ts`.
 | integration (3) | `IntegrationAttempted` `IntegrationRefused` `IntegrationSucceeded` |
 | control (2) | `ConductorPaused` `ConductorResumed` |
 | outbox (2) | `OutboxDelivered` `OutboxFailed` |
-| project & queue (5) | `ProjectPolicySet` `QueueChanged` `RunRequested` `ProjectConfigured` `Reconciled` |
+| project & queue (4) | `QueueChanged` `RunRequested` `ProjectConfigured` `Reconciled` |
 
 Every type has a Zod payload schema and an entry in `SCHEMA_VER`. A payload
 change means bumping that type's version and adding an upcaster in the same
@@ -76,7 +76,7 @@ Source: `PROJECTIONS` in `apps/cli/src/esc.ts`.
 
 | Name | Answers | Owns its table? |
 |---|---|---|
-| `task_view` | what is the current state of every task the board shows | yes — `create`/`reset` build and drop it |
+| `task_view` | what is the current state of every task the board shows | yes — `create`/`reset` build and drop it, along with `task_view_run` |
 | `outbox` | what still has to be said to GitHub | **no** — the contract owns `outbox`, so `create`/`reset` are no-ops. Dropping it would take it out from under `db verify`. |
 
 ## task state — 5
@@ -142,22 +142,17 @@ dependency is missing is refused by name, never skipped.
 Verdicts: `passed` · `failed` · `needs-approval`. The third is not a flavour of
 failure — nothing is wrong, and nothing may proceed until a person says so.
 
-## policy field — 4
-
-The part a recipe cannot soften. Lives in Escapement's log, set by `esc add`.
-Source: `Policy` in `packages/config/src/policy.ts`.
-
-| Field | Meaning | Conflict? |
-|---|---|---|
-| `tier` | containment floor | yes — a lower tier is refused by name |
-| `requiredGates` | gate names the recipe must declare | yes — omitting one is refused |
-| `approvers` | who may answer a `needs-approval` | no |
-| `concurrent` | runs this project may have at once | no |
-
 ## tier — 3
 
-`open` < `guarded` < `sandboxed`. Comparison is the whole of the rule.
-Source: `Tier` in `packages/core/src/events.ts:26`.
+`open` · `guarded` · `sandboxed`. Source: `Tier` in `packages/core/src/events.ts:26`.
+
+**It is the recipe's** — `runtime.tier`, defaulting to `guarded` — since the
+policy that used to set a floor under it was deleted (ADR 0016 §7). There is no
+comparison left to make: `run-once.ts` refuses to dispatch when the runtime
+cannot meet what the recipe asks, and that is the whole of the enforcement.
+
+`sandboxed` remains a value no runtime provides, so asking for it can only ever
+refuse.
 
 ## work kind — 4
 
@@ -220,7 +215,7 @@ Source: the switch in `apps/cli/src/esc.ts`.
 `add` · `run` · `approve` · `status` · `doctor` · `daemon` · `pause` ·
 `resume` · `now` · `projection` · `version`
 
-## doctor check — 16 live, 6 deferred
+## doctor check — 16 live, 5 deferred
 
 Source: `apps/cli/src/doctor.ts`. This list is `pnpm esc doctor`'s own output,
 not a reading of the file — grepping the constructors missed six of them.

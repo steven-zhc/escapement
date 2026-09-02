@@ -31,11 +31,6 @@ export interface AddOptions {
   /** Defaults to the repository's own default branch. */
   base?: string;
   /** Containment floor. `guarded` is what the first project runs at (0007). */
-  tier?: Tier;
-  /** Gates the recipe may not remove. Empty until a human decides otherwise. */
-  require?: string[];
-  approvers?: string[];
-  concurrent?: number;
 }
 
 /** A project's own stream. Policy and configuration live here, not in the repo. */
@@ -103,22 +98,10 @@ export async function add(options: AddOptions, log = console.log): Promise<numbe
   log(`  ${resolved.recipe.gates.length} gate(s): ${resolved.recipe.gates.map((g) => g.name).join(", ")}`);
   log(`  runtime ${resolved.recipe.runtime.agent}, kinds ${resolved.recipe.source.kinds.join(" > ")}`);
 
-  // 4. Policy. Escapement's, not the repository's — a recipe may add strictness
-  //    and can never remove it.
-  const tier: Tier = options.tier ?? "guarded";
-  const policy = {
-    project: repo,
-    tier,
-    requiredGates: options.require ?? [],
-    approvers: options.approvers ?? [],
-    // Concurrency stays at one deliberately. The old loop landed seven tickets
-    // in a night while the review backlog grew by fourteen; throughput was never
-    // the constraint. Raising it before the board draws the queue down would
-    // make the problem worse, faster.
-    concurrent: options.concurrent ?? 1,
-    by: "human:esc-add",
-    reason: `onboarded ${owner}/${repo}`,
-  };
+  // Tier is the recipe's now (ADR 0016 §7). There is no policy to write here:
+  // nothing sits above a repository's own workflow, so onboarding records what
+  // the project *is* and stops.
+  log(`  tier ${resolved.recipe.runtime.tier}`);
 
   const stream = projectStream(repo);
   const existing = await eventStore.read(stream);
@@ -136,12 +119,11 @@ export async function add(options: AddOptions, log = console.log): Promise<numbe
         fromSha,
       }),
     },
-    { type: "ProjectPolicySet", actor: "human:esc-add", data: parsePayload("ProjectPolicySet", policy) },
   ]);
 
   log(
     existing.length === 0
-      ? `added ${repo} — policy tier=${tier}, required gates ${policy.requiredGates.join(", ") || "(none)"}, concurrency ${policy.concurrent}`
+      ? `added ${repo} — tier ${resolved.recipe.runtime.tier}, ${resolved.recipe.gates.length} gate(s)`
       : `updated ${repo} — its ${existing.length} earlier event(s) are still on the record`,
   );
   return 0;

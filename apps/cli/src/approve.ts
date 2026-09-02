@@ -41,9 +41,6 @@ export async function approveCommand(
     repo: options.project,
   });
 
-  // From the project's policy, in Escapement's log — never from the managed
-  // repository, which could otherwise name itself as its own approver.
-  const approvers = project.approvers;
   const by = options.by ?? `human:${userInfo().username}`;
 
   if (options.reject !== undefined) {
@@ -54,7 +51,6 @@ export async function approveCommand(
       base: project.base ?? (await client.defaultBranch()),
       client,
       by,
-      approvers,
       reason: options.reject,
       log,
     });
@@ -70,7 +66,6 @@ export async function approveCommand(
     // An approval is never anonymous. The local account is a weak claim, but it
     // is a true one, and it is what a single-machine deployment has (0007).
     by,
-    approvers,
     note: options.note,
     token: () => client.token(),
     log,

@@ -23,7 +23,6 @@ export {
   listProjectStreams,
   loadProject,
   loadProjects,
-  policyOf,
   projectStream,
   PROJECT_STREAM_PREFIX,
 } from "./projects.ts";

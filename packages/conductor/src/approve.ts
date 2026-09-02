@@ -32,17 +32,6 @@ export interface ApproveOptions {
   /** Recorded on the approval. A waiver is never anonymous, and neither is this. */
   by: string;
   /**
-   * Who may answer, from the project's **policy** — Escapement's own log, never
-   * the managed repository. A recipe that could name its own approvers could
-   * approve itself, which is the same hole as a recipe that could lower its own
-   * containment tier.
-   *
-   * Empty means nobody has been named yet, and anyone may approve. That is the
-   * state a project is in before someone decides, and refusing every approval
-   * until then would make onboarding a chicken-and-egg problem.
-   */
-  approvers?: readonly string[];
-  /**
    * The sha the caller was looking at when they decided.
    *
    * Distinct from the approval's own `onSha`, and both are checked. A board
@@ -93,14 +82,6 @@ export async function approve(options: ApproveOptions): Promise<ApproveResult> {
   const { gate, onSha } = run.lifecycle;
   const branch = `agent/${options.issue}`;
 
-  if (options.approvers && options.approvers.length > 0 && !options.approvers.includes(options.by)) {
-    return {
-      ok: false,
-      workItemId,
-      reason: "not-an-approver",
-      detail: `${options.by} is not in this project's approvers (${options.approvers.join(", ")})`,
-    };
-  }
 
   if (options.onSha && options.onSha !== onSha) {
     return {
@@ -224,13 +205,6 @@ export async function reject(
     };
   }
 
-  if (options.approvers && options.approvers.length > 0 && !options.approvers.includes(options.by)) {
-    return {
-      ok: false,
-      workItemId,
-      detail: `${options.by} is not in this project's approvers`,
-    };
-  }
 
   const { gate, onSha } = run.lifecycle;
   await store.append(runId, run.version, [
@@ -263,7 +237,6 @@ export async function waive(options: {
   gate: string;
   by: string;
   reason: string;
-  approvers?: readonly string[];
   onSha?: string;
   store?: EventStore;
 }): Promise<{ ok: boolean; workItemId: string; detail: string }> {
@@ -282,10 +255,6 @@ export async function waive(options: {
 
   const run = reduceRun(await store.read(runId));
   if (!run.headSha) return { ok: false, workItemId, detail: `${runId} has produced no diff to waive` };
-
-  if (options.approvers && options.approvers.length > 0 && !options.approvers.includes(options.by)) {
-    return { ok: false, workItemId, detail: `${options.by} is not in this project's approvers` };
-  }
 
   // The sha the person was looking at, when they said so. If the branch has
   // moved since the card rendered, they are waiving something they have not

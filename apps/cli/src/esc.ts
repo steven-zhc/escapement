@@ -51,8 +51,6 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
 
   esc add <owner>/<repo>        onboard a repository the App is installed on
     --base <branch>             default: the repository's own default branch
-    --tier open|guarded|sandboxed
-    --require <gate,gate>       gates the recipe may not remove
   esc run <project>             take the queue, in the recipe's priority order
     --issue <n>                 one nominated issue instead of the queue
     --max <n>                   stop after n items (--max 2 is Phase 2's bar)
@@ -139,19 +137,9 @@ async function addCommand(args: string[]): Promise<number> {
     console.error("esc add <owner>/<repo>");
     return 2;
   }
-  const raw = flags["tier"];
-  if (raw !== undefined && raw !== "open" && raw !== "guarded" && raw !== "sandboxed") {
-    console.error(`--tier must be open, guarded or sandboxed (got "${raw}")`);
-    return 2;
-  }
-  const tier: Tier | undefined = raw;
-  return add({
-    slug,
-    base: flags["base"],
-    tier,
-    require: flags["require"] ? flags["require"].split(",").map((s) => s.trim()).filter(Boolean) : undefined,
-    approvers: flags["approver"] ? [flags["approver"]] : undefined,
-  });
+  // No --tier, --require or --approver: there is no policy to write (ADR 0016
+  // §7). Tier and gates are the recipe's, in the managed repository.
+  return add({ slug, base: flags["base"] });
 }
 
 async function projectionCommand(args: string[]): Promise<number> {

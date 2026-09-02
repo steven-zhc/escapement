@@ -109,14 +109,6 @@ export const taskViewProjection: Projection = {
         run_id  text primary key,
         task_id text not null
       )`);
-
-    // Tier is policy and lives on the project's stream. Kept beside the tasks so
-    // a card can show it without a second source.
-    await ctx.query(`
-      create table if not exists task_view_project (
-        project text primary key,
-        tier    text not null
-      )`);
   },
 
   async reset(ctx) {
@@ -124,7 +116,6 @@ export const taskViewProjection: Projection = {
     // `create table if not exists` would silently keep the old columns.
     await ctx.query("drop table if exists task_view");
     await ctx.query("drop table if exists task_view_run");
-    await ctx.query("drop table if exists task_view_project");
   },
 
   async apply(events, ctx) {
@@ -133,15 +124,6 @@ export const taskViewProjection: Projection = {
       const at = event.at;
 
       switch (event.type) {
-        case "ProjectPolicySet": {
-          const d = event.data as PayloadOf<"ProjectPolicySet">;
-          await ctx.query(
-            `insert into task_view_project (project, tier) values ($1, $2)
-             on conflict (project) do update set tier = excluded.tier`,
-            [d.project, d.tier],
-          );
-          break;
-        }
 
         // ---- the task's own stream ----
 
@@ -656,7 +638,7 @@ export async function readTasks(options: ReadTasksOptions = {}): Promise<TaskCar
     }
 
     const r = await client.query(
-      `select t.*, coalesce(p.tier, 'guarded') as tier
+      `select t.*
        from task_view t
        left join task_view_project p on p.project = t.project
        ${where}

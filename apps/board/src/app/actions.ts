@@ -72,7 +72,6 @@ export async function approveCard(input: {
       base: state.base ?? (await client.defaultBranch()),
       client,
       by: actor(),
-      approvers: state.approvers,
       // What the card was showing. Checked server-side against what the run is
       // actually asking about, so a click on a stale card refuses instead of
       // approving a diff nobody read.
@@ -111,7 +110,6 @@ export async function rejectCard(input: {
       base: state.base ?? (await client.defaultBranch()),
       client,
       by: actor(),
-      approvers: state.approvers,
       onSha: input.onSha,
       reason: input.reason,
     });
@@ -137,7 +135,6 @@ export async function waiveGate(input: {
       issue: input.issue,
       gate: input.gate,
       by: actor(),
-      approvers: state.approvers,
       reason: input.reason,
       // Checked server-side: the branch may have moved since the card rendered.
       onSha: input.onSha,

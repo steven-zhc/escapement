@@ -95,7 +95,7 @@ export class ProductionValueError extends Error {
  * Host substrings that mean "do not give this to an agent".
  *
  * **Not yet policy-configurable, and it should be.** ADR 0005 puts production
- * host patterns in policy, but `ProjectPolicySet` has no field for them, so
+ * host patterns configurable, but nothing carries them yet, so
  * these are a built-in default a caller can override. Adding the field is a
  * schema bump that belongs with the policy gate (#19) rather than here.
  *
