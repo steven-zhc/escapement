@@ -129,41 +129,68 @@ daemon's process with the daemon's credentials, including the GitHub App key.
 Said plainly here so nobody later assumes otherwise — that assumption is exactly
 the mistake the old README made about the guard hook.
 
-## 6. Dispatch parameters, and the end of "guard"
+## 6. Escapement does not restrict tool calls
 
-`guard` was never a peer of `gate`. It is one of the parameters describing the
-box the agent is handed, and naming it as a system made it sound like a boundary
-it never was.
+This section previously renamed the guard to `tools` and kept Escapement's own
+rule engine. **The guard is deleted instead**, and the reasoning is worth keeping
+because it is a case of a measurement removing a subsystem.
 
-| recipe key | governs |
-|---|---|
-| `env.allow` | which environment variables the agent can see |
-| `repo` | which checkout it gets |
-| `runtime.limits` | how long and how many turns |
-| **`tools.deny`** | which tool calls it may make |
+Both runtimes already have two configuration levels, and the second one is
+already where a run reads it from: the managed repository's own
+`.claude/settings.json`, which is in the worktree because the worktree is a
+checkout of that repository. A third level in the recipe is a third answer to
+"where do I configure this?", and the question is common enough that three
+answers is the wrong number.
 
-**`guard` is renamed `tools`.** `env` governs environment variables, `tools`
-governs tool calls: both name what is governed and neither claims a strength.
-`permissions` was rejected for implying a security boundary — the documented sin
-— and `sandbox` and `boundary` for the same reason at higher volume.
+The objection was that Escapement passes `--permission-mode bypassPermissions`
+deliberately — a run once spent 45 turns and $3.35 unable to write a file
+because Claude Code's permission layer refused everything before `esc-hook` saw
+it. Delegating to a layer we turn off would delegate to nothing.
 
-The eight built-in rules move into a preset. Nothing is hard-coded.
+[Experiment 008](../experiments/008-deny-survives-bypass.md) settled it:
+**`permissions.deny` is enforced under `bypassPermissions`**, and it is enforced
+by *removing the tool from the model's list* rather than refusing a call. The
+two are orthogonal — `bypassPermissions` fixes "headless cannot grant a prompt",
+which is what the expensive run actually hit, and `deny` still holds.
 
-**Only refusals become events.** An allowed call is counted in memory and
-answered immediately: *the event store's availability must never gate an agent's
-tool call*, because a database blip would otherwise stall every tool use in every
-run. This corrects a proposal made during the discussion that every decision be
-evented; it would have broken the hot path, where process startup alone already
-consumes 17ms of a 20ms budget ([0011](0011-hook-latency-is-runtime-startup.md)).
+That also collapses the argument for keeping a guard at all. Its justification,
+in its own header, is observability: the old loop fired 132 blocks across 77% of
+runs into a stderr nobody read, and no rule was ever tuned because nobody could
+see which fired. **That argument presumes attempts to record.** A deny that
+removes the tool produces none — the agent never tries. There is nothing to see,
+so nothing is lost by not seeing it.
 
-For the same reason **there is no plugin extension point per tool call.** There
-is no room — and it is the worst possible place to run third-party code, being
-synchronous and on every action the agent takes.
+So the honest statement is:
 
-`GuardTripped` becomes `ToolCallRefused`, matching `DispatchRefused` and
-`IntegrationRefused`; `guard_trips` becomes `tool_refusals`. `packages/hook` and
-`esc-hook` keep their names: "hook" names the runtime mechanism and stays
-accurate.
+> **Escapement does not restrict tool calls.** Containment is the filtered
+> environment and the disposable worktree. Tool restrictions belong to the agent
+> runtime's own configuration, at its user or project level.
+
+Deleted: `conductor/src/guard.ts` and the eight rules, the deny path in
+`hook-socket.ts`, the `GuardTripped` event, the `guard_trips` projection,
+`smokeTestFailClosed`, the `--no-guard` flag, and the `PreToolUse` wiring, which
+has no remaining job. The `tools` recipe section is never added, and
+`ToolCallRefused` and `tool_refusals` are never created.
+
+**Seven hooks remain, and the channel is untouched.** `PostToolUse` carries
+`RunTouchedFile`, `Stop` carries the completion proposal, `PreCompact` carries
+`RunContextExhausted`, and `SessionStart`, `UserPromptSubmit`, `SessionEnd` and
+`Notification` carry the rest. Deleting the guard removes one hook's job, not
+the mechanism.
+
+**What is lost, recorded rather than waved away.** One recipe can no longer
+describe tool limits for both runtimes, since each has its own configuration —
+weak today, because Codex has never run against a real repository. And nothing
+on Escapement's side records what an agent was not allowed to do: a project's
+`.claude/settings.json` can change with nothing in the log noticing.
+
+That second cost makes one thing mandatory rather than nice: **`esc doctor` must
+report which settings sources are live** for a run — whether
+`~/.claude/settings.json` exists and whether it carries `permissions`, `hooks`
+or MCP servers. Escapement does not set `HOME`, so the operator's personal
+configuration is in scope for every run, and the recipe is therefore *not* a
+complete description of one. Being unable to control that is acceptable. Being
+unable to see it is not.
 
 ## 7. What is deleted
 
@@ -178,6 +205,9 @@ accurate.
 - `prepare` as a separate concept: it folds into the `prepared` gate. Gate
   actions may therefore have side effects, accepted deliberately and already
   true of process gates.
+- **The whole guard**, per §6: `guard.ts`, the eight rules, `GuardTripped`, the
+  `guard_trips` projection, `smokeTestFailClosed`, `--no-guard`, and the
+  `PreToolUse` wiring.
 
 **`tier` survives** and moves into the recipe as `runtime.tier`, which already
 exists as an optional field. It is enforced — `run-once.ts:145` refuses dispatch
@@ -203,8 +233,8 @@ are plain renames.
 
 This is legitimate exactly once, and the conditions are recorded so nobody cites
 this ADR later as precedent: nothing is in production, the whole log is 106
-events, and **there are zero `GuardTripped` events**, so the rename that would
-otherwise need a permanent alias in the read path costs nothing.
+events, and **there are zero `GuardTripped` events**, so deleting that type
+costs nothing where it would otherwise need a permanent alias in the read path.
 
 The three real runs (admin #120, #155, #156) are archived in
 `doc/experiments/` before the reset. After it, the append-only rule resumes with

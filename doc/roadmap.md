@@ -203,7 +203,7 @@ data backfill for any of it. That licence is not available again.
 
 | Step | What changes | Done when |
 |---|---|---|
-| **3a** | `guard` → `tools`; `GuardTripped` → `ToolCallRefused`; `guard_trips` → `tool_refusals`; the eight rules move to a preset | No tool rule is hard-coded, and a recipe with no `tools` block denies nothing |
+| **3a** | **Delete the guard** — `guard.ts`, the eight rules, `GuardTripped`, `guard_trips`, `smokeTestFailClosed`, `--no-guard`, the `PreToolUse` wiring. Add the `doctor` check that reports live settings sources | Escapement restricts no tool call, seven hooks still work, and `esc doctor` says which settings sources are in scope for a run |
 | **3b** | Delete `policy.ts`, `policyConflicts`, `ProjectPolicySet`, `requiredGates`, `approvers`, `concurrent`; `tier` moves to `runtime.tier` | `esc status` no longer has a policy line, and nothing refuses a recipe for being too permissive |
 | **3c** | Five gate points; `GatesResolved`; the four kinds become actions | A run appends one `GatesResolved` naming all five points, with `[]` where nothing is configured |
 | **3d** | The `end` gate; closing the issue as an action; `labelsFor` out of the outbox | A landed issue is closed, and what closed it is named in the recipe |
