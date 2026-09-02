@@ -129,7 +129,7 @@ whether it would have made that visible.
 
 | Stage | What it delivers | Done when |
 |---|---|---|
-| **2a** | The minimum runnable daemon: one lock, the projection follower, `TaskView`, the UI reading it · **built** | An issue goes queue → landed and the card moves on its own, with nobody running a command — *the pieces are verified; the full loop has not been run once end to end* |
+| **2a** | The minimum runnable daemon: one lock, the projection follower, `TaskView`, the UI reading it · **done** | An issue goes queue → landed and the card moves on its own, with nobody running a command — *met 2026-09-02, admin #156* |
 | **2b** | Control and liveness: pause / resume / run-now through the log, `daemon_status` heartbeat · **done** | The board can stop the daemon taking work, and always says whether it is up |
 | **2c** | Robustness: attempt backoff, `Reconciled` at startup, webhooks · **done** | A failed ticket does not re-run in a loop, and a crash leaves nothing stuck |
 | **2d** | The outbox, labels and comments, notifications · **done** | Nothing that leaves the machine can vanish without a record |
@@ -189,7 +189,32 @@ cannot show and a week of uptime would only show slowly.
 Uptime is still worth measuring. It belongs to the cutover, next to retiring
 `agent-loop.sh`, not to the phase that writes the code.
 
-## Phase 3 — Self-hosting
+## Phase 3 — The settled model
+
+[ADR 0016](decisions/0016-the-settled-model.md) is the specification. This is
+mostly **deletion**: the policy concept goes, the eight tool rules leave the
+core for a preset, and four gate *kinds* become five gate *points* whose actions
+come from presets or plugins. The load-bearing machinery — event store,
+subscribe, projections, worktree, integrate, hook socket, GitHub client — is not
+touched.
+
+The log is reset once at the start (0016 §9), so there are no upcasters and no
+data backfill for any of it. That licence is not available again.
+
+| Step | What changes | Done when |
+|---|---|---|
+| **3a** | `guard` → `tools`; `GuardTripped` → `ToolCallRefused`; `guard_trips` → `tool_refusals`; the eight rules move to a preset | No tool rule is hard-coded, and a recipe with no `tools` block denies nothing |
+| **3b** | Delete `policy.ts`, `policyConflicts`, `ProjectPolicySet`, `requiredGates`, `approvers`, `concurrent`; `tier` moves to `runtime.tier` | `esc status` no longer has a policy line, and nothing refuses a recipe for being too permissive |
+| **3c** | Five gate points; `GatesResolved`; the four kinds become actions | A run appends one `GatesResolved` naming all five points, with `[]` where nothing is configured |
+| **3d** | The `end` gate; closing the issue as an action; `labelsFor` out of the outbox | A landed issue is closed, and what closed it is named in the recipe |
+| **3e** | Board: four states, five points, `skipped` rendered | An unconfigured gate is **visible as skipped**, never omitted — 0016 §4 |
+| **3f** | Re-run one admin ticket end to end | The loop still closes unattended, on the new model |
+
+**3e is the one that matters.** If a skipped gate is omitted rather than shown,
+the whole design degrades into the plugin free-for-all
+[0014](decisions/0014-one-loop-one-log.md) rejected, and it degrades silently.
+
+## Phase 4 — Self-hosting
 
 **Goal.** Escapement manages its own repository.
 
@@ -211,7 +236,7 @@ This is not a victory lap, it is the hardest correctness problem in the project:
 passes its own gates, is approved on the board, merges, and is running after a
 deliberate restart.
 
-## Phase 4 — Multi-project
+## Phase 5 — Multi-project
 
 **Goal.** The claim that a second repository costs a descriptor and nothing else,
 tested by doing it. Plus the Codex adapter, real concurrency, and the containment
@@ -225,7 +250,7 @@ problem worse, faster.
 **Exit criterion.** `nextloom-ai-press` runs with a descriptor under twenty lines
 and no change to any package.
 
-## Phase 5 — Feedback loop
+## Phase 6 — Feedback loop
 
 **Goal.** Make the system able to evaluate changes to itself against history.
 

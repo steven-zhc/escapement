@@ -9,6 +9,14 @@ examples instead of pretending to be exhaustive.
 
 **Counted 2026-09-02.**
 
+> **This describes the code as it is, not [ADR 0016](decisions/0016-the-settled-model.md).**
+> 0016 rewrites much of what is below — four gate *kinds* become five gate
+> *points*, `guard` becomes `tools`, `GuardTripped` becomes `ToolCallRefused`,
+> and the whole policy section is deleted. This file is updated as each
+> implementation step lands, never ahead of it. A reference that documents
+> intent instead of behaviour is the defect this repository hit four times on
+> 2026-09-02, and it is the one thing this file exists not to do.
+
 ---
 
 ## event — 41 types

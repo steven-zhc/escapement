@@ -1,6 +1,12 @@
 # 0005 — Configuration lives in the managed repository
 
-**Status** accepted · 2026-08-31 · supersedes an earlier draft that put it outside
+**Status** accepted in part · 2026-08-31 · supersedes an earlier draft that put
+it outside · its **policy half is superseded by [0016](0016-the-settled-model.md)**
+
+What stands: the recipe lives in the managed repository and is read from
+`origin/<base>`, never from the agent's branch. What is gone: "a recipe may
+add strictness and can never remove it" — there is no longer an outside
+policy for it to be measured against. The workflow is the user's to define.
 
 ## Context
 

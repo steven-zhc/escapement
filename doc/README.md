@@ -26,8 +26,9 @@ Three kinds of thing live here, and the distinction matters.
 | [0011](decisions/0011-hook-latency-is-runtime-startup.md) | The hook's 20ms budget is Bun's startup, and is not met | accepted |
 | [0012](decisions/0012-one-task-view.md) | One `TaskView`, and the queue leaves the log | accepted |
 | [0013](decisions/0013-daemon-hosts-the-work.md) | The daemon holds the work; the UI controls it | accepted |
-| [0014](decisions/0014-one-loop-one-log.md) | One loop, one log; everything else is a projection or a subscriber | accepted |
-| [0015](decisions/0015-five-gates-and-two-extensions.md) | Five gates, and the two ways a plugin may extend the loop | accepted |
+| [0014](decisions/0014-one-loop-one-log.md) | One loop, one log; everything else is a projection or a subscriber | superseded by 0016 |
+| [0015](decisions/0015-five-gates-and-two-extensions.md) | Five gates, and the two ways a plugin may extend the loop | superseded by 0016 |
+| [0016](decisions/0016-the-settled-model.md) | **The settled model: one loop, five gates, no policy** | accepted |
 
 ## Experiments
 
@@ -37,19 +38,31 @@ Three kinds of thing live here, and the distinction matters.
 | [002](experiments/002-subscriber-survives-a-kill.md) | Does the subscriber survive its connection being killed? | yes, no gap and no duplicate |
 | [003](experiments/003-doctor-catches-a-pooler.md) | Does `esc doctor` actually catch a transaction pooler? | yes, including the flagless case |
 | [004](experiments/004-hook-latency.md) | Where does `esc-hook`'s latency actually go? | all of it is Bun's startup; 20ms p95 not met |
+| [005](experiments/005-rung-1-reaches-a-real-repository.md) | Does a run reach a real repository end to end? | yes, after four attempts, each buying a defect |
+| [006](experiments/006-the-loop-closes-unattended.md) | Does the loop close with nobody running a command? | yes — admin #156, 15 turns, $0.83 |
+| [007](experiments/007-the-log-before-the-reset.md) | What was in the log before ADR 0016 reset it? | 106 events, Phase 0 through 2a, kept because it is the only copy |
 
 ## Open
 
-- **[ADR 0015](decisions/0015-five-gates-and-two-extensions.md) is designed and
-  not built.** Five fixed gate points, plugins that add actions to them or
-  subscribe to events, and no `policy` concept. Nothing in the code has moved
-  yet. In implementation order: close the issue at `end` (nothing does it today,
-  and a landed issue on GitHub is indistinguishable from an untouched one), then
-  the board's four states, then the gate refactor itself.
-- **The condition 0015 rests on is not built either.** An unconfigured gate has
-  to render as `skipped` on the board and in `esc status`, never be omitted. If
-  that is not done, the whole design degrades into the plugin free-for-all
-  [0014](decisions/0014-one-loop-one-log.md) rejected.
+- **[ADR 0016](decisions/0016-the-settled-model.md) is specified and not built.**
+  It is what the code is written against; nothing in the code has moved yet. The
+  order:
+
+  1. `guard` → `tools`, and the eight rules out of the core into a preset
+  2. delete the policy concept; `tier` moves to `runtime.tier` in the recipe
+  3. five gate points, `GatesResolved`, gate kinds become actions
+  4. the `end` gate, closing the issue, and `labelsFor` out of the outbox
+  5. the board: four states, five points, `skipped` shown
+  6. re-run one admin ticket end to end
+
+  Each step gets `pnpm install && contract:emit && typecheck && db:bootstrap`,
+  the full suite, and its own commit.
+
+- **The condition 0016 §4 rests on is the one to watch.** An unconfigured gate
+  must render as `skipped` on the board and in `esc status`, never be omitted.
+  Skip that and the design collapses back into the plugin free-for-all
+  [0014](decisions/0014-one-loop-one-log.md) rejected — which is why
+  `GatesResolved` is an event and not a convention.
 - **Phase 1's exit criterion is met** (admin #155 and #120 landed on
   2026-09-01) and **2a's is too** (#156, 2026-09-02, unattended). What has *not*
   been proven: more than one project, a queue deeper than one item, a run with

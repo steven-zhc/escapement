@@ -1,5 +1,9 @@
 # 0015 — Five gates, and the two ways a plugin may extend the loop
 
+**Superseded by [0016](0016-the-settled-model.md),** which folds in the `tools`
+rename, `GatesResolved`, presets as the only home for defaults, and the
+boundary that keeps `integrate` in the core. Kept as the record.
+
 **2026-09-02. Accepted.** Amends [0014](0014-one-loop-one-log.md), which stopped
 the gate set at four and sent everything after the merge to a subscriber. The
 reason for the change is in "Why `end` is a gate" below.

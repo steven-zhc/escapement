@@ -198,6 +198,11 @@ branch — so an agent that edits it changes nothing about the run in flight. Se
 
 ### Guard, gate and policy are three different questions
 
+> **Being replaced.** [ADR 0016](doc/decisions/0016-the-settled-model.md) deletes
+> the policy concept, renames `guard` to `tools` as a dispatch parameter, and
+> turns four gate kinds into five gate points. What follows describes the code
+> as it stands today and is updated when each step lands, not before.
+
 They get confused because all three can stop a run. They act at different
 moments, on different subjects, and only one of them is configured in the
 managed repository.

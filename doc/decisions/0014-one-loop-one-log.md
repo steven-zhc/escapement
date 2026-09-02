@@ -1,5 +1,9 @@
 # 0014 — One loop, one log; everything else is a projection or a subscriber
 
+**Superseded by [0016](0016-the-settled-model.md).** Its framing stands; the
+argument that something must externally declare what is *required* was withdrawn
+once the gate set became closed. Kept as the record of how that was reached.
+
 **2026-09-02. Accepted.**
 
 ## The sentence
