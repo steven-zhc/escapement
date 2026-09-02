@@ -17,7 +17,8 @@
     "@escapement/store": "workspace:*",
     "next": "16.3.3",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "@escapement/daemon": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

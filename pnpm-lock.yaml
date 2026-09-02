@@ -23,6 +23,9 @@ importers:
       '@escapement/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@escapement/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
       '@escapement/env':
         specifier: workspace:*
         version: link:../../packages/env

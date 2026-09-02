@@ -12,10 +12,16 @@
  * event-driven loop never begins. It runs once at startup.
  *
  * **A new issue appends nothing.** The queue comes from GitHub now (0012), so
- * somebody opening an issue produces no event and this hears nothing about it.
- * Webhooks close that (#28); until then the startup pass is the only thing that
- * notices, which is a real limitation and is written down rather than papered
- * over with a poll nobody asked for.
+ * somebody opening an issue produces no event and nothing here hears about it.
+ *
+ * This is the one place a timer is right, and it is worth being precise about
+ * why. Everywhere else a timer would be substituting for a signal that exists —
+ * Postgres notifies on append, so polling the log would be choosing to be slow.
+ * There is no such signal for "somebody opened an issue on GitHub". A webhook
+ * can supply one, and #28 does, but a webhook needs a public address and this
+ * runs on a laptop: it is an optimisation, and an optimisation must not be the
+ * only path. So the loop also sweeps on a long interval, and the interval is
+ * long because the sweep is a fallback and not the mechanism.
  *
  * **The failure loop.** A failed run *releases* its task, a release is a
  * completion event, and a completion event triggers the next pass — where the
@@ -56,9 +62,22 @@ export const COMPLETION_EVENTS = [
   // now rather than at the next completion.
   "ConductorResumed",
   "RunRequested",
+  // A webhook said GitHub changed. The sweep would find it eventually; this
+  // is what makes "eventually" mean seconds when a webhook can reach us.
+  "QueueChanged",
 ] as const;
 
-export type PassReason = "startup" | "completion";
+export type PassReason = "startup" | "completion" | "sweep";
+
+/**
+ * How often to look at GitHub without being told to.
+ *
+ * Five minutes rather than seconds: this is the fallback for a webhook that
+ * did not arrive, not the way work is normally found. Every completion still
+ * triggers a pass immediately, so the only thing this bounds is how long a
+ * brand-new issue can sit unnoticed on a machine with no webhook.
+ */
+export const SWEEP_MS = 5 * 60_000;
 
 export interface WorkLoopOptions {
   /**
@@ -77,6 +96,11 @@ export interface WorkLoopOptions {
    * without a restart.
    */
   paused?: () => Promise<boolean>;
+  /**
+   * How often to sweep for work nothing announced. `0` disables it, which is
+   * what a test wants and what a machine with a reachable webhook can afford.
+   */
+  sweepMs?: number;
   /** Defaults to `COMPLETION_EVENTS`. */
   triggers?: readonly string[];
   /** Session-mode connection for the subscription. */
@@ -97,6 +121,7 @@ export function createWorkLoop(options: WorkLoopOptions): WorkLoop {
   const triggers = new Set<string>(options.triggers ?? COMPLETION_EVENTS);
 
   let subscription: Subscription | null = null;
+  let sweep: ReturnType<typeof setInterval> | undefined;
   let running = false;
   let again = false;
   let stopped = false;
@@ -159,10 +184,20 @@ export function createWorkLoop(options: WorkLoopOptions): WorkLoop {
 
       // The cold start. Nothing is in flight, so nothing will tell us to begin.
       await pump("startup");
+
+      const every = options.sweepMs ?? SWEEP_MS;
+      if (every > 0) {
+        sweep = setInterval(() => void pump("sweep"), every);
+        // Never hold the process open on its own account. A daemon whose only
+        // remaining reason to live is its own fallback timer is a daemon that
+        // cannot exit.
+        sweep.unref?.();
+      }
     },
 
     async stop() {
       stopped = true;
+      clearInterval(sweep);
       await subscription?.close().catch(() => {});
       subscription = null;
     },

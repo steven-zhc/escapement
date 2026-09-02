@@ -18,3 +18,10 @@ export {
   type GitHubClient,
   type Issue,
 } from "./client.ts";
+export {
+  DELIVERY_HEADER,
+  EVENT_HEADER,
+  SIGNATURE_HEADER,
+  verifyWebhook,
+  type WebhookVerdict,
+} from "./webhook.ts";

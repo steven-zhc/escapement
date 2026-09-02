@@ -293,6 +293,24 @@ export const ConductorResumed = z.object({ by: z.string() });
  * specific ticket is a decision, and it belongs beside the pause that came
  * before it.
  */
+/**
+ * GitHub said something about the queue changed.
+ *
+ * The queue is not in the log (0012), so a webhook cannot append the change
+ * itself — what it can do is say that one happened, which is enough to wake the
+ * daemon into asking GitHub. That keeps one mechanism instead of two: the loop
+ * already wakes on appends, and this is an append.
+ *
+ * `delivery` is GitHub's own id for the delivery. It makes a retry — which
+ * GitHub does, several times, on any non-2xx — cheap to recognise and drop.
+ */
+export const QueueChanged = z.object({
+  project: z.string(),
+  /** `issues.opened`, `issues.labeled`, and so on. */
+  reason: z.string(),
+  delivery: z.string(),
+});
+
 export const RunRequested = z.object({
   project: z.string(),
   issue: z.string(),
@@ -410,6 +428,7 @@ export const EVENTS = {
   ConductorPaused,
   ConductorResumed,
   ProjectPolicySet,
+  QueueChanged,
   RunRequested,
   ProjectConfigured,
   Reconciled,
