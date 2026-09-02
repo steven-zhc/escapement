@@ -46,6 +46,20 @@ export const UPCASTERS: UpcastRegistry = {
      */
     2: (data) => ({ ...(data as object), base: null }),
   },
+  Reconciled: {
+    /**
+     * 1 → 2: each finding gained `action`. Nothing had appended one of these
+     * when the field was added, so this step exists for the rule rather than
+     * for any event — `reported` is the honest reading of a v1 finding, which
+     * recorded that something diverged and not what became of it.
+     */
+    1: (data) => ({
+      findings: ((data as { findings?: object[] }).findings ?? []).map((f) => ({
+        ...f,
+        action: "reported",
+      })),
+    }),
+  },
   WorkItemClaimed: {
     /**
      * 1 → 2: `title` and `kind` were added when the queue left the log (0012).

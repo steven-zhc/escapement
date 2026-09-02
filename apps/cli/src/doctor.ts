@@ -22,7 +22,7 @@
  * check you will forget you never had.
  */
 import { runnableEnv } from "@escapement/conductor";
-import { STALE_AFTER_MS, readControl, readStatus } from "@escapement/daemon";
+import { STALE_AFTER_MS, findOrphans, readControl, readStatus } from "@escapement/daemon";
 import { githubApp, hasGitHubApp } from "@escapement/env";
 import { REQUIRED_PERMISSIONS } from "@escapement/github";
 import { createClaudeCodeRuntime } from "@escapement/runtime";
@@ -399,8 +399,8 @@ const DEFERRED: { name: string; detail: string }[] = [
   {
     name: "hook: fail closed",
     detail:
-      "esc run proves it before dispatching anything; running it at daemon startup " +
-      "belongs with #48",
+      "every run proves it immediately before dispatching, which is the check that matters; " +
+      "proving it once at daemon startup as well would only surface a missing binary earlier (#48)",
   },
   { name: "github: installation and labels", detail: "per repository, and no project is registered yet — esc add checks it (#9)" },
 ];
@@ -460,6 +460,32 @@ async function daemonLiveness(): Promise<CheckResult> {
   };
 }
 
+/**
+ * What a restart would tidy up, without tidying it up.
+ *
+ * `dryRun` is the whole point: a check that changed the thing it was checking
+ * would tell you about a state that no longer exists by the time you read it.
+ */
+async function orphans(): Promise<CheckResult> {
+  const found = await findOrphans({ dryRun: true }).catch(() => null);
+  if (found === null) {
+    return { name: "worktrees: reconciliation", status: "ok", detail: "could not read the worktree directory" };
+  }
+  if (found.length === 0) {
+    return { name: "worktrees: reconciliation", status: "ok", detail: "nothing left over" };
+  }
+  return {
+    name: "worktrees: reconciliation",
+    status: "ok",
+    // Reported, not failed. Leftovers are a normal consequence of a kill, and
+    // starting the daemon clears them — a red doctor here would train people
+    // to ignore a red doctor.
+    detail: `${found.length} left over; esc daemon removes them on startup: ${found
+      .map((f) => f.stream)
+      .join(", ")}`,
+  };
+}
+
 export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<DoctorReport> {
   const results: CheckResult[] = [];
 
@@ -484,6 +510,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
     results.push(...(await schema(direct)));
     results.push(await projections(pooled));
     results.push(await daemonLiveness());
+    results.push(await orphans());
   } else {
     results.push({
       name: "postgres",

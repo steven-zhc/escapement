@@ -299,6 +299,7 @@ export const RunRequested = z.object({
   by: z.string(),
 });
 
+
 // --------------------------------------------------------------- project ----
 
 /** Policy lives here, not in the managed repo. See doc/decisions/0005. */
@@ -340,9 +341,35 @@ export const ProjectConfigured = z.object({
   fromSha: z.string(),
 });
 
-/** What a restarted conductor found that the log did not predict. */
+/**
+ * What a restarted daemon found that the log did not predict, and what it did.
+ *
+ * **Recorded, not quietly repaired.** A system that silently tidies up after
+ * itself cannot tell you it has been crashing: the disk gets cleaner, the
+ * symptom disappears, and you find out six weeks later. The old harness's
+ * integrate step had six silent `return 1` paths and this is the same failure
+ * wearing a different hat.
+ *
+ * A batch rather than one event per finding, because "what did the restart at
+ * 04:12 find" is the question people actually ask — a startup that found
+ * nothing appends nothing at all.
+ */
 export const Reconciled = z.object({
-  findings: z.array(z.object({ stream: z.string(), expected: z.string(), actual: z.string() })),
+  findings: z.array(
+    z.object({
+      stream: z.string(),
+      expected: z.string(),
+      actual: z.string(),
+      /**
+       * What was done about it: `removed`, or `reported` when nothing was.
+       *
+       * Added in v2. Without it the event says a divergence existed and leaves
+       * you to guess whether it still does, which is most of what you wanted
+       * to know.
+       */
+      action: z.string(),
+    }),
+  ),
 });
 
 // -------------------------------------------------------------- registry ----
@@ -400,6 +427,8 @@ const BUMPED: Partial<Record<EventType, number>> = {
   ProjectConfigured: 3,
   // 2: added `title` and `kind`, because the queue left the log. See above.
   WorkItemClaimed: 2,
+  // 2: each finding gained `action`. See Reconciled above.
+  Reconciled: 2,
 };
 
 export const SCHEMA_VER: Record<EventType, number> = Object.fromEntries(

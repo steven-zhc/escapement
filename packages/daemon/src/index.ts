@@ -33,3 +33,10 @@ export {
   type ControlState,
   type DaemonStatus,
 } from "./control.ts";
+export {
+  exists,
+  findOrphans,
+  reconcile,
+  type Finding,
+  type ReconcileOptions,
+} from "./reconcile.ts";

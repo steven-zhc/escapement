@@ -27,6 +27,7 @@ import {
   createWorkLoop,
   pauseConductor,
   readControl,
+  reconcile,
   requestRun,
   resumeConductor,
   startDaemon,
@@ -226,6 +227,17 @@ async function daemonCommand(flags: Record<string, string> = {}): Promise<number
   // cards sat still and nothing reported it; this is what makes that a glance.
   await createStatusTable();
   await beat("starting");
+
+  // Before anything is taken. A worktree left by a killed daemon is holding a
+  // branch checked out, which stops git updating that ref on the next attempt —
+  // so the tidy-up has to happen before the next attempt, not after it fails.
+  const found = await reconcile({ log: (line) => console.log(line) }).catch((err: unknown) => {
+    // Reported, never fatal. Refusing to start because a directory could not be
+    // removed would turn a mess into an outage.
+    console.error(`reconcile failed: ${(err as Error).message}`);
+    return [];
+  });
+  if (found.length > 0) console.log(`reconciled ${found.length} divergence(s)`);
   const heartbeat = setInterval(() => {
     void beat("up").catch(() => {});
   }, HEARTBEAT_MS);
