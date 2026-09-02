@@ -40,3 +40,9 @@ export {
   type Finding,
   type ReconcileOptions,
 } from "./reconcile.ts";
+export {
+  deliverOutbox,
+  type Deliverer,
+  type DeliverOptions,
+  type DeliverOutcome,
+} from "./deliver.ts";

@@ -60,6 +60,11 @@ try {
     // Checkpoints name a sequence that no longer exists; a projection resuming
     // from one would sit forever waiting for events behind it.
     await client.query("truncate table checkpoints");
+    // The outbox outlives a log reset because the contract owns the table and
+    // no projection drops it. Left behind, a dead letter from a suite that
+    // exercised a permanent failure makes `esc doctor` red forever — the check
+    // being right about data that no longer means anything.
+    await client.query("truncate table outbox");
   } finally {
     await client.query("alter table events enable rule escapement_events_no_delete");
   }

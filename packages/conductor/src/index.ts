@@ -101,3 +101,17 @@ export {
 } from "./schedule.ts";
 export { prepareWorktree, type PrepareOptions, type PrepareResult } from "./prepare.ts";
 export { approve, reject, waive, type ApproveOptions, type ApproveResult } from "./approve.ts";
+export {
+  BASE_BACKOFF_MS,
+  MAX_ATTEMPTS,
+  MAX_BACKOFF_MS,
+  OUTBOX_TABLE,
+  backoffFor,
+  deadOutbox,
+  labelsFor,
+  outboxProjection,
+  pendingOutbox,
+  type OutboxItem,
+  type OutboxKind,
+  type PendingOptions,
+} from "./outbox.ts";

@@ -17,7 +17,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentRecipe, loadProjects, refreshQueue, runQueue } from "@escapement/conductor";
-import { createGitHubClient } from "@escapement/github";
+import { createGitHubClient, type GitHubClient } from "@escapement/github";
 import { githubApp, hasGitHubApp } from "@escapement/env";
 import { createClaudeCodeRuntime } from "@escapement/runtime";
 
@@ -35,9 +35,36 @@ export interface ConductOptions {
   log?: (line: string) => void;
 }
 
+/**
+ * A `Deliverer` over as many projects as the daemon manages.
+ *
+ * Clients are per repository — an installation token is scoped to one — so the
+ * outbox worker, which is not, needs something that can reach any of them. The
+ * cache is not an optimisation: minting a token per delivery would turn a
+ * hundred queued labels into a hundred installation lookups.
+ */
+export function deliverer(clients: Map<string, GitHubClient>) {
+  const need = (project: string): GitHubClient => {
+    const client = clients.get(project);
+    if (!client) throw new Error(`no GitHub client for ${project}`);
+    return client;
+  };
+  return {
+    async comment(project: string, issue: number, body: string): Promise<string> {
+      const { id } = await need(project).comment(issue, body);
+      return String(id);
+    },
+    async setLabels(project: string, issue: number, labels: readonly string[]): Promise<void> {
+      await need(project).setLabels(issue, labels);
+    },
+  };
+}
+
 export interface PassOutcome {
   /** Projects looked at. */
   projects: number;
+  /** A client per project, so the outbox worker can reach any of them. */
+  clients: Map<string, GitHubClient>;
   /** Items run across all of them. */
   ran: number;
   /** Projects that could not be looked at, and why. */
@@ -46,7 +73,7 @@ export interface PassOutcome {
 
 export async function conductorPass(options: ConductOptions = {}): Promise<PassOutcome> {
   const log = options.log ?? (() => {});
-  const outcome: PassOutcome = { projects: 0, ran: 0, refused: [] };
+  const outcome: PassOutcome = { projects: 0, ran: 0, refused: [], clients: new Map() };
 
   if (!hasGitHubApp()) {
     outcome.refused.push({ project: "*", detail: "no GitHub App configured" });
@@ -81,6 +108,7 @@ export async function conductorPass(options: ConductOptions = {}): Promise<PassO
         owner: project.owner,
         repo: name,
       });
+      outcome.clients.set(name, client);
       const resolved = await currentRecipe(project, client);
 
       // Ask GitHub first. Without this the queue is whatever the last pass saw,

@@ -8,7 +8,8 @@
     "./projects": "./src/projects.ts",
     "./decide": "./src/approve.ts",
     "./worktree": "./src/worktree.ts",
-    "./task-view": "./src/task-view.ts"
+    "./task-view": "./src/task-view.ts",
+    "./outbox": "./src/outbox.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -119,6 +119,8 @@ function fakeClient(issues: Issue[], project = "esctest"): GitHubClient {
     fileAt: async () => null,
     refSha: async () => "0".repeat(40),
     listOpenIssues: async () => issues,
+  comment: async () => { throw new Error("no writes in this test"); },
+  setLabels: async () => { throw new Error("no writes in this test"); },
     getIssue: async (n) => issues.find((i) => i.number === n) ?? issue({ number: n }),
   };
 }

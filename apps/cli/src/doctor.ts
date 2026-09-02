@@ -21,7 +21,7 @@
  * that will fill them in, rather than omitted — a check you cannot see is a
  * check you will forget you never had.
  */
-import { runnableEnv } from "@escapement/conductor";
+import { deadOutbox, pendingOutbox, runnableEnv } from "@escapement/conductor";
 import { STALE_AFTER_MS, findOrphans, readControl, readStatus } from "@escapement/daemon";
 import { githubApp, hasGitHubApp } from "@escapement/env";
 import { REQUIRED_PERMISSIONS } from "@escapement/github";
@@ -486,6 +486,39 @@ async function orphans(): Promise<CheckResult> {
   };
 }
 
+/**
+ * How much is queued to go out, and how much never will.
+ *
+ * Depth is reported; **dead letters fail**. That asymmetry is the point. A
+ * backlog is usually a daemon that has been down and will drain on its own; a
+ * permanently failed delivery is a thing somebody has to look at, and it is
+ * exactly what the old loop lost — a `gh` call that failed inline left no trace
+ * at all, so nobody could tell "we never commented" from "we commented and it
+ * did not help".
+ */
+async function outbox(): Promise<CheckResult> {
+  const pending = await pendingOutbox({ limit: 1000 }).catch(() => null);
+  if (pending === null) {
+    return { name: "outbox: depth", status: "ok", detail: "no outbox yet — nothing has been queued" };
+  }
+  const dead = await deadOutbox().catch(() => []);
+
+  if (dead.length > 0) {
+    return {
+      name: "outbox: depth",
+      status: "fail",
+      detail:
+        `${dead.length} will never be delivered — ` +
+        dead.slice(0, 3).map((d) => `${d.project}#${d.target}: ${d.lastError}`).join("; "),
+    };
+  }
+  return {
+    name: "outbox: depth",
+    status: "ok",
+    detail: pending.length === 0 ? "empty" : `${pending.length} waiting to go out`,
+  };
+}
+
 export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<DoctorReport> {
   const results: CheckResult[] = [];
 
@@ -511,6 +544,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
     results.push(await projections(pooled));
     results.push(await daemonLiveness());
     results.push(await orphans());
+    results.push(await outbox());
   } else {
     results.push({
       name: "postgres",

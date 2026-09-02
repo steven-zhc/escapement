@@ -19,12 +19,13 @@ import {
   type Projection,
 } from "@escapement/store";
 import type { Tier } from "@escapement/core";
-import { taskViewProjection } from "@escapement/conductor";
+import { outboxProjection, taskViewProjection } from "@escapement/conductor";
 import {
   HEARTBEAT_MS,
   beat,
   createStatusTable,
   createWorkLoop,
+  deliverOutbox,
   pauseConductor,
   readControl,
   reconcile,
@@ -32,7 +33,7 @@ import {
   resumeConductor,
   startDaemon,
 } from "@escapement/daemon";
-import { conductorPass } from "./conduct.ts";
+import { conductorPass, deliverer } from "./conduct.ts";
 import { add } from "./add.ts";
 import { approveCommand } from "./approve.ts";
 import { formatReport, runDoctor } from "./doctor.ts";
@@ -42,6 +43,7 @@ import { status } from "./status.ts";
 /** Every projection the runner knows how to advance, by `checkpoints.name`. */
 const PROJECTIONS: Record<string, Projection> = {
   [taskViewProjection.name]: taskViewProjection,
+  [outboxProjection.name]: outboxProjection,
   [guardTripsProjection.name]: guardTripsProjection,
 };
 
@@ -258,9 +260,23 @@ async function daemonCommand(flags: Record<string, string> = {}): Promise<number
           merge: !("no-merge" in flags),
           log: (line) => console.log(line),
         });
+        // After the run, in the same pass. A comment saying "waiting on you"
+        // is only useful if it goes out near the moment it became true, and
+        // the pass is the only thing that knows a client for each project.
+        const sent = await deliverOutbox({
+          deliverer: deliverer(outcome.clients),
+          log: (line) => console.log(line),
+        }).catch((err: unknown) => {
+          // Never fatal. A delivery that cannot go out must not stop work from
+          // being taken — the row stays pending and the next pass tries again.
+          console.error(`outbox: ${(err as Error).message}`);
+          return { delivered: 0, failed: 0 };
+        });
+
         console.log(
           `pass (${reason}): ${outcome.projects} project(s), ${outcome.ran} run(s)` +
-            (outcome.refused.length > 0 ? `, ${outcome.refused.length} refused` : ""),
+            (outcome.refused.length > 0 ? `, ${outcome.refused.length} refused` : "") +
+            (sent.delivered + sent.failed > 0 ? `, ${sent.delivered} sent` : ""),
         );
       },
     });

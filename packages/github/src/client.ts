@@ -56,6 +56,28 @@ export interface GitHubClient {
   getIssue(number: number): Promise<Issue>;
 
   /**
+   * Posts a comment.
+   *
+   * The first write on this client, and it stays narrow on purpose: everything
+   * that changes *code* still goes through git, so this is only for telling a
+   * person something on the ticket they are already looking at.
+   *
+   * Called from the outbox worker, never inline. The old loop called `gh`
+   * in-line and a failed call vanished with no record and no retry.
+   */
+  comment(issue: number, body: string): Promise<{ id: number }>;
+
+  /**
+   * Replaces the whole label set.
+   *
+   * Replace rather than add, because `--add-label` is set union and not a
+   * transition — which is how #35 ended up carrying `agent:blocked` and
+   * `agent:review` at the same time with nothing able to notice. A state that
+   * is computed and then *set* cannot hold two contradictory values.
+   */
+  setLabels(issue: number, labels: readonly string[]): Promise<void>;
+
+  /**
    * The current installation token, refreshed if it is about to expire.
    *
    * Exposed because git needs it and this client is the only thing that has it.
@@ -112,6 +134,18 @@ export async function createGitHubClient(options: CreateClientOptions): Promise<
     return (await response.json()) as T;
   }
 
+  async function comment(issue: number, body: string): Promise<{ id: number }> {
+    return request<{ id: number }>("POST", `/repos/${owner}/${repo}/issues/${issue}/comments`, {
+      body,
+    });
+  }
+
+  async function setLabels(issue: number, labels: readonly string[]): Promise<void> {
+    await request<unknown>("PUT", `/repos/${owner}/${repo}/issues/${issue}/labels`, {
+      labels: [...labels],
+    });
+  }
+
   function toIssue(raw: {
     number: number;
     title: string;
@@ -137,6 +171,8 @@ export async function createGitHubClient(options: CreateClientOptions): Promise<
     request,
     // The same source `request` uses, handed out so git can authenticate too.
     token: tokenFor,
+    comment,
+    setLabels,
 
     async defaultBranch() {
       const raw = await request<{ default_branch: string }>("GET", `/repos/${owner}/${repo}`);

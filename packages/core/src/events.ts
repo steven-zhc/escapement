@@ -304,6 +304,46 @@ export const ConductorResumed = z.object({ by: z.string() });
  * `delivery` is GitHub's own id for the delivery. It makes a retry — which
  * GitHub does, several times, on any non-2xx — cheap to recognise and drop.
  */
+/**
+ * A side effect that was actually carried out.
+ *
+ * The outbox is a *projection*, which is what makes "a crash between the event
+ * and the delivery loses nothing" true: the pending row is derived from the
+ * log, so it comes back on replay. But that only works if delivery is also in
+ * the log — otherwise rebuilding the projection would forget what had already
+ * been sent and post every comment again.
+ *
+ * So this is the half that makes the other half safe, and it is a fact worth
+ * keeping on its own: *we commented on #155 at 14:02, and here is the id*.
+ */
+export const OutboxDelivered = z.object({
+  /** `<seq>:<kind>` — stable across replay, because seq is. */
+  ref: z.string(),
+  kind: z.string(),
+  target: z.string(),
+  /** Whatever identifies the thing that was created, when there is one. */
+  detail: z.string(),
+});
+
+/**
+ * An attempt that did not work.
+ *
+ * Every failed attempt, not just the last: the count is what the backoff reads,
+ * and keeping it in the log is what stops a restart from resetting the delay
+ * and hammering an endpoint that is already unhappy.
+ *
+ * `permanent` is the difference between "try again later" and "this will never
+ * work" — a 404 on an issue somebody deleted is not a retry candidate, and
+ * retrying it forever is how a queue silently stops meaning anything.
+ */
+export const OutboxFailed = z.object({
+  ref: z.string(),
+  kind: z.string(),
+  target: z.string(),
+  error: z.string(),
+  permanent: z.boolean(),
+});
+
 export const QueueChanged = z.object({
   project: z.string(),
   /** `issues.opened`, `issues.labeled`, and so on. */
@@ -427,6 +467,8 @@ export const EVENTS = {
   IntegrationSucceeded,
   ConductorPaused,
   ConductorResumed,
+  OutboxDelivered,
+  OutboxFailed,
   ProjectPolicySet,
   QueueChanged,
   RunRequested,
