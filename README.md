@@ -1,6 +1,13 @@
 # Escapement
 
-Event-sourced scheduler for autonomous code agents.
+**One agent loop, driven by an append-only event log. Everything else is a
+projection of that log or a subscriber to it.**
+
+That sentence is the whole design, and the load-bearing word is *log*, not
+*event*. Plenty of systems are event-**driven** and still keep authoritative
+mutable state somewhere. Here the log is the only truth: every table is
+derived, can be dropped, and rebuilds to exactly what it was
+([ADR 0014](doc/decisions/0014-one-loop-one-log.md)).
 
 An escapement is the part of a clock that lets the mainspring out one tooth at a
 time. Without it the spring releases all at once. That is the job: take a queue
@@ -23,11 +30,14 @@ and the merge lane under its advisory lock. 13 turns, $0.86. #120 landed the
 same way. It took four attempts and each failure bought a real defect; the
 [roadmap](doc/roadmap.md) has the table.
 
-**Phase 2 is in progress.** `esc daemon` holds the projections and takes work,
-driven by completion events rather than a timer, and `esc pause` stops it. What
-is left is robustness: a `Reconciled` pass at startup for orphaned worktrees,
-and webhooks so a newly opened issue wakes the daemon instead of waiting for
-the next pass.
+**Phase 2 stages 2a-2d are built, and 2a is verified.** `esc daemon` holds the
+projections and takes work, driven by completion events rather than a timer,
+and `esc pause` stops it. The `Reconciled` pass for orphaned worktrees and the
+webhook route are both in. On 2026-09-02 admin #156 went queue to landed at
+`06e8bbe` from a single `esc now`, with no command issued after it and the
+completion event driving the next pass by itself — 15 turns, $0.83
+([experiment 006](doc/experiments/006-the-loop-closes-unattended.md), which
+also lists what that run did *not* prove).
 
 **Watch it.** Nothing has run unattended for long enough to have earned trust,
 and `esc pause` exists because that is the honest state to be in.

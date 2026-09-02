@@ -225,7 +225,7 @@ it is not part of what a run does.
 `core` · `config` · `store` · `github` · `runtime` · `gates` · `conductor` ·
 `daemon` · `hook`, and `apps/cli` · `apps/board`.
 
-## doc — 13 decisions, 6 experiments
+## doc — 14 decisions, 6 experiments
 
 `doc/decisions/` is append-only in spirit: a decision that turns out wrong gets
 a new file that supersedes it, never an edit. `doc/experiments/` holds things

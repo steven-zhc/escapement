@@ -26,6 +26,7 @@ Three kinds of thing live here, and the distinction matters.
 | [0011](decisions/0011-hook-latency-is-runtime-startup.md) | The hook's 20ms budget is Bun's startup, and is not met | accepted |
 | [0012](decisions/0012-one-task-view.md) | One `TaskView`, and the queue leaves the log | accepted |
 | [0013](decisions/0013-daemon-hosts-the-work.md) | The daemon holds the work; the UI controls it | accepted |
+| [0014](decisions/0014-one-loop-one-log.md) | One loop, one log; everything else is a projection or a subscriber | accepted |
 
 ## Experiments
 
@@ -38,15 +39,21 @@ Three kinds of thing live here, and the distinction matters.
 
 ## Open
 
-- **Where to start.** Phase 0 is done and Phase 1's eleven issues are closed —
-  but **Phase 1's exit criterion is not met, and it needs you.** Everything from
-  discovery to merge runs end to end against a real git remote, the real hook,
-  real gates and the real merge lane; the one stand-in is GitHub. Creating a
-  **GitHub App**, giving it the four permissions in `.env.example`, and
-  installing it on `nextloom-ai-admin` is a human step. After that:
-  `pnpm --filter @escapement/hook build`, `esc add steven-zhc/nextloom-ai-admin`,
-  then `esc run --once nextloom-ai-admin --issue <n>` on a ticket the old loop
-  has not touched.
+- **How much of the vocabulary survives [ADR 0014](decisions/0014-one-loop-one-log.md).**
+  The framing is agreed: one loop, one log, everything else a projection or a
+  subscriber. The subtraction it implies is argued but **not decided** —
+  `concurrent` is never compared against anything, `approvers` is `[]` which
+  short-circuits to "anyone", `agent` and `policy` gate kinds have never run
+  against a real repository, and `sandboxed` is a tier no runtime provides. The
+  one thing the ADR argues must survive is a declaration of what is *required*,
+  because a log cannot record what should have happened and did not. `tier` is
+  enforced and stays.
+- **Phase 1's exit criterion is met** (admin #155 and #120 landed on
+  2026-09-01) and **2a's is too** (#156, 2026-09-02, unattended). What has *not*
+  been proven: more than one project, a queue deeper than one item, a run with
+  the guard on, and the launchd install. See
+  [experiment 006](experiments/006-the-loop-closes-unattended.md) for the full
+  list of limits.
 - **Six of `esc doctor`'s checks are not implemented.** They print as `skip` with
   the issue that fills them in — recipe, repository, environment allowlist, hook
   fail-closed, GitHub auth — rather than being omitted. A check you cannot see is
