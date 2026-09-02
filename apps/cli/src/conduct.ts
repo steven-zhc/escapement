@@ -73,6 +73,10 @@ export function deliverer(clients: Map<string, GitHubClient>) {
      * is lost; that is a far smaller wrong than deleting all of them, and the
      * gap is one HTTP round trip.
      */
+    async closeIssue(project: string, issue: number): Promise<void> {
+      await need(project).closeIssue(issue);
+    },
+
     async setLabels(project: string, issue: number, labels: readonly string[]): Promise<void> {
       const client = need(project);
       const current = await client.getIssue(issue);

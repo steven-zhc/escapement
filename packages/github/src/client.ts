@@ -78,6 +78,17 @@ export interface GitHubClient {
   setLabels(issue: number, labels: readonly string[]): Promise<void>;
 
   /**
+   * Closes an issue, as completed.
+   *
+   * The gap this fills: nothing closed a landed issue, and `labelsFor("landed")`
+   * removes Escapement's own label — so an issue Escapement had merged was
+   * indistinguishable on GitHub from one it had never touched. The old loop's
+   * failure was state living in labels; the failure after it was state living
+   * nowhere.
+   */
+  closeIssue(issue: number): Promise<void>;
+
+  /**
    * The current installation token, refreshed if it is about to expire.
    *
    * Exposed because git needs it and this client is the only thing that has it.
@@ -140,6 +151,13 @@ export async function createGitHubClient(options: CreateClientOptions): Promise<
     });
   }
 
+  async function closeIssue(issue: number): Promise<void> {
+    await request<unknown>("PATCH", `/repos/${owner}/${repo}/issues/${issue}`, {
+      state: "closed",
+      state_reason: "completed",
+    });
+  }
+
   async function setLabels(issue: number, labels: readonly string[]): Promise<void> {
     await request<unknown>("PUT", `/repos/${owner}/${repo}/issues/${issue}/labels`, {
       labels: [...labels],
@@ -173,6 +191,7 @@ export async function createGitHubClient(options: CreateClientOptions): Promise<
     token: tokenFor,
     comment,
     setLabels,
+    closeIssue,
 
     async defaultBranch() {
       const raw = await request<{ default_branch: string }>("GET", `/repos/${owner}/${repo}`);

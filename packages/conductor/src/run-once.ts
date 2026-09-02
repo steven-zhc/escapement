@@ -19,7 +19,7 @@
  * with a question. The old loop could end in silence in at least seven places;
  * that is the thing being replaced, so `finally` blocks here are not tidiness.
  */
-import { type ResolvedRecipe, parseDuration } from "@escapement/config";
+import { type GateAction, type ResolvedRecipe, parseDuration } from "@escapement/config";
 import { type Tier, parsePayload } from "@escapement/core";
 import { gatesFromRecipe, runGatePipeline } from "@escapement/gates";
 import type { GitHubClient } from "@escapement/github";
@@ -109,6 +109,41 @@ function runBinary(
     child.on("error", (err) => resolve({ code: null, stderr: err.message }));
     child.stdin.end(stdin);
   });
+}
+
+/**
+ * What the `end` point resolved to, appended so the outbox can act on it.
+ *
+ * The conductor reads recipes; projections read the log. `end` actions are
+ * declared in a recipe and carried out by the outbox, so the plan has to cross
+ * that line as an event — see `EndActionsResolved`.
+ *
+ * Nothing is appended when nothing matches: an empty list would be a row saying
+ * "no effects", which is the same as no row and costs a write.
+ */
+async function appendEndActions(
+  store: EventStore,
+  workItemId: string,
+  actions: readonly GateAction[],
+  outcome: "landed" | "blocked" | "failed",
+): Promise<void> {
+  type Resolved = { name: string; close: true } | { name: string; labels: string[] };
+  const resolved: Resolved[] = [];
+  for (const a of actions) {
+    if (!("when" in a)) continue;
+    if (a.when !== outcome && a.when !== "any") continue;
+    resolved.push("close" in a ? { name: a.name, close: true } : { name: a.name, labels: a.labels });
+  }
+  if (resolved.length === 0) return;
+
+  const at = (await store.read(workItemId)).length;
+  await store.append(workItemId, at, [
+    {
+      type: "EndActionsResolved",
+      actor: "conductor",
+      data: parsePayload("EndActionsResolved", { outcome, actions: resolved }),
+    },
+  ]);
 }
 
 export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
@@ -597,6 +632,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
           data: parsePayload("WorkItemLanded", { mergeCommit: merged.mergeCommit, base }),
         },
       ]);
+      await appendEndActions(store, workItemId, recipe.gates.end, "landed");
       released = true;
       log(`landed ${merged.mergeCommit.slice(0, 7)} on ${base}`);
       return { ok: true, workItemId, runId, mergeCommit: merged.mergeCommit };

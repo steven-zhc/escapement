@@ -71,7 +71,7 @@ export const MAX_ATTEMPTS = 6;
 export const BASE_BACKOFF_MS = 1_000;
 export const MAX_BACKOFF_MS = 15 * 60_000;
 
-export type OutboxKind = "issue-comment" | "issue-labels";
+export type OutboxKind = "issue-comment" | "issue-labels" | "issue-close";
 
 /**
  * What a row carries, per kind.
@@ -82,7 +82,8 @@ export type OutboxKind = "issue-comment" | "issue-labels";
  */
 export type OutboxPayload =
   | { project: string; target: string; body: string }
-  | { project: string; target: string; labels: string[] };
+  | { project: string; target: string; labels: string[] }
+  | { project: string; target: string; close: true };
 
 export interface OutboxItem {
   /** `<seq>:<kind>` — the contract calls it `id`. */
@@ -162,6 +163,38 @@ export const outboxProjection: Projection = {
             at,
             seq,
           });
+          break;
+        }
+
+        /**
+         * The `end` point, carried out.
+         *
+         * The conductor resolved which actions matched the outcome and wrote
+         * them down; this only folds. That division is why a rebuild produces
+         * the same rows years later even if the recipe has changed since — the
+         * plan is in the log, not re-derived from configuration.
+         */
+        case "EndActionsResolved": {
+          const d = event.data as PayloadOf<"EndActionsResolved">;
+          const { project, issue } = splitTaskId(event.streamId);
+          if (!issue) break;
+          for (const [i, action] of d.actions.entries()) {
+            if ("close" in action) {
+              await enqueue(ctx, `${seq}:${i}:issue-close`, {
+                kind: "issue-close",
+                payload: { project, target: issue, close: true },
+                at,
+                seq,
+              });
+            } else {
+              await enqueue(ctx, `${seq}:${i}:issue-labels`, {
+                kind: "issue-labels",
+                payload: { project, target: issue, labels: action.labels },
+                at,
+                seq,
+              });
+            }
+          }
           break;
         }
 

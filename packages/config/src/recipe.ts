@@ -58,6 +58,25 @@ export const GateAction = z.union([
     name: z.string(),
     human: z.string(),
   }),
+  /**
+   * Closes the issue. Only meaningful at `end`, which is the one point that
+   * cannot refuse — these run for effect.
+   *
+   * `when` filters on the outcome, because `end` fires on *every* terminal
+   * state. "Close it when it lands, label it when it is blocked" is then one
+   * configuration rather than two mechanisms.
+   */
+  z.object({
+    name: z.string(),
+    close: z.literal(true),
+    when: z.enum(["landed", "blocked", "failed", "any"]).default("landed"),
+  }),
+  /** Sets labels. Escapement's own are replaced; everybody else's are kept. */
+  z.object({
+    name: z.string(),
+    labels: z.array(z.string()),
+    when: z.enum(["landed", "blocked", "failed", "any"]).default("any"),
+  }),
 ]);
 export type GateAction = z.infer<typeof GateAction>;
 
@@ -83,10 +102,14 @@ export const GateMap = z.object({
 export type GateMap = z.infer<typeof GateMap>;
 
 /** The action's kind, for an event and for dispatch. Exactly one key decides it. */
-export function kindOfAction(action: GateAction): "run" | "agent" | "watch" | "human" {
+export type ActionKind = "run" | "agent" | "watch" | "human" | "close" | "labels";
+
+export function kindOfAction(action: GateAction): ActionKind {
   if ("run" in action) return "run";
   if ("agent" in action) return "agent";
   if ("watch" in action) return "watch";
+  if ("close" in action) return "close";
+  if ("labels" in action) return "labels";
   return "human";
 }
 

@@ -117,6 +117,7 @@ function fakeClient(over: Partial<GitHubClient> & { recipe?: string } = {}): Git
     refSha: async () => "0".repeat(40),
     listOpenIssues: async () => [issue],
 comment: async () => { throw new Error("no writes in this test"); },
+closeIssue: async () => {},
 setLabels: async () => { throw new Error("no writes in this test"); },
     getIssue: async () => issue,
     ...rest,

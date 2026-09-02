@@ -10,19 +10,19 @@ examples instead of pretending to be exhaustive.
 **Counted 2026-09-02.**
 
 > **This describes the code as it is, not [ADR 0016](decisions/0016-the-settled-model.md).**
-> **Steps 3a, 3b and 3c have landed** and is reflected below: the guard is gone, and with it
+> **Steps 3a–3d have landed** and is reflected below: the guard is gone, and with it
 > `GuardTripped`, the `guard_trips` projection and the `--no-guard` flag; and the
 > policy concept is gone, with `tier` now the recipe's; and gates are five fixed
-> *points* rather than four *kinds*. Still ahead: the `end` gate's actions (3d),
-> the board's four states with `skipped` rendered (3e), and folding `prepare`
-> into the `prepared` point, which was split out of 3c. This file is updated as each step lands, never ahead of it. A
+> *points* rather than four *kinds*. and the `end` point closes issues. Still ahead: the board's four
+> states with `skipped` rendered (3e), and folding `prepare` into the `prepared`
+> point, which was split out of 3c. This file is updated as each step lands, never ahead of it. A
 > reference that documents intent instead of behaviour is the defect this
 > repository hit four times on 2026-09-02, and it is the one thing this file
 > exists not to do.
 
 ---
 
-## event — 40 types
+## event — 41 types
 
 One fact that already happened, past tense. Never edited, never deleted.
 Source: the registry at the bottom of `packages/core/src/events.ts`.
@@ -33,7 +33,7 @@ Source: the registry at the bottom of `packages/core/src/events.ts`.
 | dispatch (1) | `DispatchRefused` |
 | preparation (3) | `PreparationStarted` `PreparationPassed` `PreparationFailed` |
 | run (9) | `RunStarted` `RunPrompted` `RunTouchedFile` `RunContextExhausted` `RunAwaitingInput` `RunProducedDiff` `RunProposedCompletion` `RunFinished` `RunFailed` |
-| gate (6) | `GatesResolved` `GateRequested` `GateStarted` `GatePassed` `GateFailed` `GateWaived` |
+| gate (7) | `GatesResolved` `EndActionsResolved` `GateRequested` `GateStarted` `GatePassed` `GateFailed` `GateWaived` |
 | approval (3) | `ApprovalRequested` `ApprovalGranted` `ApprovalRevoked` |
 | integration (3) | `IntegrationAttempted` `IntegrationRefused` `IntegrationSucceeded` |
 | control (2) | `ConductorPaused` `ConductorResumed` |
@@ -141,8 +141,9 @@ Source: `GatePoint` and `GATE_POINTS` in `packages/core/src/events.ts`.
 
 Today only `diff` and `merge` have anything wired: `diff` runs the recipe's
 actions, `merge` holds when a `human` action asks or when `--no-merge` does.
-`admit`, `prepared` and `end` are declared and empty, which is what an
-unconfigured point *is* rather than a gap.
+`end` now runs too: its actions are effects rather than verdicts, and they go
+through the outbox so they survive a crash. `admit` and `prepared` are declared
+and empty, which is what an unconfigured point *is* rather than a gap.
 
 ## gate action — 4 kinds
 
@@ -154,6 +155,14 @@ What runs at a point. Source: `GateAction` in `packages/config/src/recipe.ts`.
 | `agent:` | a cold reviewer reading the diff, given this prompt | a reviewer runtime |
 | `watch:` | globs against the diff's file list, then `request-approval` or `fail` | the diff's file list |
 | `human:` | a person, later, on the same stream; the string is the question | nothing |
+| `close:` | — it is an effect, not a verdict. `end` only | the outbox |
+| `labels:` | — same | the outbox |
+
+The last two carry `when:` (`landed` / `blocked` / `failed` / `any`), because
+`end` fires on *every* terminal outcome. "Close it when it lands, label it when
+it is blocked" is one configuration rather than two mechanisms. Putting either
+at a gating point is refused by name — a gate that silently did nothing would be
+worse.
 
 The shape is GitHub Actions': a `name`, exactly one of the keys above, and its
 parameters beside it. Order within a point is the array's, the first refusal
@@ -227,12 +236,18 @@ returns in `packages/conductor/src/run-once.ts`.
 `diff: no commits` is the one worth recognising — the agent finished and wrote
 nothing.
 
-## outbox kind — 2
+## outbox kind — 3
 
 Everything that leaves this machine and is not git. Source:
 `OutboxKind` in `packages/conductor/src/outbox.ts:74`.
 
-`issue-comment` · `issue-labels`
+`issue-comment` · `issue-labels` · `issue-close`
+
+`issue-close` comes from `EndActionsResolved`, which is how a recipe's `end`
+plan reaches a projection. The conductor reads the recipe and writes down what
+it resolved; the projection only folds. **A projection may never read a
+recipe** — that division is why a rebuild produces the same rows years later
+even if the recipe has changed since.
 
 Nothing that changes *code* goes through here — that is git's job, under the
 merge lane's lock.

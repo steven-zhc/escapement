@@ -11,7 +11,7 @@
  * rebuilding the projection, which is what a crash plus a restart amounts to,
  * and checking the row is still pending and still singular.
  */
-import { directDatabaseUrl } from "@escapement/env";
+import { databaseUrl, directDatabaseUrl } from "@escapement/env";
 import { createDb, createEventStore, createProjectionRunner, type Db, type EventStore } from "@escapement/store";
 import { outboxProjection, pendingOutbox, deadOutbox, labelsFor } from "@escapement/conductor/outbox";
 import pg from "pg";
@@ -54,6 +54,9 @@ function recorder(fail?: { status?: number; message?: string }): Deliverer & { s
       if (fail) boom();
       sent.push(`comment ${project}#${issue} ${body.slice(0, 20)}`);
       return "comment-1";
+    },
+    async closeIssue(project: string, issue: number) {
+      sent.push(`close ${project}#${issue}`);
     },
     async setLabels(project, issue, labels) {
       if (fail) boom();
@@ -213,4 +216,35 @@ describe("a delivery that fails", () => {
     await deliverOutbox({ deliverer: again, store, limit: 500 });
     expect(again.sent.filter((s) => s.includes(other))).toHaveLength(0);
   });
+});
+
+describe("the end point", () => {
+  /**
+   * The division ADR 0016 §7 turns on: the conductor reads the recipe and
+   * writes down what it resolved; the projection only folds. That is why a
+   * rebuild years later produces the same rows even if the recipe has changed
+   * since — the plan is in the log, not re-derived from configuration.
+   */
+  it("turns a resolved close into a delivery, and does not re-enqueue on rebuild", async () => {
+    const id = task(9);
+    created.add(id);
+    await store.append(id, 0, [
+      {
+        type: "EndActionsResolved",
+        actor: "conductor",
+        data: { outcome: "landed", actions: [{ name: "close the ticket", close: true }] },
+      },
+    ]);
+    await build();
+
+    const first = await pendingOutbox({ url: databaseUrl() });
+    const closes = first.filter((i) => i.kind === "issue-close" && i.target === "9");
+    expect(closes, "the close was never enqueued").toHaveLength(1);
+
+    // Replaying is idempotent: the row is keyed on the event's seq, so a second
+    // fold finds it already there rather than queueing a second close.
+    await build();
+    const again = await pendingOutbox({ url: databaseUrl() });
+    expect(again.filter((i) => i.kind === "issue-close" && i.target === "9")).toHaveLength(1);
+  }, 120_000);
 });

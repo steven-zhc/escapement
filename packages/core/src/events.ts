@@ -267,6 +267,30 @@ export const GatesResolved = z.object({
   points: z.array(z.object({ gate: GatePoint, actions: z.array(z.string()) })).length(5),
 });
 
+/**
+ * What the `end` point resolved to, and the outcome it resolved against.
+ *
+ * `end` is the point that cannot refuse: its actions run for effect. Effects
+ * that must survive a crash go through the outbox, and the outbox is a
+ * *projection* — it may read the log and nothing else, so it can never read a
+ * recipe.
+ *
+ * That is what this event is for. The conductor reads the recipe (which is what
+ * the conductor does) and appends what it resolved; the projection folds this
+ * and enqueues the deliveries. Teaching the projection to read configuration
+ * would have been the other way to do it, and would have made every projection
+ * rebuild depend on a recipe that has since changed.
+ */
+export const EndActionsResolved = z.object({
+  outcome: z.enum(["landed", "blocked", "failed"]),
+  actions: z.array(
+    z.union([
+      z.object({ name: z.string(), close: z.literal(true) }),
+      z.object({ name: z.string(), labels: z.array(z.string()) }),
+    ]),
+  ),
+});
+
 export const GateRequested = z.object(gateBase);
 export const GateStarted = z.object(gateBase);
 export const GatePassed = z.object({ ...gateBase, evidence: z.string() });
@@ -490,6 +514,7 @@ export const EVENTS = {
   RunFinished,
   RunFailed,
   GatesResolved,
+  EndActionsResolved,
   GateRequested,
   GateStarted,
   GatePassed,

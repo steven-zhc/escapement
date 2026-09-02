@@ -64,8 +64,20 @@ export function gatesFromRecipe(actions: readonly GateAction[], deps: GateDeps =
       return createPolicyGate({ name: action.name, watch: action.watch, then: action.then }, deps.policy);
     }
 
-    // `human` needs nothing: it asks, and the answer arrives later on the same
-    // stream. The question is the action's own string.
-    return createHumanGate({ name: action.name, question: action.human });
+    if ("human" in action) {
+      // Needs nothing: it asks, and the answer arrives later on the same
+      // stream. The question is the action's own string.
+      return createHumanGate({ name: action.name, question: action.human });
+    }
+
+    // `close` and `labels` are effects, not verdicts — they belong at `end`,
+    // the one point that cannot refuse, and are carried out by the outbox
+    // rather than run here. Reaching this is a recipe that put one at a gating
+    // point, and refusing loudly beats a gate that silently does nothing.
+    throw new GateActionUnavailableError(
+      action.name,
+      kind,
+      "it is an effect and only runs at the `end` point, which produces no verdict",
+    );
   });
 }

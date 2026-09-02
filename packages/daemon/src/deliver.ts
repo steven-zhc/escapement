@@ -33,6 +33,7 @@ import { type EventStore, eventStore } from "@escapement/store";
 export interface Deliverer {
   comment(project: string, issue: number, body: string): Promise<string>;
   setLabels(project: string, issue: number, labels: readonly string[]): Promise<void>;
+  closeIssue(project: string, issue: number): Promise<void>;
 }
 
 export interface DeliverOptions {
@@ -111,6 +112,10 @@ async function send(deliverer: Deliverer, item: OutboxItem): Promise<string> {
   }
   // Discriminated on the payload's own shape rather than on `kind`, so a row
   // whose kind and payload disagree fails to compile rather than at runtime.
+  if ("close" in item.payload) {
+    await deliverer.closeIssue(item.project, issue);
+    return "closed";
+  }
   await deliverer.setLabels(item.project, issue, item.payload.labels);
   return item.payload.labels.join(",");
 }
