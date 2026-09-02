@@ -51,6 +51,11 @@ export const COMPLETION_EVENTS = [
   "WorkItemUnblocked",
   "IntegrationSucceeded",
   "IntegrationRefused",
+  // Control, for the same reason: resuming has to start work without anybody
+  // restarting the daemon, and asking for a specific ticket has to be answered
+  // now rather than at the next completion.
+  "ConductorResumed",
+  "RunRequested",
 ] as const;
 
 export type PassReason = "startup" | "completion";
@@ -64,6 +69,14 @@ export interface WorkLoopOptions {
    * against.
    */
   pass: (reason: PassReason) => Promise<void>;
+  /**
+   * Whether the conductor is currently allowed to take work.
+   *
+   * A callback rather than a flag, because the answer lives in the log and can
+   * change while a run is in flight — the point of a pause is that it lands
+   * without a restart.
+   */
+  paused?: () => Promise<boolean>;
   /** Defaults to `COMPLETION_EVENTS`. */
   triggers?: readonly string[];
   /** Session-mode connection for the subscription. */
@@ -101,6 +114,13 @@ export function createWorkLoop(options: WorkLoopOptions): WorkLoop {
       do {
         again = false;
         if (stopped) break;
+        // Asked before every pass, not cached: a pause issued mid-run has to
+        // take effect at the next opportunity, and the next opportunity is
+        // here.
+        if (await options.paused?.()) {
+          log("paused — taking no work");
+          break;
+        }
         passes += 1;
         try {
           await options.pass(reason);

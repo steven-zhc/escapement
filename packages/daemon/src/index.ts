@@ -19,3 +19,17 @@ export {
   type WorkLoop,
   type WorkLoopOptions,
 } from "./work-loop.ts";
+export {
+  CONTROL_STREAM,
+  HEARTBEAT_MS,
+  STALE_AFTER_MS,
+  beat,
+  createStatusTable,
+  pauseConductor,
+  readControl,
+  readStatus,
+  requestRun,
+  resumeConductor,
+  type ControlState,
+  type DaemonStatus,
+} from "./control.ts";

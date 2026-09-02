@@ -14,8 +14,11 @@ export const Actor = z
 export const StreamId = z
   .string()
   .regex(
-    /^(wi|run|int|prj)-[\w.-]+$/,
-    "streamId must be wi-… (work item), run-…, int-… (integration lane) or prj-… (project)",
+    /^(wi|run|int|prj|ctl)-[\w.-]+$/,
+    // `ctl` is the operator's own aggregate: pauses, resumes and hand-picked
+    // runs. One stream for the whole installation — control is not per-project,
+    // and a pause that only stopped one repository would be a surprise.
+    "streamId must be wi-… (work item), run-…, int-… (integration lane), prj-… (project) or ctl-… (control)",
   );
 
 export interface Envelope<T = unknown> {

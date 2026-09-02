@@ -20,7 +20,17 @@ import {
 } from "@escapement/store";
 import type { Tier } from "@escapement/core";
 import { taskViewProjection } from "@escapement/conductor";
-import { createWorkLoop, startDaemon } from "@escapement/daemon";
+import {
+  HEARTBEAT_MS,
+  beat,
+  createStatusTable,
+  createWorkLoop,
+  pauseConductor,
+  readControl,
+  requestRun,
+  resumeConductor,
+  startDaemon,
+} from "@escapement/daemon";
 import { conductorPass } from "./conduct.ts";
 import { add } from "./add.ts";
 import { approveCommand } from "./approve.ts";
@@ -54,8 +64,12 @@ const USAGE = `esc — event-sourced scheduler for autonomous code agents
   esc status [project]          what is runnable, and what is holding the rest
     --all                       include items that have left the queue
   esc doctor                    check everything that can be checked
-  esc daemon                    hold the projections current
-    --conduct                   also take work; --no-merge and --no-guard apply
+  esc daemon                    hold the projections current and take work
+    --no-conduct                projections only, take nothing
+    --no-merge / --no-guard     as for esc run
+  esc pause <why>               stop taking new work; a run in flight finishes
+  esc resume                    take work again
+  esc now <project> --issue <n> ask for one ahead of the queue
   esc projection run            the same thing, kept as an alias
   esc projection lag            how far each projection is behind the log
   esc projection rebuild <name> drop the table, reset the checkpoint, replay
@@ -206,16 +220,26 @@ async function daemonCommand(flags: Record<string, string> = {}): Promise<number
     return 0;
   }
 
-  // Opt-in until there is a way to stop it.
-  //
-  // The daemon taking work is the point of #43, but a daemon that starts
-  // spending money the moment it is up, with no drain and no pause, is a
-  // feature you cannot turn off — and #45 is what turns it off. The flag comes
-  // out and this becomes the default when that lands.
+  // The beacon. One timer in the whole system, and it decides nothing — it
+  // says "still here", which is the difference between a board that is behind
+  // and a board that is broken. Two work items merged for real while their
+  // cards sat still and nothing reported it; this is what makes that a glance.
+  await createStatusTable();
+  await beat("starting");
+  const heartbeat = setInterval(() => {
+    void beat("up").catch(() => {});
+  }, HEARTBEAT_MS);
+
+  // Taking work is the default now that there is a way to stop it (#45).
+  // `--no-conduct` is for a daemon you want keeping the board current while
+  // you work on something else.
   let loop: ReturnType<typeof createWorkLoop> | null = null;
-  if ("conduct" in flags) {
+  if (!("no-conduct" in flags)) {
     loop = createWorkLoop({
       log: (line) => console.log(line),
+      // Asked from the log every pass. A pause issued while a run is in flight
+      // has to land at the next opportunity without anybody restarting this.
+      paused: async () => (await readControl()).paused,
       pass: async (reason) => {
         const outcome = await conductorPass({
           guard: !("no-guard" in flags),
@@ -228,12 +252,16 @@ async function daemonCommand(flags: Record<string, string> = {}): Promise<number
         );
       },
     });
+    const control = await readControl();
+    if (control.paused) console.log(`paused by ${control.by} — ${control.reason}`);
     await loop.start();
   } else {
-    console.log("projections only — pass --conduct to take work");
+    console.log("projections only — no work will be taken");
   }
 
   const stop = () => {
+    clearInterval(heartbeat);
+    void beat("stopping").catch(() => {});
     void loop?.stop();
     started.daemon.stop();
   };
@@ -247,6 +275,47 @@ async function daemonCommand(flags: Record<string, string> = {}): Promise<number
     return 1;
   }
   console.log("stopped");
+  return 0;
+}
+
+/**
+ * `esc pause` / `esc resume` / `esc now` — the operator's controls.
+ *
+ * They append and return. The daemon is listening, so a pause takes effect at
+ * its next opportunity; if it is down, the command is waiting when it comes
+ * back rather than being a race somebody has to handle.
+ */
+async function controlCommand(verb: "pause" | "resume" | "now", args: string[]): Promise<number> {
+  const { positional, flags } = parseFlags(args);
+  const by = `human:${process.env["USER"] ?? "operator"}`;
+
+  if (verb === "pause") {
+    const reason = flags["reason"] ?? positional.join(" ");
+    if (!reason.trim()) {
+      // A pause with no reason is one nobody can undo confidently, because
+      // nobody can tell whether the thing it was waiting for has happened.
+      console.error("esc pause <why>  — a pause needs a reason");
+      return 2;
+    }
+    await pauseConductor(by, reason);
+    console.log(`paused by ${by} — ${reason}`);
+    return 0;
+  }
+
+  if (verb === "resume") {
+    await resumeConductor(by);
+    console.log(`resumed by ${by}`);
+    return 0;
+  }
+
+  const project = positional[0];
+  const issue = flags["issue"] ?? positional[1];
+  if (!project || !issue) {
+    console.error("esc now <project> --issue <n>");
+    return 2;
+  }
+  await requestRun(project, issue, by);
+  console.log(`requested ${project} #${issue}`);
   return 0;
 }
 
@@ -313,6 +382,12 @@ async function main(argv: string[]): Promise<number> {
       return doctor();
     case "daemon":
       return daemonCommand(parseFlags(rest).flags);
+    case "pause":
+      return controlCommand("pause", rest);
+    case "resume":
+      return controlCommand("resume", rest);
+    case "now":
+      return controlCommand("now", rest);
     case "projection":
       return projectionCommand(rest);
     case "version":

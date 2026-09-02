@@ -22,6 +22,7 @@
  * check you will forget you never had.
  */
 import { runnableEnv } from "@escapement/conductor";
+import { STALE_AFTER_MS, readControl, readStatus } from "@escapement/daemon";
 import { githubApp, hasGitHubApp } from "@escapement/env";
 import { REQUIRED_PERMISSIONS } from "@escapement/github";
 import { createClaudeCodeRuntime } from "@escapement/runtime";
@@ -398,8 +399,8 @@ const DEFERRED: { name: string; detail: string }[] = [
   {
     name: "hook: fail closed",
     detail:
-      "esc run --once proves it before dispatching anything; running it at conductor startup " +
-      "belongs with the daemon (#27)",
+      "esc run proves it before dispatching anything; running it at daemon startup " +
+      "belongs with #48",
   },
   { name: "github: installation and labels", detail: "per repository, and no project is registered yet — esc add checks it (#9)" },
 ];
@@ -409,6 +410,54 @@ export interface DoctorReport {
   ok: number;
   failed: number;
   skipped: number;
+}
+
+/**
+ * Is the daemon up, and is it taking work?
+ *
+ * This is the check that would have turned an hour of confusion into a glance.
+ * Two work items merged into `develop` for real while their cards sat in
+ * "waiting on you", because nothing was advancing the projections and nothing
+ * said so — from outside, a button that did nothing.
+ *
+ * A daemon that is down is **not a failure here**. Not running one is a
+ * legitimate state, and `esc run` still works by hand. What would be a failure
+ * is not being able to tell.
+ */
+async function daemonLiveness(): Promise<CheckResult> {
+  const status = await readStatus().catch(() => null);
+  // Read before the early return. A pause is in force whether or not a daemon
+  // has ever run, and it is exactly the thing somebody will forget they set —
+  // reporting liveness without it would be the same silence this check exists
+  // to break.
+  const control = await readControl().catch(() => null);
+  const paused = control?.paused ? `, paused by ${control.by} (${control.reason})` : "";
+
+  if (!status) {
+    return {
+      name: "daemon: liveness",
+      status: "ok",
+      detail: `no daemon has run — esc run works by hand; esc daemon takes the queue${paused}`,
+    };
+  }
+
+  const age = Date.now() - status.lastSeenAt.getTime();
+
+  if (age > STALE_AFTER_MS) {
+    return {
+      name: "daemon: liveness",
+      status: "ok",
+      // Reported, not failed: a stopped daemon is a choice as often as a
+      // crash, and doctor exiting non-zero on it would make the command
+      // useless as a restart gate.
+      detail: `last seen ${Math.round(age / 1000)}s ago (pid ${status.pid}) — not running${paused}`,
+    };
+  }
+  return {
+    name: "daemon: liveness",
+    status: "ok",
+    detail: `${status.state}, last beat ${Math.round(age / 1000)}s ago${paused}`,
+  };
 }
 
 export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<DoctorReport> {
@@ -434,6 +483,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
     results.push(await directIsSessionMode(direct));
     results.push(...(await schema(direct)));
     results.push(await projections(pooled));
+    results.push(await daemonLiveness());
   } else {
     results.push({
       name: "postgres",

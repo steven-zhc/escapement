@@ -262,6 +262,43 @@ export const IntegrationSucceeded = z.object({
   mergeCommit: z.string(),
 });
 
+// --------------------------------------------------------------- control ----
+
+/**
+ * What an operator told the conductor to do.
+ *
+ * In the log because it is a decision somebody made, and `ApprovalGranted` is
+ * already exactly that shape — "who stopped the conductor at four o'clock"
+ * should not need a different mechanism than "who approved this merge"
+ * ([0013](../../../doc/decisions/0013-daemon-hosts-the-work.md)).
+ *
+ * It also means a command issued while the daemon is restarting is *waiting*
+ * when it comes back, rather than being a race somebody has to handle.
+ *
+ * Liveness deliberately does **not** go here. A heartbeat every few seconds
+ * fails the log's admission test — is this worth remembering later — and would
+ * bury everything that is.
+ */
+export const ConductorPaused = z.object({
+  by: z.string(),
+  reason: z.string(),
+});
+
+export const ConductorResumed = z.object({ by: z.string() });
+
+/**
+ * Run this one now, ahead of the queue.
+ *
+ * The same mechanism rather than a second channel: a person asking for a
+ * specific ticket is a decision, and it belongs beside the pause that came
+ * before it.
+ */
+export const RunRequested = z.object({
+  project: z.string(),
+  issue: z.string(),
+  by: z.string(),
+});
+
 // --------------------------------------------------------------- project ----
 
 /** Policy lives here, not in the managed repo. See doc/decisions/0005. */
@@ -343,7 +380,10 @@ export const EVENTS = {
   IntegrationAttempted,
   IntegrationRefused,
   IntegrationSucceeded,
+  ConductorPaused,
+  ConductorResumed,
   ProjectPolicySet,
+  RunRequested,
   ProjectConfigured,
   Reconciled,
 } as const;
