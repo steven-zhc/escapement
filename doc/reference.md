@@ -1,0 +1,232 @@
+# Reference: every term, and everything currently in it
+
+One table per term. Each says where the list lives in code, so a reader can
+check rather than trust — the two doc defects found on 2026-09-02 were both a
+document asserting a state of the world the code had moved past.
+
+Where a list is open-ended (streams, runs, projects) it says so and gives
+examples instead of pretending to be exhaustive.
+
+**Counted 2026-09-02.**
+
+---
+
+## event — 41 types
+
+One fact that already happened, past tense. Never edited, never deleted.
+Source: the registry at the bottom of `packages/core/src/events.ts`.
+
+| Group | Types |
+|---|---|
+| work item (7) | `WorkItemDiscovered` `WorkItemClaimed` `WorkItemReleased` `WorkItemBlocked` `WorkItemUnblocked` `WorkItemLinked` `WorkItemLanded` |
+| dispatch (1) | `DispatchRefused` |
+| preparation (3) | `PreparationStarted` `PreparationPassed` `PreparationFailed` |
+| run (10) | `RunStarted` `RunPrompted` `RunTouchedFile` `GuardTripped` `RunContextExhausted` `RunAwaitingInput` `RunProducedDiff` `RunProposedCompletion` `RunFinished` `RunFailed` |
+| gate (5) | `GateRequested` `GateStarted` `GatePassed` `GateFailed` `GateWaived` |
+| approval (3) | `ApprovalRequested` `ApprovalGranted` `ApprovalRevoked` |
+| integration (3) | `IntegrationAttempted` `IntegrationRefused` `IntegrationSucceeded` |
+| control (2) | `ConductorPaused` `ConductorResumed` |
+| outbox (2) | `OutboxDelivered` `OutboxFailed` |
+| project & queue (5) | `ProjectPolicySet` `QueueChanged` `RunRequested` `ProjectConfigured` `Reconciled` |
+
+Every type has a Zod payload schema and an entry in `SCHEMA_VER`. A payload
+change means bumping that type's version and adding an upcaster in the same
+commit — old events are never rewritten.
+
+## stream — 5 prefixes, unbounded instances
+
+The events about one thing, in order. The **prefixes** are a closed set,
+validated by regex in `packages/core/src/envelope.ts`. The streams themselves
+are not — one per work item, run, lane and project, forever.
+
+| Prefix | One per | Example |
+|---|---|---|
+| `wi-` | work item (ticket) | `wi-nextloom-ai-admin-156` |
+| `run-` | run (one attempt) | `run-75b80f13-9f88-48cf-b4d2-79b9779f47cf` |
+| `int-` | integration lane, per base branch | `int-nextloom-ai-admin-develop` |
+| `prj-` | project | `prj-nextloom-ai-admin` |
+| `ctl-` | control | `ctl-conductor` (the only one so far) |
+
+## upcaster — 2 chains
+
+A function reading an older event shape and returning the current one.
+Source: `UPCASTERS` in `packages/core/src/upcast.ts`.
+
+| Type | Step | What was added, and why null is honest |
+|---|---|---|
+| `ProjectConfigured` | 1 → 2 | `owner` — the repo name alone could not reach GitHub again. v1 events get `null`, not a guess. |
+| `ProjectConfigured` | 2 → 3 | `base` — defaulting to the repo's default branch is only right by convention, and admin's default was a feature branch. `null` means "ask GitHub", which is what those runs did. |
+| `Reconciled` | 1 → 2 | see the registry |
+
+Every other type is still at version 1.
+
+## projection — 3
+
+A regular Postgres table built by replaying the log. Holds no truth of its own.
+Source: `PROJECTIONS` in `apps/cli/src/esc.ts`.
+
+| Name | Answers | Owns its table? |
+|---|---|---|
+| `task_view` | what is the current state of every task the board shows | yes — `create`/`reset` build and drop it |
+| `outbox` | what still has to be said to GitHub | **no** — the contract owns `outbox`, so `create`/`reset` are no-ops. Dropping it would take it out from under `db verify`. |
+| `guard_trips` | which guard rules are firing, and were they right to | yes |
+
+## task state — 5
+
+Source: `TaskState` in `packages/conductor/src/task-view.ts:50`.
+
+`queued` · `running` · `gates` · `waiting` · `landed`
+
+`queued` is the only one not driven by an event — it comes from GitHub, because
+Escapement never decided which issues exist ([ADR 0012](decisions/0012-one-task-view.md)).
+
+## guard rule — 8
+
+Allow/deny on one tool call. Every decision, allow or deny, is a `GuardTripped`.
+Source: `packages/conductor/src/guard.ts`.
+
+| Rule | Because |
+|---|---|
+| `production-host` | an agent must never reach production. Matched by host *segment*, not substring — `reproducible.dev.example.com` contains "prod" and is not a false positive. |
+| `executed-ddl` | schema changes belong in a reviewed migration file. admin #117 was a migration applied by hand. |
+| `db-push` | `prisma db push` changes a schema with no migration and no review. |
+| `pr-merge` | merging is the integrator's job, under the merge lane's advisory lock. |
+| `push-to-base` | the agent pushes `agent/*`; the base is only ever written by the integrator. |
+| `force-push` | rewrites history that gate verdicts were made against. |
+| `recursive-delete` | `rm -rf` outside the worktree is unrecoverable. |
+| `read-dotenv` | `.env` holds values the agent is deliberately not given. `.env.local` is the one it is. |
+
+A recipe may add rules through `deny`. It cannot remove any of these.
+
+## gate kind — 4, and 3 verdicts
+
+A named check producing a verdict about **one commit**. Source: `GateSpec` in
+`packages/config/src/recipe.ts`, dispatched in `packages/gates/src/from-recipe.ts`.
+
+| Kind | Verdict from | Needs from the caller |
+|---|---|---|
+| `process` | a command's exit code (`run:`) | nothing |
+| `agent` | a cold reviewer reading the diff | a reviewer runtime |
+| `policy` | globs in `watch:` against the diff's file list, then `request-approval` or `fail` | the diff's file list |
+| `human` | a person, later, on the same stream | nothing |
+
+`run-once.ts` supplies both dependencies, so all four run. A kind whose
+dependency is missing is refused by name, never skipped.
+
+Verdicts: `passed` · `failed` · `needs-approval`. The third is not a flavour of
+failure — nothing is wrong, and nothing may proceed until a person says so.
+
+## policy field — 4
+
+The part a recipe cannot soften. Lives in Escapement's log, set by `esc add`.
+Source: `Policy` in `packages/config/src/policy.ts`.
+
+| Field | Meaning | Conflict? |
+|---|---|---|
+| `tier` | containment floor | yes — a lower tier is refused by name |
+| `requiredGates` | gate names the recipe must declare | yes — omitting one is refused |
+| `approvers` | who may answer a `needs-approval` | no |
+| `concurrent` | runs this project may have at once | no |
+
+## tier — 3
+
+`open` < `guarded` < `sandboxed`. Comparison is the whole of the rule.
+Source: `Tier` in `packages/core/src/events.ts:26`.
+
+## work kind — 4
+
+What the recipe's `source.kinds` selects on, read from an issue's labels.
+Source: `WorkKind` in `packages/core/src/events.ts:22`.
+
+`bug` · `feature` · `enhancement` · `tech-debt`
+
+An issue with no matching label has no kind and is **not runnable** — which is
+why admin #156 sat invisible until it was labelled.
+
+## runtime — 2
+
+Source: `RuntimeId` in `packages/core/src/events.ts:29`.
+
+`claude-code` · `codex`
+
+## integration refusal reason — 7
+
+Why a merge did not happen. Source: `RefusalReason` in `packages/core/src/events.ts:37`.
+
+`conflict` · `dirty-base` · `unpushed-base` · `pending-migration` ·
+`gate-failed` · `no-commits` · `lane-busy`
+
+## run stage — 10
+
+Where a failed run stopped, as `stopped at <stage>`. Source: the `stage:`
+returns in `packages/conductor/src/run-once.ts`.
+
+`recipe` · `dispatch` · `discover` · `claim` · `hook` · `prepare` · `run` ·
+`diff` · `integrate` · `unexpected`
+
+`diff: no commits` is the one worth recognising — the agent finished and wrote
+nothing.
+
+## outbox kind — 2
+
+Everything that leaves this machine and is not git. Source:
+`OutboxKind` in `packages/conductor/src/outbox.ts:74`.
+
+`issue-comment` · `issue-labels`
+
+Nothing that changes *code* goes through here — that is git's job, under the
+merge lane's lock.
+
+## notification subscription — 4 by default
+
+What is worth interrupting somebody for. All four mean the same thing: nothing
+moves until a person acts. Source: `DEFAULT_SUBSCRIPTIONS` in
+`packages/daemon/src/notify.ts`.
+
+`ApprovalRequested` · `IntegrationRefused` · `RunAwaitingInput` · `WorkItemBlocked`
+
+A landed task is good news that needed nobody, and is deliberately not here.
+
+## esc subcommand — 11
+
+Source: the switch in `apps/cli/src/esc.ts`.
+
+`add` · `run` · `approve` · `status` · `doctor` · `daemon` · `pause` ·
+`resume` · `now` · `projection` · `version`
+
+## doctor check — 15 live, 6 deferred
+
+Source: `apps/cli/src/doctor.ts`. This list is `pnpm esc doctor`'s own output,
+not a reading of the file — grepping the constructors missed six of them.
+
+| Group | Checks |
+|---|---|
+| load (1) | `packages load under Node` |
+| environment (1) | `environment` |
+| connections (2) | `postgres: pooled connection` · `postgres: direct connection is session mode` |
+| schema (5) | `schema: tables` · `schema: optimistic concurrency` · `schema: append-only` · `schema: notify trigger` · `schema: payload columns` |
+| running system (4) | `projections: lag` · `daemon: liveness` · `worktrees: reconciliation` · `outbox: depth` |
+| credentials (2) | `github: app credentials` · `runtime: signed in` |
+
+Deferred checks each name the issue that will implement them, and are reported
+rather than hidden — a check quietly dropped is indistinguishable from one that
+passes.
+
+## preset — 1
+
+Source: `packages/config/src/presets.ts`.
+
+`pnpm-workspace` — a `pnpm install --frozen-lockfile` prepare step and a
+`build` process gate. A preset's *name* is not part of the recipe hash, because
+it is not part of what a run does.
+
+## package — 9, plus 2 apps
+
+`core` · `config` · `store` · `github` · `runtime` · `gates` · `conductor` ·
+`daemon` · `hook`, and `apps/cli` · `apps/board`.
+
+## doc — 13 decisions, 6 experiments
+
+`doc/decisions/` is append-only in spirit: a decision that turns out wrong gets
+a new file that supersedes it, never an edit. `doc/experiments/` holds things
+actually run, each with its limits.
