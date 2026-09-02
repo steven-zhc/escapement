@@ -69,7 +69,6 @@ There are two projections:
 | Name | Feeds | Rebuild with |
 |---|---|---|
 | `task_view` | The board, `esc status`, and what the conductor takes next | `esc projection rebuild task_view` |
-| `guard_trips` | Which guard patterns fire most, across every run | `esc projection rebuild guard_trips` |
 
 `task_view` holds one row per task and **only what a card shows**. Gate
 evidence, findings, the diff and the trips themselves are folded from the event
@@ -94,10 +93,10 @@ the log; there is no timer, because Postgres notifies on every append.
 | **daemon** | The one process that holds the conductor and the projection follower. The board controls it and watches it; it never holds work ([ADR 0013](doc/decisions/0013-daemon-hosts-the-work.md)). |
 | **run** | One attempt at a work item. A work item can have several; each gets its own worktree, its own agent process and its own id. |
 | **recipe** | `.escapement/config.yaml`, committed **in the managed repository**. Its team decides what may be picked up, what environment it gets, what must pass. Read from `origin/<base>`, never from the agent's branch. |
-| **policy** | The part a recipe cannot soften — containment floor, mandatory gates, who may approve. Lives in Escapement's log, set by `esc add`. |
-| **gate** | A named check that produces a verdict about **one commit**, not about a ticket. `process`, `agent`, `policy`, `human`. A force-push invalidates a verdict by arithmetic rather than by anybody noticing. |
-| **guard**, **guard trip** | The hook's allow/deny on a single tool call, and a record of one that was denied. A coordination mechanism, not a sandbox. |
-| **tier** | How contained the agent runtime is: `open`, `guarded`, `sandboxed`. |
+| **gate** | One of **five fixed points in the loop** where the conductor waits for a verdict: `admit`, `prepared`, `diff`, `merge`, `end`. The set is closed. A gate is a *place*, not a kind of check. |
+| **action** | What runs at a point, from the recipe: `run` a command, `agent` a cold reviewer, `watch` some globs, `human` a person, `close`/`labels` an effect at `end`. Verdicts are bound to **one commit**, so a force-push invalidates them by arithmetic. |
+| **skipped** | A point nobody configured. It is *shown*, never omitted — a point that is merely absent is indistinguishable from one that was configured and silently did not run. |
+| **tier** | How contained the agent runtime must be: `open`, `guarded`, `sandboxed`. The recipe's, in `runtime.tier`. |
 | **mirror** | Escapement's own bare clone of a managed repository, at `~/.escapement/repos/<project>.git`. Never your checkout. |
 | **worktree** | The disposable checkout a run works in, cut from the mirror and removed when the run ends. |
 | **integrate** | The merge lane: under a Postgres advisory lock, merge the base in, verify, merge out. Every exit path appends an event, including the failures. |
@@ -156,8 +155,8 @@ and an unparsed log file respectively, which is why it could answer none of them
 | **conductor** | The scheduler. Finds work, claims it, cuts the worktree, starts the agent, runs the gates, merges. Everything it decides, it appends. | Never edits code itself. |
 | **agent runtime** | The thing that actually writes the code — Claude Code today, in a worktree and an environment of its own. | Never talks to GitHub, and never sees a secret the recipe did not name. |
 | **esc-hook** | A small binary Claude Code calls before every tool use. Exit 0 allows, exit 2 denies. Fails closed on anything it cannot understand. | Not a security boundary — see below. |
-| **gates** | Named checks that produce a verdict about a *specific commit*. All four kinds are built: `process` runs a command, `agent` asks a cold reviewer, `policy` matches paths, `human` waits for you. | Not tied to a ticket, so a force-push invalidates a verdict by arithmetic. |
-| **board** | Reads the `board` projection and shows one card per work item, with its diff, its cost, its guard trips and its gate verdicts. Approve, Reject and Waive are on the card. | Cannot advance its own projection — see [Terms](#terms). |
+| **gates** | Five fixed points, each running the actions its recipe declares. A point with nothing configured is skipped, and the skip is rendered. | Not tied to a ticket, so a force-push invalidates a verdict by arithmetic. |
+| **board** | Reads `task_view` and shows one card per work item, with its diff, its cost and every gate point — including the skipped ones. Approve, Reject and Waive are on the card. | Cannot advance its own projection — see [Terms](#terms). |
 | **daemon** | `esc daemon` — one advisory lock, the projection follower and the conductor. Wakes on a completion event; there is no timer. | Never killed a running agent. Pause stops it *taking* work. |
 | **esc** | Configures projects, drives runs by hand, and controls the daemon: `pause`, `resume`, `now`. | — |
 
@@ -196,87 +195,109 @@ recipe governing a run is read from `origin/<base>`, never from the agent's
 branch — so an agent that edits it changes nothing about the run in flight. See
 [ADR 0005](doc/decisions/0005-config-in-target-repo.md).
 
-### Guard, gate and policy are three different questions
+### The loop, and the five places it stops
 
-> **Being replaced.** [ADR 0016](doc/decisions/0016-the-settled-model.md) deletes
-> the policy concept, renames `guard` to `tools` as a dispatch parameter, and
-> turns four gate kinds into five gate points. What follows describes the code
-> as it stands today and is updated when each step lands, not before.
+```mermaid
+flowchart LR
+  Q[queue] --> A{{admit}}
+  A --> C[claim + worktree]
+  C --> P{{prepared}}
+  P --> AG[agent runs]
+  AG --> D{{diff}}
+  D --> M{{merge}}
+  M --> I[integrate<br/>advisory lock]
+  I --> E{{end}}
+  E --> L[landed]
 
-They get confused because all three can stop a run. They act at different
-moments, on different subjects, and only one of them is configured in the
-managed repository.
+  classDef gate fill:#e9dcc0,stroke:#8a6a2e,stroke-width:2px,color:#14181c;
+  classDef core fill:#e6e9ec,stroke:#5c646d,color:#14181c;
+  class A,P,D,M,E gate;
+  class Q,C,AG,I,L core;
+```
 
-| | Asks | About | When | Where it is configured |
-|---|---|---|---|---|
-| **guard** | may the agent make *this tool call*? | one tool call | during the run, per call | Escapement, plus `deny` additions from the recipe |
-| **gate** | is *this commit* acceptable? | one commit (`onSha`) | after the agent stops, before the merge | the recipe's `gates:` |
-| **policy** | is *this recipe* allowed to describe this run? | the recipe itself | before the run starts | Escapement's log, `esc add` |
+The rectangles are the loop's own work and are not configurable. The hexagons
+are **gates** — the five points where the conductor stops and waits for a
+verdict — and what runs at each is the recipe's.
 
-The order is guard → gate → policy in *narrowness*, and policy → guard → gate in
-*time*: policy is checked first because it decides whether the recipe may be
-honoured at all.
-
-**None of the three is a security boundary.** Both runtimes' `PreToolUse` does
-command pattern matching, and a model can write a script and run it to step
-around a pattern. The real boundaries are the filtered environment, the isolated
-worktree and a runtime sandbox where one exists
-([ADR 0007](doc/decisions/0007-dual-runtime.md)). What these three give you is
-policy enforcement and total observability.
-
-#### The eight guard rules
-
-Every decision — allow or deny — is a `GuardTripped` on the run's stream, which
-is what the `guard_trips` projection exists to make tunable. The old loop fired
-132 blocks across 77% of its runs, all to a stderr nobody parsed, and not one
-pattern was ever tuned because there was no way to know which were firing.
-
-| Rule | Denies | Because |
+| Point | When | May refuse? |
 |---|---|---|
-| `production-host` | a command naming a production host | an agent must never reach production; matched by host *segment*, not substring, so `reproducible.dev.example.com` is not a false positive |
-| `executed-ddl` | DDL run as a command | schema changes belong in a reviewed migration file — admin #117 was a migration applied by hand |
-| `db-push` | `prisma db push` | changes a schema with no migration and no review |
-| `pr-merge` | merging a PR | merging is the integrator's job, under the merge lane's advisory lock |
-| `push-to-base` | pushing to the base branch | the agent pushes `agent/*`; the base is only ever written by the integrator |
-| `force-push` | `--force` | rewrites history that gate verdicts were made against |
-| `recursive-delete` | `rm -rf` outside the worktree | unrecoverable on a path the worktree does not own |
-| `read-dotenv` | reading `.env` | it holds values the agent is deliberately not given; `.env.local` is the one it is |
+| `admit` | the queue offers an item, before it is claimed | yes — it stays queued |
+| `prepared` | the worktree exists, before the agent starts | yes — refuse before money is spent |
+| `diff` | the agent stopped and there are commits | yes |
+| `merge` | after `diff` passes, before the merge lane | yes |
+| `end` | the item reached any terminal outcome | **no** — its actions are effects |
 
-A recipe may add rules through `deny`. It cannot remove any of these.
+**The set is closed.** No sixth point will ever be added. What runs *at* a point
+is open, which is what lets extension be unbounded while the core stays finite:
+adding a security scan or a second reviewer is a line in a recipe, not a change
+here. `end` is the one that cannot refuse — nothing can be stopped once a merge
+has landed — and calling it a gate anyway is a deliberate imprecision, recorded
+rather than smoothed over.
 
-#### The four gate kinds
+**A point nobody configured is skipped, and the skip is shown.** That is the
+condition everything else rests on. A gate with nothing at it does not run, and
+that is your decision, not a defect; a gate that *was* configured and did not
+run is Escapement's bug. Those two are only distinguishable if the empty ones
+are rendered, so the board and `esc add` list all five, always.
 
-One primitive: **a named check that produces a verdict about a specific
-commit.** `passed`, `failed`, or `needs-approval` — the third is not a flavour
-of failure, it means nothing is wrong and nothing may proceed until a person
-says so.
+```
+admit     (skipped)
+prepared  (skipped)
+diff      build
+merge     (skipped)
+end       close the ticket
+```
 
-| Kind | Verdict comes from | Needs |
-|---|---|---|
-| `process` | a command's exit code (`run:`) | nothing |
-| `agent` | a cold reviewer reading the diff | a reviewer runtime |
-| `policy` | globs in `watch:` matching the diff's file list, then `request-approval` or `fail` | the diff's file list |
-| `human` | a person, later, on the same stream | nothing |
+### What a recipe says
 
-`onSha` is the load-bearing part: a verdict is about a diff, so a force-push
-invalidates it by arithmetic rather than by anybody noticing. In the old system
-approval was a label, and a label survives any amount of rewriting.
+The shape is GitHub Actions': a `name`, one key saying what kind of thing this
+is, and its parameters beside it.
 
-#### What a policy holds
+```yaml
+gates:
+  admit: []
+  prepared: []
 
-Four fields, and the rule over them is one sentence: **a recipe may add
-strictness; it can never remove it.**
+  diff:
+    - name: build
+      run: pnpm typecheck && pnpm lint && pnpm test
+      timeout: 15m
 
-| Field | Meaning | A recipe that conflicts |
-|---|---|---|
-| `tier` | containment floor — `open` < `guarded` < `sandboxed` | asking for a lower tier is refused |
-| `requiredGates` | gate names the recipe must declare | omitting one is refused |
-| `approvers` | who may answer a `needs-approval` | — |
-| `concurrent` | how many runs this project may have at once | — |
+  merge:
+    - name: migrations          # a policy hold, by path
+      watch: ["prisma/migrations/**"]
+      then: request-approval
+    - name: approval            # a person, and the question they are asked
+      human: Merge {branch} into {base}?
 
-Conflicts are *returned*, not thrown one at a time, so `esc doctor` reports all
-of them at once — fixing one only to be told about the next is the experience
-this avoids.
+  end:
+    - name: close the ticket
+      when: landed
+      close: true
+```
+
+Order within a point is the array's, the first refusal wins, and the actions
+after it do not run — continuing would spend money producing verdicts about a
+diff that is not going anywhere.
+
+### What Escapement does not do
+
+**It does not restrict tool calls.** There is no guard and no policy engine.
+Tool limits belong to the agent runtime's own configuration —
+`permissions.deny` in `~/.claude/settings.json` or in the managed repository's
+`.claude/settings.json` — which holds even under `--permission-mode
+bypassPermissions`, and holds by *removing the tool from the model's list* so
+nothing is ever attempted
+([experiment 008](doc/experiments/008-deny-survives-bypass.md)).
+
+Containment is the **filtered environment** and the **disposable worktree**.
+Neither was ever the guard's, and both still hold.
+
+**It does not second-guess your workflow.** Nothing sits above a repository's
+own recipe. `esc doctor` reports what else is configuring a run — your
+`~/.claude/settings.json` is in scope for every one, because Escapement cannot
+set `HOME` without breaking the runtime's own credentials. Being unable to
+control that is acceptable. Being unable to see it is not.
 
 ### What one run actually does
 
