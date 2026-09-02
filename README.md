@@ -16,23 +16,21 @@ making those three the same append-only log.
 
 ## Status
 
-**Phases 0 and 1 are built.** The event log can be written, read, subscribed to,
-reduced to state and projected; `esc run --once` takes one nominated issue from
-discovery through claim, worktree, guard, agent, gates and the merge lane, and
-the board shows the landed card with its receipt.
+**Phases 0 and 1 are done.** `nextloom-ai-admin` #155 went from a GitHub issue
+to `be25a20` on `develop` on 2026-09-01 — recipe, claim, worktree, install,
+Claude Code, the build gate green in 22.3s, a hold at the merge gate, one click,
+and the merge lane under its advisory lock. 13 turns, $0.86. #120 landed the
+same way. It took four attempts and each failure bought a real defect; the
+[roadmap](doc/roadmap.md) has the table.
 
-**Phase 1's exit criterion is not met.** It requires a real `nextloom-ai-admin`
-issue merged into `develop`, and no run has produced a commit yet. What is done:
-the App is configured, that repository's recipe is committed on `develop`, and
-runs reach it for real — a worktree cut from the mirror with submodules and
-`pnpm install` in 10.3s, then an agent started under the guard. What is not: the
-agent has yet to finish a ticket. The first attempt spent 30 turns and $1.11
-writing nothing, because the prompt told it to read an issue and handed it only
-a number. See [experiment 005](doc/experiments/005-rung-1-reaches-a-real-repository.md).
+**Phase 2 is in progress.** `esc daemon` holds the projections and takes work,
+driven by completion events rather than a timer, and `esc pause` stops it. What
+is left is robustness: a `Reconciled` pass at startup for orphaned worktrees,
+and webhooks so a newly opened issue wakes the daemon instead of waiting for
+the next pass.
 
-**Nothing here runs unattended, deliberately.** `esc run --once` merges as soon
-as its gates pass, and the human gate that should sit in front of that merge is
-Phase 2 ([#20], [#21]). Watch the runs until it exists.
+**Watch it.** Nothing has run unattended for long enough to have earned trust,
+and `esc pause` exists because that is the honest state to be in.
 
 See [`doc/roadmap.md`](doc/roadmap.md) for the phases and
 [`doc/README.md`](doc/README.md) for what is settled and what is open.
@@ -56,27 +54,34 @@ the rest of this file uses them without stopping, and one of them — *projectio
 | **checkpoint** | How far a projection has replayed, in the `checkpoints` table. A projection behind the log is *stale*, not wrong — it will catch up. |
 | **upcaster** | A function that reads an event written in an older shape and returns the current one. An unbroken chain from version 1, because old events are never rewritten to match new code. |
 
-There are three projections today:
+There are two projections:
 
 | Name | Feeds | Rebuild with |
 |---|---|---|
-| `board` | The web UI at `:3200` — one card per work item | `esc projection rebuild board` |
-| `queue` | `esc status`, and what `esc run` takes next | `esc projection rebuild queue` |
-| `guard_trips` | What the agent was stopped from doing | `esc projection rebuild guard_trips` |
+| `task_view` | The board, `esc status`, and what the conductor takes next | `esc projection rebuild task_view` |
+| `guard_trips` | Which guard patterns fire most, across every run | `esc projection rebuild guard_trips` |
+
+`task_view` holds one row per task and **only what a card shows**. Gate
+evidence, findings, the diff and the trips themselves are folded from the event
+stream when somebody opens a task — a list view and a detail view have opposite
+economics, and only the list has to be cheap. See
+[ADR 0012](doc/decisions/0012-one-task-view.md).
 
 `esc projection lag` shows how far behind each one is. `rebuild` drops the
 table, resets the checkpoint and replays from the beginning — safe by
-construction, because the log is the only thing that was ever authoritative.
+construction, because the log is the only thing that was ever authoritative,
+and possible only because no projection reads the clock.
 
-**Nothing advances a projection on its own yet.** There is no daemon: `esc run`
-appends events, and a projection only moves when you run `esc projection`. That
-is [#27], along with everything else about running unattended.
+**The daemon advances them.** `esc daemon` holds one advisory lock and follows
+the log; there is no timer, because Postgres notifies on every append.
 
 ### Escapement's own words
 
 | Term | What it is |
 |---|---|
-| **work item** | One ticket under management, from the moment it is claimed to the moment it lands or is dropped. What a board card shows. |
+| **task** (work item) | One ticket under management, from the moment it is claimed to the moment it lands or is dropped. What a board card shows. |
+| **the queue** | What GitHub currently lists that the recipe will take, minus what the log says is claimed. **Not in the log** — Escapement never decided which issues exist ([ADR 0012](doc/decisions/0012-one-task-view.md)). |
+| **daemon** | The one process that holds the conductor and the projection follower. The board controls it and watches it; it never holds work ([ADR 0013](doc/decisions/0013-daemon-hosts-the-work.md)). |
 | **run** | One attempt at a work item. A work item can have several; each gets its own worktree, its own agent process and its own id. |
 | **recipe** | `.escapement/config.yaml`, committed **in the managed repository**. Its team decides what may be picked up, what environment it gets, what must pass. Read from `origin/<base>`, never from the agent's branch. |
 | **policy** | The part a recipe cannot soften — containment floor, mandatory gates, who may approve. Lives in Escapement's log, set by `esc add`. |
@@ -143,7 +148,8 @@ and an unparsed log file respectively, which is why it could answer none of them
 | **esc-hook** | A small binary Claude Code calls before every tool use. Exit 0 allows, exit 2 denies. Fails closed on anything it cannot understand. | Not a security boundary — see below. |
 | **gates** | Named checks that produce a verdict about a *specific commit*. All four kinds are built: `process` runs a command, `agent` asks a cold reviewer, `policy` matches paths, `human` waits for you. | Not tied to a ticket, so a force-push invalidates a verdict by arithmetic. |
 | **board** | Reads the `board` projection and shows one card per work item, with its diff, its cost, its guard trips and its gate verdicts. Approve, Reject and Waive are on the card. | Cannot advance its own projection — see [Terms](#terms). |
-| **esc** | Configures projects and drives runs. `esc run <project>` takes the queue; `--issue` nominates one, `--no-merge` stops before writing. | Nothing runs unattended — no daemon, no timer ([#27]). |
+| **daemon** | `esc daemon` — one advisory lock, the projection follower and the conductor. Wakes on a completion event; there is no timer. | Never killed a running agent. Pause stops it *taking* work. |
+| **esc** | Configures projects, drives runs by hand, and controls the daemon: `pause`, `resume`, `now`. | — |
 
 The hook deserves the caveat it gets. It is a *coordination* mechanism, not a
 sandbox: an agent that wants to get around it can. The three boundaries that
@@ -182,7 +188,8 @@ branch — so an agent that edits it changes nothing about the run in flight. Se
 
 ### What one run actually does
 
-`esc run --once nextloom-ai-admin --issue 120`, end to end:
+`esc run nextloom-ai-admin --issue 120`, end to end — and the same eight steps
+the daemon takes for you:
 
 1. **Resolve the recipe** from `origin/develop` — the base recorded when the
    project was registered, not whatever GitHub currently calls the default
@@ -259,8 +266,6 @@ is in Postgres, and none of it is here.
 [#18]: https://github.com/steven-zhc/escapement/issues/18
 [#19]: https://github.com/steven-zhc/escapement/issues/19
 [#20]: https://github.com/steven-zhc/escapement/issues/20
-[#21]: https://github.com/steven-zhc/escapement/issues/21
-[#27]: https://github.com/steven-zhc/escapement/issues/27
 [#28]: https://github.com/steven-zhc/escapement/issues/28
 
 ## Getting started
@@ -577,6 +582,10 @@ pnpm --filter @escapement/hook build      # the guard binary; not committed
 pnpm --filter @escapement/board dev       # the board, on :3200
 ```
 
+The board is a reader. It renders `task_view` and issues control events; it
+never holds a run, which is why restarting it or closing the tab costs nothing
+— see [ADR 0013](doc/decisions/0013-daemon-hosts-the-work.md).
+
 A run without the hook does not start — a run with no guard is not a smaller
 run, it is a different one.
 
@@ -610,24 +619,57 @@ held at 8f3a1c2 — wi-nextloom-ai-admin-120 is waiting on you
 nothing was merged. Re-run without --no-merge to merge it.
 ```
 
-### Decide, on the board
-
-The run appended events; it did not update the board. Catch the projection up
-first — until [#27] there is no daemon doing it for you, and a board that has
-never been advanced is simply empty:
+### Let the daemon do it
 
 ```bash
-pnpm esc projection rebuild board
-pnpm esc projection lag                   # board  48/48  0 behind
+pnpm esc daemon
 ```
 
-Then open <http://localhost:3200>. The card is in **Waiting on you**, with the
-diff, each gate's verdict and its evidence, and the reviewer's findings with
-their failure scenarios. Approve, Reject or Waive are on the card.
+One process, holding one advisory lock. It keeps the projections current and
+takes work: a completion event — landed, released, blocked, refused — is what
+tells it to pick the next one up, so the loop advances by itself with no timer
+anywhere.
 
-The page updates itself from then on: Postgres notifies on every append and the
-board re-reads. What it cannot do is advance the projection, so a run started
-while the page is open still needs the command above.
+Running it while another copy is up is fine; the second exits saying who holds
+the lock.
+
+```bash
+pnpm esc pause "the importer is flaky today"   # take nothing new
+pnpm esc resume
+pnpm esc now nextloom-ai-admin --issue 155     # one, ahead of the queue
+```
+
+**Pause stops it taking new work; a run in flight finishes.** Killing a running
+agent is not implemented — a run you want gone ends when its lease expires and
+the claim comes back. Said plainly because a Stop button that means Pause is
+worse than no Stop button.
+
+Control goes through the log, so a pause issued while the daemon is down is
+waiting when it comes back.
+
+To keep it running across logout, sleep and crashes:
+
+```bash
+./scripts/launchd.sh install     # KeepAlive; there is no start button to press
+./scripts/launchd.sh status
+./scripts/launchd.sh uninstall
+```
+
+### Decide, on the board
+
+Open <http://localhost:3200>. The card is in **Waiting on you** — title, state,
+cost, gate counts — and Approve, Reject and Waive are on it, because deciding is
+what the board is for.
+
+Everything else is one click away. The card's title opens `/task/<id>`, which
+folds that task's event stream on demand: each gate's verdict with its evidence,
+the reviewer's findings with their failure scenarios, the guard trips, and the
+raw history with every actor. Nothing on that page is maintained in a table — a
+detail view is read rarely, by one person, about one task.
+
+The page updates itself: Postgres notifies on every append, the daemon advances
+the projection, and the board re-reads. If it stops moving, `esc doctor` says
+whether the daemon is up and whether somebody paused it.
 
 That is the whole bet: if deciding still means opening GitHub, nothing changed.
 
