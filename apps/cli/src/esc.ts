@@ -24,8 +24,10 @@ import {
   HEARTBEAT_MS,
   beat,
   createStatusTable,
+  createNotifier,
   createWorkLoop,
   deliverOutbox,
+  macNotifier,
   pauseConductor,
   readControl,
   reconcile,
@@ -249,8 +251,19 @@ async function daemonCommand(flags: Record<string, string> = {}): Promise<number
   // you work on something else.
   let loop: ReturnType<typeof createWorkLoop> | null = null;
   if (!("no-conduct" in flags)) {
+    // Tell the operator when the operator is the bottleneck. Fire and forget:
+    // a notification retried later, about a decision already made, trains you
+    // to ignore the next one.
+    const channel = await macNotifier();
+    const notifier = createNotifier({ channel, log: (line) => console.log(line) });
+    console.log(
+      `notifications via ${channel.name}` +
+        (channel.clickable ? "" : " — install terminal-notifier to make them clickable"),
+    );
+
     loop = createWorkLoop({
       log: (line) => console.log(line),
+      notify: (event) => notifier.consider(event),
       // Asked from the log every pass. A pause issued while a run is in flight
       // has to land at the next opportunity without anybody restarting this.
       paused: async () => (await readControl()).paused,

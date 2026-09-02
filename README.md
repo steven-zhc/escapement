@@ -647,6 +647,17 @@ worse than no Stop button.
 Control goes through the log, so a pause issued while the daemon is down is
 waiting when it comes back.
 
+It also comments on the ticket when something is waiting on you, sets an
+`escapement:*` label as a task moves, and sends a macOS notification for the
+four things that mean nothing moves until you act. The comments and labels go
+through an **outbox** — queued from the log, retried with backoff, and given up
+on with a reason rather than retried forever. Notifications deliberately do
+not: one delivered an hour late about a decision you already made is worse than
+none.
+
+`terminal-notifier` on your PATH makes a notification clickable, opening that
+task's page. Without it they still arrive, and the daemon says which you got.
+
 To keep it running across logout, sleep and crashes:
 
 ```bash

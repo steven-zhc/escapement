@@ -97,6 +97,14 @@ export interface WorkLoopOptions {
    */
   paused?: () => Promise<boolean>;
   /**
+   * Told about every appended event, subscribed or not — it decides.
+   *
+   * On the loop's existing subscription rather than a second one: a notifier
+   * with its own connection would be another session-mode connection held open
+   * for the life of the daemon, for something that is already being read.
+   */
+  notify?: (event: import("@escapement/core").Envelope) => Promise<void>;
+  /**
    * How often to sweep for work nothing announced. `0` disables it, which is
    * what a test wants and what a machine with a reachable webhook can afford.
    */
@@ -176,6 +184,10 @@ export function createWorkLoop(options: WorkLoopOptions): WorkLoop {
         name: "escapement-daemon",
         ...(options.url === undefined ? {} : { url: options.url }),
         onEvent: (event) => {
+          // Before the trigger check: the events worth interrupting somebody
+          // for are mostly *not* the ones that wake the conductor. A task being
+          // blocked is both; a run asking a question is only the first.
+          void options.notify?.(event);
           if (!triggers.has(event.type)) return;
           void pump("completion");
         },
