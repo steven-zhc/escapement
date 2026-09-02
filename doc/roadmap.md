@@ -132,12 +132,24 @@ whether it would have made that visible.
 | **2a** | The minimum runnable daemon: one lock, the projection follower, `TaskView`, the UI reading it · **built** | An issue goes queue → landed and the card moves on its own, with nobody running a command — *the pieces are verified; the full loop has not been run once end to end* |
 | **2b** | Control and liveness: pause / resume / run-now through the log, `daemon_status` heartbeat · **done** | The board can stop the daemon taking work, and always says whether it is up |
 | **2c** | Robustness: attempt backoff, `Reconciled` at startup, webhooks · **done** | A failed ticket does not re-run in a loop, and a crash leaves nothing stuck |
-| **2d** | Everything deferred on purpose: caching, retention, notifications, the outbox | — |
+| **2d** | The outbox, labels and comments, notifications · **done** | Nothing that leaves the machine can vanish without a record |
 
 Stage 2a is the bar for "the model is running". Nothing that is an optimisation
 belongs before it.
 
-**Status, 2026-09-01.** 2a, 2b and 2c are built; 314 tests. What has *not*
+**Status, 2026-09-01.** 2a, 2b, 2c and 2d are built; 327 tests.
+
+Two items filed under 2d turned out to need nothing. **Queue caching** is how
+`syncQueued` already works — the conductor asks GitHub and the board reads the
+table, so no page render ever calls the API. **Retention** is already a
+parameter on `readTasks`, because 0012 put it in the query rather than the
+projection. Structured logging was not done and is not tracked; nothing has
+needed it yet.
+
+What was cut from #25 is worth naming: labels are written when a task changes
+state, but not *reconciled*. Deleting every `escapement:*` label by hand and
+restarting would not restore them, which the issue asked for. That needs a
+periodic sweep comparing GitHub against `task_view`. What has *not*
 happened is one uninterrupted queue-to-landed run with nobody typing a command —
 every piece of it is verified separately and the whole has not been watched
 once, which is a different claim and the phase is not done until it is made.
