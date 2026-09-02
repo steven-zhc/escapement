@@ -13,8 +13,11 @@
  * the old system approval was a label, and a label survives any amount of
  * rewriting.
  *
- * Only `process` is implemented here. `agent`, `policy` and `human` are Phase 2
- * and follow this shape: the pipeline, the events and `onSha` do not change.
+ * All four are implemented. `process` and `human` need nothing from the caller;
+ * `agent` needs a reviewer and `policy` needs the diff's file list, and
+ * `run-once` supplies both. A kind whose dependency is missing is refused by
+ * name rather than skipped — see `from-recipe.ts`. The pipeline, the events and
+ * `onSha` are the same for all four.
  */
 import type { GateSpec } from "@escapement/config";
 import type { PayloadOf } from "@escapement/core";

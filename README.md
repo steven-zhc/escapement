@@ -186,6 +186,83 @@ recipe governing a run is read from `origin/<base>`, never from the agent's
 branch — so an agent that edits it changes nothing about the run in flight. See
 [ADR 0005](doc/decisions/0005-config-in-target-repo.md).
 
+### Guard, gate and policy are three different questions
+
+They get confused because all three can stop a run. They act at different
+moments, on different subjects, and only one of them is configured in the
+managed repository.
+
+| | Asks | About | When | Where it is configured |
+|---|---|---|---|---|
+| **guard** | may the agent make *this tool call*? | one tool call | during the run, per call | Escapement, plus `deny` additions from the recipe |
+| **gate** | is *this commit* acceptable? | one commit (`onSha`) | after the agent stops, before the merge | the recipe's `gates:` |
+| **policy** | is *this recipe* allowed to describe this run? | the recipe itself | before the run starts | Escapement's log, `esc add` |
+
+The order is guard → gate → policy in *narrowness*, and policy → guard → gate in
+*time*: policy is checked first because it decides whether the recipe may be
+honoured at all.
+
+**None of the three is a security boundary.** Both runtimes' `PreToolUse` does
+command pattern matching, and a model can write a script and run it to step
+around a pattern. The real boundaries are the filtered environment, the isolated
+worktree and a runtime sandbox where one exists
+([ADR 0007](doc/decisions/0007-dual-runtime.md)). What these three give you is
+policy enforcement and total observability.
+
+#### The eight guard rules
+
+Every decision — allow or deny — is a `GuardTripped` on the run's stream, which
+is what the `guard_trips` projection exists to make tunable. The old loop fired
+132 blocks across 77% of its runs, all to a stderr nobody parsed, and not one
+pattern was ever tuned because there was no way to know which were firing.
+
+| Rule | Denies | Because |
+|---|---|---|
+| `production-host` | a command naming a production host | an agent must never reach production; matched by host *segment*, not substring, so `reproducible.dev.example.com` is not a false positive |
+| `executed-ddl` | DDL run as a command | schema changes belong in a reviewed migration file — admin #117 was a migration applied by hand |
+| `db-push` | `prisma db push` | changes a schema with no migration and no review |
+| `pr-merge` | merging a PR | merging is the integrator's job, under the merge lane's advisory lock |
+| `push-to-base` | pushing to the base branch | the agent pushes `agent/*`; the base is only ever written by the integrator |
+| `force-push` | `--force` | rewrites history that gate verdicts were made against |
+| `recursive-delete` | `rm -rf` outside the worktree | unrecoverable on a path the worktree does not own |
+| `read-dotenv` | reading `.env` | it holds values the agent is deliberately not given; `.env.local` is the one it is |
+
+A recipe may add rules through `deny`. It cannot remove any of these.
+
+#### The four gate kinds
+
+One primitive: **a named check that produces a verdict about a specific
+commit.** `passed`, `failed`, or `needs-approval` — the third is not a flavour
+of failure, it means nothing is wrong and nothing may proceed until a person
+says so.
+
+| Kind | Verdict comes from | Needs |
+|---|---|---|
+| `process` | a command's exit code (`run:`) | nothing |
+| `agent` | a cold reviewer reading the diff | a reviewer runtime |
+| `policy` | globs in `watch:` matching the diff's file list, then `request-approval` or `fail` | the diff's file list |
+| `human` | a person, later, on the same stream | nothing |
+
+`onSha` is the load-bearing part: a verdict is about a diff, so a force-push
+invalidates it by arithmetic rather than by anybody noticing. In the old system
+approval was a label, and a label survives any amount of rewriting.
+
+#### What a policy holds
+
+Four fields, and the rule over them is one sentence: **a recipe may add
+strictness; it can never remove it.**
+
+| Field | Meaning | A recipe that conflicts |
+|---|---|---|
+| `tier` | containment floor — `open` < `guarded` < `sandboxed` | asking for a lower tier is refused |
+| `requiredGates` | gate names the recipe must declare | omitting one is refused |
+| `approvers` | who may answer a `needs-approval` | — |
+| `concurrent` | how many runs this project may have at once | — |
+
+Conflicts are *returned*, not thrown one at a time, so `esc doctor` reports all
+of them at once — fixing one only to be told about the next is the experience
+this avoids.
+
 ### What one run actually does
 
 `esc run nextloom-ai-admin --issue 120`, end to end — and the same eight steps
@@ -530,13 +607,11 @@ runtime. It resolves to the same run as spelling all of it out, and hashes the
 same — a preset's *name* is not part of what a run does, so it is not part of
 the hash.
 
-Only `process` gates run today. A recipe naming an `agent`, `policy` or `human`
-gate is **refused**, naming the issue that implements it
-([#18](https://github.com/steven-zhc/escapement/issues/18),
-[#19](https://github.com/steven-zhc/escapement/issues/19),
-[#20](https://github.com/steven-zhc/escapement/issues/20)) — a pipeline that
-silently skipped a human approval would put a green board on a change nobody
-approved.
+All four gate kinds run. `process` and `human` need nothing from the caller;
+`agent` needs a reviewer and `policy` needs the diff's file list, and `run-once`
+supplies both. A recipe naming a kind whose dependency is missing is **refused**
+by name rather than skipped — a pipeline that silently dropped a human approval
+would put a green board on a change nobody approved.
 
 ### 2. Register it
 
