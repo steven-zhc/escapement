@@ -41,6 +41,13 @@
  * transition, which is how #35 came to carry `agent:blocked` and `agent:review`
  * at once with nothing able to notice. A state that is computed and then
  * assigned cannot hold two contradictory values.
+ *
+ * `labelsFor` returns *only* Escapement's own labels, and the union with
+ * whatever else is on the issue is taken in the deliverer (`apps/cli`), which
+ * is the only layer that can see GitHub's current state. It has to be there:
+ * a projection must be deterministic, and what else is on an issue is not in
+ * the log. That was written as an assumption here before anything honoured it,
+ * and the first outbox drain duly stripped `enhancement` off three issues.
  */
 import type { PayloadOf } from "@escapement/core";
 import { databaseUrl } from "@escapement/env";

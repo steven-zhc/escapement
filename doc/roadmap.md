@@ -137,7 +137,13 @@ whether it would have made that visible.
 Stage 2a is the bar for "the model is running". Nothing that is an optimisation
 belongs before it.
 
-**Status, 2026-09-01.** 2a, 2b, 2c and 2d are built; 327 tests.
+**Status, 2026-09-02.** 2a, 2b, 2c and 2d are built, and **2a is verified**:
+admin #156 went queue → landed at `06e8bbe` (15 turns, $0.83) from one
+`esc now`, with no command issued after it, and the completion event drove the
+next pass by itself. See `doc/experiments/006-the-loop-closes-unattended.md`,
+including the two defects the run found that no unit test had — `esc now` not
+running the issue it named, and the outbox deleting every label it did not put
+there.
 
 Two items filed under 2d turned out to need nothing. **Queue caching** is how
 `syncQueued` already works — the conductor asks GitHub and the board reads the
