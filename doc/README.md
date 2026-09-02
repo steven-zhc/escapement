@@ -27,6 +27,7 @@ Three kinds of thing live here, and the distinction matters.
 | [0012](decisions/0012-one-task-view.md) | One `TaskView`, and the queue leaves the log | accepted |
 | [0013](decisions/0013-daemon-hosts-the-work.md) | The daemon holds the work; the UI controls it | accepted |
 | [0014](decisions/0014-one-loop-one-log.md) | One loop, one log; everything else is a projection or a subscriber | accepted |
+| [0015](decisions/0015-five-gates-and-two-extensions.md) | Five gates, and the two ways a plugin may extend the loop | accepted |
 
 ## Experiments
 
@@ -39,15 +40,16 @@ Three kinds of thing live here, and the distinction matters.
 
 ## Open
 
-- **How much of the vocabulary survives [ADR 0014](decisions/0014-one-loop-one-log.md).**
-  The framing is agreed: one loop, one log, everything else a projection or a
-  subscriber. The subtraction it implies is argued but **not decided** —
-  `concurrent` is never compared against anything, `approvers` is `[]` which
-  short-circuits to "anyone", `agent` and `policy` gate kinds have never run
-  against a real repository, and `sandboxed` is a tier no runtime provides. The
-  one thing the ADR argues must survive is a declaration of what is *required*,
-  because a log cannot record what should have happened and did not. `tier` is
-  enforced and stays.
+- **[ADR 0015](decisions/0015-five-gates-and-two-extensions.md) is designed and
+  not built.** Five fixed gate points, plugins that add actions to them or
+  subscribe to events, and no `policy` concept. Nothing in the code has moved
+  yet. In implementation order: close the issue at `end` (nothing does it today,
+  and a landed issue on GitHub is indistinguishable from an untouched one), then
+  the board's four states, then the gate refactor itself.
+- **The condition 0015 rests on is not built either.** An unconfigured gate has
+  to render as `skipped` on the board and in `esc status`, never be omitted. If
+  that is not done, the whole design degrades into the plugin free-for-all
+  [0014](decisions/0014-one-loop-one-log.md) rejected.
 - **Phase 1's exit criterion is met** (admin #155 and #120 landed on
   2026-09-01) and **2a's is too** (#156, 2026-09-02, unattended). What has *not*
   been proven: more than one project, a queue deeper than one item, a run with

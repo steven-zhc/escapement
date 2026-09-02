@@ -87,6 +87,11 @@ were ever removed. All three labels were restored by hand.
   right is undecided, not implemented and forgotten.
 - **The board was not watched during the run.** The card's movement is inferred
   from `task_view` being the board's only source, not from having looked at it.
-- **The 12 backlog deliveries** at startup were the outbox replaying months of
-  log against GitHub for the first time. Harmless here, but a projection that
-  can re-send on first build is worth knowing about before a bigger log.
+- **The 12 backlog deliveries** at startup were a genuine first-time backlog:
+  those rows had never been delivered, because the outbox worker did not exist
+  when their events were appended. This was first written up here as a re-send
+  hazard, which was **wrong** — two independent things prevent one. The table is
+  never dropped (`reset()` is a no-op, the contract owns it), so `delivered_at`
+  survives a rebuild; and even if it were dropped, `OutboxDelivered` is in the
+  log, so a replay re-folds delivery state. A snapshot would not help with this
+  either: what prevents double-posting is that delivery is itself an event.
