@@ -326,26 +326,25 @@ details[open] > summary::before { content: "▾"; }
 
 .detail .mono { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
 
-/* Guard trips. 132 of these were invisible in the old loop; the command is
-   stored already redacted and is never re-derived for display. */
-.trips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
-.trips li {
+/* The five gate points. Every one is listed, including the empty ones — a
+   point that is merely omitted looks exactly like one that was configured and
+   silently did not run, and only the second is a bug (ADR 0016 §4). */
+.points { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.point {
   display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 0.6rem;
+  grid-template-columns: 7rem 1fr;
+  gap: 0.75rem;
   align-items: baseline;
-  padding: 0.5rem 0.7rem;
+  padding: 0.45rem 0.7rem;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 3px;
 }
-.trips code {
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  color: var(--ink);
-  overflow-x: auto;
-  white-space: pre;
-}
+/* Present but quiet: it should read as "nothing here, deliberately" rather
+   than as an error or as absence. */
+.point.skipped { opacity: 0.62; }
+.point .name { color: var(--muted); }
+.point .actions { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
 
 /* The history. Every summary above it is an interpretation; this is what
    happened, in order, with who did it. */
@@ -374,7 +373,7 @@ details[open] > summary::before { content: "▾"; }
 
 @media (max-width: 46rem) {
   .history li { grid-template-columns: 1fr; gap: 0.1rem; padding: 0.5rem 0; }
-  .trips li { grid-template-columns: 1fr; }
+  .point { grid-template-columns: 1fr; }
 }
 
 /* The card title is the link to all of the above. The whole title, because a

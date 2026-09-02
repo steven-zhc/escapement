@@ -11,7 +11,7 @@
  * rather than a reducer's.
  */
 import { eventStore } from "@escapement/store";
-import type { Envelope } from "@escapement/core";
+import { GATE_POINTS, type Envelope } from "@escapement/core";
 
 export interface Finding {
   file: string;
@@ -34,12 +34,31 @@ export interface GateVerdict {
   findings: Finding[];
 }
 
+/**
+ * One of the five points, and what happened there.
+ *
+ * `skipped` is a first-class state and not an absence. ADR 0016 §4 rests on it:
+ * a gate nobody configured does not run, and that is the user's decision — but
+ * it has to be *shown*, because a point that is merely omitted is
+ * indistinguishable from one that was configured and silently did not run. That
+ * second case is Escapement's bug, and this is where it becomes visible.
+ */
+export interface PointView {
+  point: string;
+  /** Empty when nothing was configured. */
+  planned: string[];
+  verdicts: GateVerdict[];
+  skipped: boolean;
+}
+
 export interface TaskDetail {
   taskId: string;
   runId: string | null;
   headSha: string | null;
   baseSha: string | null;
   gates: GateVerdict[];
+  /** All five, in loop order, including the ones nothing was configured at. */
+  points: PointView[];
   /** Everything, in order, for the question a summary did not anticipate. */
   history: { at: string; type: string; actor: string; summary: string }[];
 }
@@ -141,5 +160,18 @@ export async function loadTask(taskId: string): Promise<TaskDetail | null> {
       summary: summarise(e),
     }));
 
-  return { taskId, runId, headSha, baseSha, gates: [...gates.values()], history };
+  // The plan the conductor wrote down when the run started. Without it the page
+  // could only show points that reported, which is exactly the omission ADR
+  // 0016 §4 forbids.
+  const resolved = run.find((e) => e.type === "GatesResolved");
+  const plan = (resolved?.data as { points?: { gate: string; actions: string[] }[] } | undefined)?.points;
+
+  const all = [...gates.values()];
+  const points: PointView[] = GATE_POINTS.map((point) => {
+    const planned = plan?.find((p) => p.gate === point)?.actions ?? [];
+    const verdicts = all.filter((g) => g.gate.startsWith(`${point}:`));
+    return { point, planned, verdicts, skipped: planned.length === 0 && verdicts.length === 0 };
+  });
+
+  return { taskId, runId, headSha, baseSha, gates: all, points, history };
 }

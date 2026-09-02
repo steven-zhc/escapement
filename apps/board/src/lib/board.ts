@@ -16,7 +16,15 @@
 // business compiling.
 import { readTasks, type TaskCard } from "@escapement/conductor/task-view";
 
-export type ColumnId = "queued" | "running" | "gates" | "waiting" | "landed";
+/**
+ * Four, not five. `gates` folded into `running` (ADR 0016 §8).
+ *
+ * From an operator's seat "the agent is working" and "the build is running" are
+ * the same fact — the machine is busy and you are not needed — so two lanes for
+ * them made the board wider without making it say more. `waiting` is the lane
+ * the board exists for, and keeping it distinct is the whole point.
+ */
+export type ColumnId = "queued" | "running" | "waiting" | "landed";
 
 export interface BoardCard {
   taskId: string;
@@ -57,7 +65,6 @@ export interface BoardColumn {
 export const COLUMNS: { id: ColumnId; label: string }[] = [
   { id: "queued", label: "Queued" },
   { id: "running", label: "Running" },
-  { id: "gates", label: "Gates" },
   // Its own column rather than a label, because it is where the queue actually
   // stalls: 45 items and growing against zero processed.
   { id: "waiting", label: "Waiting on you" },
@@ -68,7 +75,8 @@ function toCard(t: TaskCard): BoardCard {
   return {
     taskId: t.taskId,
     project: t.project,
-    column: t.state,
+    // `gates` is a task state and no longer a lane; it belongs with `running`.
+    column: t.state === "gates" ? "running" : t.state,
     ref: t.issue,
     kind: t.kind,
     title: t.title,

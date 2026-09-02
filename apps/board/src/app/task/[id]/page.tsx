@@ -43,6 +43,35 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             failure scenarios, and the diff. If you have to open GitHub to
             decide, nothing changed. */}
         <section>
+          <h2>Gates</h2>
+          {/* All five, always — including the ones nothing was configured at.
+              A point that is merely omitted looks exactly like a point that was
+              configured and silently did not run, and only one of those is our
+              bug (ADR 0016 §4). */}
+          <ol className="points">
+            {task.points.map((p) => (
+              <li key={p.point} className={p.skipped ? "point skipped" : "point"}>
+                <span className="mono name">{p.point}</span>
+                {p.skipped ? (
+                  <span className="pill">skipped</span>
+                ) : (
+                  <span className="actions">
+                    {p.planned.length > 0 ? p.planned.join(", ") : "\u2014"}
+                    {p.planned.length > p.verdicts.length ? (
+                      // Planned but no verdict. Either it is still running, or
+                      // it did not run — and the second is the one worth seeing.
+                      <span className="pill sig" title="planned, no verdict yet">
+                        {p.planned.length - p.verdicts.length} pending
+                      </span>
+                    ) : null}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section>
           <h2>Verdicts</h2>
           {task.gates.length === 0 ? (
             <p className="empty">No gate has reported yet.</p>

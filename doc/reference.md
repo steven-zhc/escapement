@@ -10,12 +10,12 @@ examples instead of pretending to be exhaustive.
 **Counted 2026-09-02.**
 
 > **This describes the code as it is, not [ADR 0016](decisions/0016-the-settled-model.md).**
-> **Steps 3a–3d have landed** and is reflected below: the guard is gone, and with it
+> **Steps 3a–3e have landed** and is reflected below: the guard is gone, and with it
 > `GuardTripped`, the `guard_trips` projection and the `--no-guard` flag; and the
 > policy concept is gone, with `tier` now the recipe's; and gates are five fixed
-> *points* rather than four *kinds*. and the `end` point closes issues. Still ahead: the board's four
-> states with `skipped` rendered (3e), and folding `prepare` into the `prepared`
-> point, which was split out of 3c. This file is updated as each step lands, never ahead of it. A
+> *points* rather than four *kinds*. and the `end` point closes issues. The board is four lanes with every gate point rendered.
+> Still ahead: folding `prepare` into the `prepared` point, split out of 3c, and
+> a real run on the new model. This file is updated as each step lands, never ahead of it. A
 > reference that documents intent instead of behaviour is the defect this
 > repository hit four times on 2026-09-02, and it is the one thing this file
 > exists not to do.
@@ -81,11 +81,19 @@ Source: `PROJECTIONS` in `apps/cli/src/esc.ts`.
 | `task_view` | what is the current state of every task the board shows | yes — `create`/`reset` build and drop it, along with `task_view_run` |
 | `outbox` | what still has to be said to GitHub | **no** — the contract owns `outbox`, so `create`/`reset` are no-ops. Dropping it would take it out from under `db verify`. |
 
-## task state — 5
+## task state — 5, board lane — 4
 
 Source: `TaskState` in `packages/conductor/src/task-view.ts:50`.
 
 `queued` · `running` · `gates` · `waiting` · `landed`
+
+**The board shows four**: `gates` folds into `running` (ADR 0016 §8). From an
+operator's seat "the agent is working" and "the build is running" are the same
+fact — the machine is busy and you are not needed. `waiting` is the lane the
+board exists for, and it stays its own.
+
+The state survives because it is a real distinction *in the log*; only the
+column is merged.
 
 `queued` is the only one not driven by an event — it comes from GitHub, because
 Escapement never decided which issues exist ([ADR 0012](decisions/0012-one-task-view.md)).
@@ -242,6 +250,18 @@ Everything that leaves this machine and is not git. Source:
 `OutboxKind` in `packages/conductor/src/outbox.ts:74`.
 
 `issue-comment` · `issue-labels` · `issue-close`
+
+### where `skipped` is rendered
+
+The task page lists **all five points**, always, marking an empty one `skipped`
+rather than leaving it out — `PointView` in `apps/board/src/lib/task.ts`, built
+by folding `GatesResolved` against the verdicts that followed. A point with more
+planned actions than verdicts shows a `pending` count, which is where
+"configured but did not run" becomes visible.
+
+`esc add` prints the same five at onboarding. Neither surface omits a point.
+
+## outbox, continued
 
 `issue-close` comes from `EndActionsResolved`, which is how a recipe's `end`
 plan reaches a projection. The conductor reads the recipe and writes down what

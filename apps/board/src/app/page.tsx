@@ -33,7 +33,7 @@ function accent(card: BoardCard): string {
   if (card.gatesFailed > 0) return "a-fail";
   if (card.column === "waiting") return "a-sig";
   if (card.column === "landed") return "a-pass";
-  if (card.column === "running" || card.column === "gates") return "a-run";
+  if (card.column === "running") return "a-run";
   return "";
 }
 
