@@ -275,6 +275,27 @@ describe("projection runner", () => {
       },
     };
 
+    // Start it just behind its own two events rather than at zero.
+    //
+    // `start()` registers a checkpoint with `on conflict do nothing`, so a row
+    // put down here survives. Without it the runner catches up from the
+    // beginning of the log, and this test asserted a property of the log's
+    // *length* without saying so: with fewer than `batchSize` events before the
+    // poison, nothing commits and the table stays empty — with more, an earlier
+    // batch commits legitimately and the assertion below reads 1000 rows and
+    // calls the runner broken. That is what it did once the shared test log
+    // grew past a thousand events.
+    const base = written[0].seq - 1n;
+    await direct((c) =>
+      // Upsert: the row outlives the test run, and the base is different every
+      // time because the log has grown.
+      c.query(
+        `insert into checkpoints (name, last_seq, updated_at) values ($1, $2, now())
+           on conflict (name) do update set last_seq = excluded.last_seq, updated_at = now()`,
+        [boom.name, base.toString()],
+      ),
+    );
+
     const runner = track(
       createProjectionRunner({ projection: boom, store, batchSize: 1_000, onError: () => {} }),
     );
@@ -292,11 +313,10 @@ describe("projection runner", () => {
     const rows = await direct((c) => c.query("select seq from esc_test_boom").then((r) => r.rowCount));
     expect(rows).toBe(0);
 
-    // Checkpoint intact means: still at zero. `start()` registers the row so a
-    // projection with nothing to do is distinguishable from one nobody ran, but
-    // it never advances past an event the projection refused.
+    // Checkpoint intact means: still where it started. It never advances past an
+    // event the projection refused.
     const lag = await projectionLag();
-    expect(lag.find((p) => p.name === "esc_test_boom")?.lastSeq).toBe(0n);
+    expect(lag.find((p) => p.name === "esc_test_boom")?.lastSeq).toBe(base);
     expect(written).toHaveLength(2);
   });
 

@@ -103,7 +103,7 @@ export const taskViewProjection: Projection = {
     await ctx.query("create index if not exists task_view_closed_idx on task_view (closed_at)");
 
     // Which run belongs to which task. Run events arrive on their own stream and
-    // name the task only at PreparationStarted or RunStarted.
+    // name the task only at WorkItemClaimed or RunStarted.
     await ctx.query(`
       create table if not exists task_view_run (
         run_id  text primary key,
@@ -216,32 +216,6 @@ export const taskViewProjection: Projection = {
         }
 
         // ---- the run's stream ----
-
-        /**
-         * The card moves to `running` here rather than at `RunStarted`: a
-         * ten-minute install is work in flight, and a card sitting in `queued`
-         * through it says nothing is happening while something is.
-         */
-        case "PreparationStarted": {
-          const d = event.data as PayloadOf<"PreparationStarted">;
-          await linkRun(ctx, event.streamId, d.workItemId);
-          await viaRun(ctx, event.streamId, seq, at, {
-            state: "running",
-            run_id: event.streamId,
-          });
-          break;
-        }
-
-        case "PreparationFailed": {
-          const d = event.data as PayloadOf<"PreparationFailed">;
-          await viaRun(ctx, event.streamId, seq, at, {
-            state: "waiting",
-            // Not "the run failed": no agent ever ran. The worktree could not be
-            // made workable, which is a different problem with a different fix.
-            note: `${d.timedOut ? "prepare timed out" : "prepare failed"} at ${d.step}`,
-          });
-          break;
-        }
 
         case "RunStarted": {
           const d = event.data as PayloadOf<"RunStarted">;

@@ -92,6 +92,12 @@ export interface ProjectionRunner {
    *
    * This is what makes a projection's shape free to change: it costs a rebuild,
    * not a migration.
+   *
+   * It is not free, and the price is the *log's* length rather than the
+   * projection's: a handler issues its own statements per event, so a replay is
+   * O(events) round trips. Measured 2026-09-02 against the test database:
+   * 1,184 events through `outboxProjection` took 59.4s, about 50ms each. Worth
+   * knowing before putting one inside anything with a deadline.
    */
   rebuild(): Promise<void>;
 

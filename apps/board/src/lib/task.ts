@@ -90,10 +90,6 @@ function summarise(event: Envelope): string {
       return `${String(d["kind"])}: ${String(d["detail"] ?? "")}`;
     case "RunProducedDiff":
       return `${String(d["files"])} files +${String(d["insertions"])} −${String(d["deletions"])}`;
-    case "PreparationPassed":
-      return `${String(d["step"])} in ${(Number(d["durationMs"] ?? 0) / 1000).toFixed(1)}s`;
-    case "PreparationFailed":
-      return `${String(d["step"])}: ${String(d["evidence"] ?? "").slice(0, 120)}`;
     default: {
       const gate = d["gate"];
       if (typeof gate === "string") return gate;

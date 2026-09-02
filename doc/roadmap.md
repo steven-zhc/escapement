@@ -206,7 +206,7 @@ data backfill for any of it. That licence is not available again.
 | **3a** ✓ | **Delete the guard** — `guard.ts`, the eight rules, `GuardTripped`, `guard_trips`, `smokeTestFailClosed`, `--no-guard`, the `PreToolUse` wiring. Add the `doctor` check that reports live settings sources | Escapement restricts no tool call, seven hooks still work, and `esc doctor` says which settings sources are in scope for a run |
 | **3b** ✓ | Delete `policy.ts`, `policyConflicts`, `ProjectPolicySet`, `requiredGates`, `approvers`, `concurrent`; `tier` moves to `runtime.tier` | `esc status` no longer has a policy line, and nothing refuses a recipe for being too permissive |
 | **3c** ✓ | Five gate points; `GatesResolved`; the four kinds become actions · **done** `d50a7d9` | A run appends one `GatesResolved` naming all five points, with `[]` where nothing is configured |
-| **3c′** | Fold `prepare` into the `prepared` point — split out of 3c, because it deletes three events and reroutes the board | `PreparationStarted/Passed/Failed` are gone and the install step is declared at `gates.prepared` |
+| **3c′** ✓ | Fold `prepare` into the `prepared` point — split out of 3c, because it deletes three events and reroutes the board | `PreparationStarted/Passed/Failed` are gone and the install step is declared at `gates.prepared` |
 | **3d** ✓ | The `end` gate; closing the issue as an action; `labelsFor` out of the outbox | A landed issue is closed, and what closed it is named in the recipe |
 | **3e** ✓ | Board: four states, five points, `skipped` rendered | An unconfigured gate is **visible as skipped**, never omitted — 0016 §4 |
 | **3f** ✓ | Re-run one admin ticket end to end | The loop still closes unattended, on the new model |

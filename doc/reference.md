@@ -9,20 +9,20 @@ examples instead of pretending to be exhaustive.
 
 **Counted 2026-09-02.**
 
-> **This describes the code as it is, not [ADR 0016](decisions/0016-the-settled-model.md).**
-> **Steps 3a–3e have landed** and is reflected below: the guard is gone, and with it
-> `GuardTripped`, the `guard_trips` projection and the `--no-guard` flag; and the
-> policy concept is gone, with `tier` now the recipe's; and gates are five fixed
-> *points* rather than four *kinds*. and the `end` point closes issues. The board is four lanes with every gate point rendered.
-> Still ahead: folding `prepare` into the `prepared` point, split out of 3c, and
-> a real run on the new model. This file is updated as each step lands, never ahead of it. A
+> **This describes the code as it is.** [ADR 0016](decisions/0016-the-settled-model.md)
+> has landed in full: the guard is gone, and with it `GuardTripped`, the
+> `guard_trips` projection and the `--no-guard` flag; the policy concept is gone,
+> with `tier` now the recipe's; gates are five fixed *points* rather than four
+> *kinds*; the `end` point closes issues; the board is four lanes with every gate
+> point rendered; and `prepare` is no longer a stage of its own — it is whatever
+> a recipe puts at the `prepared` point. This file is updated as each step lands, never ahead of it. A
 > reference that documents intent instead of behaviour is the defect this
 > repository hit four times on 2026-09-02, and it is the one thing this file
 > exists not to do.
 
 ---
 
-## event — 41 types
+## event — 38 types
 
 One fact that already happened, past tense. Never edited, never deleted.
 Source: the registry at the bottom of `packages/core/src/events.ts`.
@@ -31,7 +31,6 @@ Source: the registry at the bottom of `packages/core/src/events.ts`.
 |---|---|
 | work item (7) | `WorkItemDiscovered` `WorkItemClaimed` `WorkItemReleased` `WorkItemBlocked` `WorkItemUnblocked` `WorkItemLinked` `WorkItemLanded` |
 | dispatch (1) | `DispatchRefused` |
-| preparation (3) | `PreparationStarted` `PreparationPassed` `PreparationFailed` |
 | run (9) | `RunStarted` `RunPrompted` `RunTouchedFile` `RunContextExhausted` `RunAwaitingInput` `RunProducedDiff` `RunProposedCompletion` `RunFinished` `RunFailed` |
 | gate (7) | `GatesResolved` `EndActionsResolved` `GateRequested` `GateStarted` `GatePassed` `GateFailed` `GateWaived` |
 | approval (3) | `ApprovalRequested` `ApprovalGranted` `ApprovalRevoked` |
@@ -317,8 +316,8 @@ passes.
 
 Source: `packages/config/src/presets.ts`.
 
-`pnpm-workspace` — a `pnpm install --frozen-lockfile` prepare step and a
-`build` process gate. A preset's *name* is not part of the recipe hash, because
+`pnpm-workspace` — a `pnpm install --frozen-lockfile` action at `prepared` and a
+`build` action at `diff`. A preset's *name* is not part of the recipe hash, because
 it is not part of what a run does.
 
 ## package — 9, plus 2 apps

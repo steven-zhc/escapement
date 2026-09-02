@@ -138,50 +138,8 @@ export const DispatchRefused = z.object({
 
 // --------------------------------------------------------------- prepare ----
 
-/**
- * Getting the worktree into a state the agent can work in — installing
- * dependencies, mostly — before the agent starts.
- *
- * These exist as their own events rather than as a `RunFailed` kind because the
- * run genuinely did not fail: it never began. Recording it as a failed run would
- * put "the agent broke it" on a board where no agent ever ran, which is the
- * exact category of lie this system was built to stop telling.
- *
- * `git worktree add` copies no `node_modules`. Without this stage the agent is
- * handed a checkout where it cannot run the repository's own tests, cannot
- * reproduce a failure and cannot check its own work — and the first thing that
- * says so is a gate failing at the end, after the money is spent.
- *
- * The command is recorded in full. It was written by a person and committed to
- * the repository under a hash that is already in the log — unlike anything an
- * agent composes, which is why this needs no redaction.
- */
-export const PreparationStarted = z.object({
-  /**
-   * Carried here as well as on `RunStarted`, because this is the first event on
-   * a run's stream and the board resolves a card through the run. Without it a
-   * ten-minute install would leave the card sitting in `queued`, and a run that
-   * refused at prepare would never appear at all.
-   */
-  workItemId: z.string(),
-  step: z.string(),
-  run: z.string(),
-});
 
-export const PreparationPassed = z.object({
-  step: z.string(),
-  durationMs: z.number().int(),
-});
 
-export const PreparationFailed = z.object({
-  step: z.string(),
-  /** The log tail. A refusal with no output is a link to somewhere else. */
-  evidence: z.string(),
-  /** A step that ran out of time and one that ran and refused are different
-   *  problems with different fixes. */
-  timedOut: z.boolean(),
-  durationMs: z.number().int(),
-});
 
 // ------------------------------------------------------------------- run ----
 
@@ -501,9 +459,6 @@ export const EVENTS = {
   WorkItemLinked,
   WorkItemLanded,
   DispatchRefused,
-  PreparationStarted,
-  PreparationPassed,
-  PreparationFailed,
   RunStarted,
   RunPrompted,
   RunTouchedFile,

@@ -326,20 +326,25 @@ git -c user.name=agent -c user.email=a@example.invalid commit -qm 'wrong change'
   }, 120_000);
 
   /**
-   * The point of the stage, stated as a test: whatever prepare does, the agent
-   * is looking at afterwards. Before it existed the agent got a worktree with no
-   * node_modules and could not run the repository's own tests — it wrote blind,
-   * and nothing said so until a gate failed at the very end.
+   * The point of the `prepared` point, stated as a test: whatever runs there,
+   * the agent is looking at afterwards. Before it existed the agent got a
+   * worktree with no node_modules and could not run the repository's own tests
+   * — it wrote blind, and nothing said so until a gate failed at the very end.
    *
-   * Here prepare writes a file and the agent refuses unless it is there.
+   * This used to be a `prepare:` section of its own, with three events nothing
+   * else had (ADR 0016: one mechanism per job). It is an action at a gate point
+   * now, and the assertions moved with it: `GatePassed` at `prepared`, not
+   * `PreparationPassed`.
+   *
+   * Here the action writes a file and the agent refuses unless it is there.
    */
-  it("runs prepare before the agent, so the agent sees a worktree that works", async () => {
+  it("runs the prepared point before the agent, so the agent sees a worktree that works", async () => {
     const recipe = RECIPE.replace(
-      "source:",
-      'prepare:\n  - { name: install, run: "echo ready > .prepared", timeout: 1m }\nsource:',
+      "gates:",
+      'gates:\n  prepared:\n    - { name: install, run: "echo ready > .prepared", timeout: 1m }',
     );
     const agent = await agentThat(`
-test -f .prepared || { echo "prepare did not run before me"; exit 1; }
+test -f .prepared || { echo "the prepared point did not run before me"; exit 1; }
 mkdir -p src && echo "export const x = 1;" > src/fix.ts
 git add -A && git commit -q -m "fix the race"
 `);
@@ -352,16 +357,20 @@ git add -A && git commit -q -m "fix the race"
 
     expect(result.ok).toBe(true);
 
-    const events = (await store.read(result.runId!)).map((e) => e.type);
-    // Ordering is the assertion. Prepare finishes before the run begins.
-    expect(events.indexOf("PreparationPassed")).toBeGreaterThanOrEqual(0);
-    expect(events.indexOf("PreparationPassed")).toBeLessThan(events.indexOf("RunStarted"));
+    const events = await store.read(result.runId!);
+    const types = events.map((e) => e.type);
+    const passedPrepared = events.findIndex(
+      (e) => e.type === "GatePassed" && (e.data as { gate?: string }).gate === "prepared",
+    );
+    // Ordering is the assertion. The point finishes before the run begins.
+    expect(passedPrepared).toBeGreaterThanOrEqual(0);
+    expect(passedPrepared).toBeLessThan(types.indexOf("RunStarted"));
   }, 180_000);
 
-  it("refuses at prepare without starting the agent, and says which step", async () => {
+  it("refuses at the prepared point without starting the agent, and says which action", async () => {
     const recipe = RECIPE.replace(
-      "source:",
-      'prepare:\n  - { name: install, run: "echo could not resolve dependency; exit 1", timeout: 1m }\nsource:',
+      "gates:",
+      'gates:\n  prepared:\n    - { name: install, run: "echo could not resolve dependency; exit 1", timeout: 1m }',
     );
     // If this ever runs, the test fails loudly rather than quietly passing.
     const agent = await agentThat(`echo "the agent must not have started"; exit 1`);
@@ -380,7 +389,7 @@ git add -A && git commit -q -m "fix the race"
     expect(result.detail).toContain("could not resolve dependency");
 
     const events = (await store.read(result.runId!)).map((e) => e.type);
-    expect(events).toContain("PreparationFailed");
+    expect(events).toContain("GateFailed");
     // The whole cost argument: nothing expensive happened.
     expect(events).not.toContain("RunStarted");
 

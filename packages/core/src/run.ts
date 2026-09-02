@@ -44,7 +44,6 @@ export interface GateState {
 export type RunLifecycle =
   | { status: "pending" }
   /** The worktree is being made workable. No agent has started. */
-  | { status: "preparing"; step: string }
   | { status: "running" }
   | { status: "awaiting-input"; prompt: string }
   | { status: "gating"; headSha: string }
@@ -94,11 +93,6 @@ export interface RunState {
   /** Latest verdict per gate name, each carrying the sha it was made against. */
   gates: Readonly<Record<string, GateState>>;
 
-  /**
-   * Set when a prepare step refused, so a card can say which one and show its
-   * log. Null on every run that got as far as starting an agent.
-   */
-  preparation: { step: string; evidence: string; timedOut: boolean } | null;
 
   receipt: { exitCode: number; turns: number; durationMs: number; costUsd: number | null } | null;
 
@@ -122,7 +116,6 @@ export const emptyRun: RunState = {
   compactedAtTurns: [],
   prompts: 0,
   gates: {},
-  preparation: null,
   receipt: null,
   version: 0,
   lastSeq: null,
@@ -148,31 +141,6 @@ export function applyRun(state: RunState, event: Envelope): RunState {
   const at = { version: event.version, lastSeq: event.seq };
 
   switch (event.type) {
-    case "PreparationStarted": {
-      const d = event.data as PayloadOf<"PreparationStarted">;
-      return { ...state, ...at, lifecycle: { status: "preparing", step: d.step } };
-    }
-
-    // A step that passed leaves no mark beyond the log itself. What matters for
-    // state is which one is running and which one refused; "install succeeded"
-    // is answered by the run having gone on to start.
-    case "PreparationPassed":
-      return { ...state, ...at };
-
-    case "PreparationFailed": {
-      const d = event.data as PayloadOf<"PreparationFailed">;
-      return {
-        ...state,
-        ...at,
-        lifecycle: {
-          status: "failed",
-          kind: "prepare-failed",
-          detail: `the ${d.step} step ${d.timedOut ? "timed out" : "refused"}`,
-        },
-        preparation: { step: d.step, evidence: d.evidence, timedOut: d.timedOut },
-      };
-    }
-
     case "RunStarted": {
       const d = event.data as PayloadOf<"RunStarted">;
       return {

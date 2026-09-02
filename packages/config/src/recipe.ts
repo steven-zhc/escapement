@@ -138,17 +138,6 @@ export const Recipe = z.object({
    * invalidates it by arithmetic. A prepare step runs before the agent has
    * written anything and holds no verdict about anything.
    */
-  prepare: z
-    .array(
-      z.object({
-        name: z.string(),
-        run: z.string(),
-        /** Shorter than a gate's by default: installing is not verifying. */
-        timeout: z.string().default("10m"),
-      }),
-    )
-    .default([]),
-
   source: z.object({
     /** Also the priority order: earlier wins. */
     kinds: z.array(WorkKind).min(1),

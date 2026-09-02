@@ -722,7 +722,7 @@ trust it:
 pnpm esc run nextloom-ai-admin --issue 120 --no-merge
 ```
 
-Discovery, claim, worktree, prepare, agent, gates — then it **stops** and asks.
+Discovery, claim, worktree, the `prepared` point, agent, the remaining gates — then it **stops** and asks.
 The branch is pushed and every verdict is recorded; nothing is merged. You get:
 
 ```
@@ -847,9 +847,9 @@ Every refusal names itself. The common ones:
 | `runtime: signed in — claude-code reports not signed in` | `esc doctor` asks in the environment a *run* gets, not yours. If you are signed in and this fails, that environment is missing something the credential store needs. `/login` will not help. |
 | `no esc-hook binary at …` | `pnpm --filter @escapement/hook build`. A run without the guard must not start. |
 | `ENOENT … escapement-app.pem` | The key path is wrong. `~` and relative paths both work; relative is from this repository's root. |
-| `stopped at recipe: … policy requires …` | The recipe would weaken the run. Every conflicting clause is listed at once. |
+| `stopped at recipe: …` | The recipe did not parse, or names an action this build does not have. The message is the validation failure. |
 | `stopped at discover: owned-by-another-agent` | That issue carries an `agent:*` label. Pick one the old loop has not touched. |
-| `stopped at prepare: … the install step refused` | Dependencies did not install in a fresh worktree. Nothing expensive ran — that is the point of failing here. |
+| `stopped at prepare: the install action refused` | An action at the `prepared` point refused — usually dependencies that did not install in a fresh worktree. Nothing expensive ran; that is the point of failing here. |
 | `did not merge (stale): the card showed …` | The branch moved between reading and deciding. Reload and read it again. |
 | `a waiver needs a reason` | A waiver records who and why. Both, always. |
 | `stopped: exhausted — 1 run(s)` | The queue still has work; everything left has already been tried this pass. Not the same as `empty`. |

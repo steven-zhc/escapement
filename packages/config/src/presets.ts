@@ -16,7 +16,6 @@ import type { Recipe } from "./recipe.ts";
 /** What a preset may fill in. Everything is optional; the recipe always wins. */
 export type Preset = {
   repo?: Partial<Recipe["repo"]>;
-  prepare?: Recipe["prepare"];
   gates?: Recipe["gates"];
   runtime?: Partial<Recipe["runtime"]>;
 };
@@ -33,7 +32,7 @@ export const PRESETS: Record<string, Preset> = {
    * The lesson is in the comment as much as in the fix: a default derived from
    * a repository has to be read off that repository.
    *
-   * The install is a `prepare` step, not part of the gate. It was in the gate
+   * The install runs at the `prepared` point, not at `diff`. It was at `diff`
    * briefly, which fixed the gate and left the agent holding the same empty
    * worktree — unable to run the tests it was being asked to keep green.
    *
@@ -43,13 +42,16 @@ export const PRESETS: Record<string, Preset> = {
    */
   "pnpm-workspace": {
     repo: { submodules: true },
-    prepare: [{ name: "install", run: "pnpm install --frozen-lockfile", timeout: "10m" }],
     // Only `diff` is filled. The other four points are empty and stay empty
     // until a project says otherwise — which the board renders as `skipped`
     // rather than omitting (ADR 0016 §4).
     gates: {
       admit: [],
-      prepared: [],
+      // `git worktree add` copies no node_modules, so without this the agent is
+      // handed a checkout where it cannot run this repository's own tests. It
+      // is an action at a gate point like anything else now — there is no
+      // separate `prepare` section for it to live in.
+      prepared: [{ name: "install", run: "pnpm install --frozen-lockfile", timeout: "10m" }],
       diff: [{ name: "build", run: "pnpm typecheck && pnpm lint && pnpm test", timeout: "15m" }],
       merge: [],
       end: [],
@@ -116,7 +118,6 @@ export function applyPreset(raw: unknown): PresetApplied {
       // Arrays replace rather than concatenate, for both of these. A recipe
       // that lists its own steps means *those* steps; silently appending the
       // preset's would be a way to acquire work nobody wrote down.
-      prepare: recipe["prepare"] ?? preset.prepare,
       gates: recipe["gates"] ?? preset.gates,
     },
     preset: name,

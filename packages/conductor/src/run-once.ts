@@ -30,7 +30,6 @@ import { refreshQueue, workItemStream } from "./discover.ts";
 import { smokeTestFailClosed, writeHookWiring } from "./hook-config.ts";
 import { createHookServer } from "./hook-socket.ts";
 import { integrate } from "./integrate.ts";
-import { prepareWorktree } from "./prepare.ts";
 import { GATE_POINTS, type ProjectState } from "@escapement/core";
 import { DEFAULT_PRODUCTION_PATTERNS, type TokenSource, filterEnv, git, provisionWorktree, removeWorktree, runnableEnv, stateDir } from "./worktree.ts";
 import { spawn } from "node:child_process";
@@ -282,30 +281,41 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       return { ok: false, workItemId, runId, stage: "hook", detail: smoke.detail };
     }
 
-    // ---- 6. prepare: make the worktree workable, or refuse for free --------
-    // After the hook smoke test, which costs milliseconds — a broken hook should
-    // not take a ten-minute install to discover. Before the agent, which is the
-    // whole point: everything past here assumes the agent can run this
-    // repository's own commands, and until this stage existed that assumption
-    // was simply false.
-    const prepared = await prepareWorktree({
-      runId,
-      workItemId,
-      cwd: worktree.path,
-      env: runnableEnv(env.values),
-      steps: recipe.prepare,
-      store,
-      at: 0,
-      log,
+    // ---- 6. the `prepared` point ------------------------------------------
+    // A gate like any other now, rather than its own stage with its own three
+    // events. It runs after the hook smoke test, which costs milliseconds — a
+    // broken hook should not take a ten-minute install to discover — and before
+    // the agent, which is the whole point: everything past here assumes the
+    // agent can run this repository's own commands, and until this stage
+    // existed that assumption was simply false.
+    //
+    // `onSha` is the base: nothing has been committed yet, so the verdict is
+    // about the tree the agent is being handed.
+    const prepared = await runGatePipeline({
+      point: "prepared",
+      gates: gatesFromRecipe(recipe.gates.prepared),
+      context: {
+        runId,
+        onSha: worktree.baseSha,
+        cwd: worktree.path,
+        env: runnableEnv(env.values),
+      },
+      emit: async (event) => {
+        const at = (await store.read(runId)).length;
+        await store.append(runId, at, [
+          { type: event.type, actor: "conductor", data: parsePayload(event.type, event.data) },
+        ]);
+      },
     });
     if (!prepared.ok) {
-      await release(`prepare failed at ${prepared.step}`);
+      const which = prepared.failedAt ?? prepared.heldAt ?? "prepared";
+      await release(`prepare failed at ${which}`);
       return {
         ok: false,
         workItemId,
         runId,
         stage: "prepare",
-        detail: `the ${prepared.step} step ${prepared.timedOut ? "timed out" : "refused"}:\n${prepared.detail}`,
+        detail: `the ${which} action refused:\n${prepared.results.at(-1)?.evidence ?? ""}`,
       };
     }
 
@@ -324,7 +334,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       // ---- 7. RunStarted, then the agent --------------------------------
       // Not version 0 any more: prepare wrote first. Asserting 0 here would
       // have failed the moment a recipe declared a single prepare step.
-      await store.append(runId, prepared.version, [
+      await store.append(runId, (await store.read(runId)).length, [
         {
           type: "RunStarted",
           actor: "conductor",

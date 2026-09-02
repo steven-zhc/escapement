@@ -29,7 +29,27 @@ const task = (n: number) => {
   return id;
 };
 
+/**
+ * Fold whatever has been appended since the last time.
+ *
+ * Catch-up, not a rebuild. A rebuild replays the *whole* log, so its cost is
+ * the log's length rather than this file's: at 1,184 events one took 59.4s
+ * against the shared test database — one query per event over a remote
+ * connection — and these tests have a 60s timeout, so two of them started
+ * failing on a stopwatch rather than on anything about the outbox. Only the two
+ * tests that are actually *about* replaying use `rebuildAll` below.
+ */
 async function build(): Promise<void> {
+  const runner = createProjectionRunner({ projection: outboxProjection, store });
+  try {
+    await runner.start();
+  } finally {
+    await runner.close();
+  }
+}
+
+/** A real replay from seq 0. Costs the whole log; only use it where that is the subject. */
+async function rebuildAll(): Promise<void> {
   const runner = createProjectionRunner({ projection: outboxProjection, store });
   try {
     await runner.rebuild();
@@ -122,11 +142,13 @@ describe("the outbox", () => {
    * than written beside it.
    */
   it("still has the row after a rebuild, and still only one", async () => {
-    await build();
+    await rebuildAll();
     const rows = await mine();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.deliveredAt).toBeNull();
-  });
+    // A whole-log replay. The default 60s is the wrong budget for something
+    // whose cost is the log's length, not this test's.
+  }, 180_000);
 
   it("delivers once, and a second pass finds nothing left to do", async () => {
     // Scoped to this project throughout. The outbox is global on purpose — one
@@ -156,11 +178,13 @@ describe("the outbox", () => {
    * triggering event's seq.
    */
   it("replaying the log cannot resurrect a delivered item", async () => {
-    await build();
+    await rebuildAll();
     const after = recorder();
     await deliverOutbox({ deliverer: after, store, limit: 500 });
     expect(after.sent.filter((s) => s.includes(PROJECT))).toHaveLength(0);
-  });
+    // A whole-log replay. The default 60s is the wrong budget for something
+    // whose cost is the log's length, not this test's.
+  }, 180_000);
 
   it("computes the label set rather than adding to it", () => {
     // `--add-label` is set union, not a transition. #35 carried agent:blocked

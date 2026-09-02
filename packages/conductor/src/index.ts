@@ -90,7 +90,6 @@ export {
   type ScheduleResult,
   type StoppedBecause,
 } from "./schedule.ts";
-export { prepareWorktree, type PrepareOptions, type PrepareResult } from "./prepare.ts";
 export { approve, reject, waive, type ApproveOptions, type ApproveResult } from "./approve.ts";
 export {
   BASE_BACKOFF_MS,
