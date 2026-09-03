@@ -39,8 +39,25 @@ completion event driving the next pass by itself — 15 turns, $0.83
 ([experiment 006](doc/experiments/006-the-loop-closes-unattended.md), which
 also lists what that run did *not* prove).
 
+**Phase 3 — the settled model — is done.** 3a-3f, against
+[ADR 0016](doc/decisions/0016-the-settled-model.md): the guard is gone and
+Lingtai restricts no tool call, the policy layer is gone, and what used to be
+four gate *kinds* is five gate **points** whose actions come from the recipe. On
+2026-09-02 admin #157 and #158 both went queue to landed on the new model — 8
+turns, $0.63, 49.9s and 6 turns, $0.55, 50.8s — each with the build gate green
+and each **closed on GitHub by an action at the `end` point** rather than by a
+person ([experiment 009](doc/experiments/009-the-end-gate-closes-its-own-issue.md)).
+
+The third run of that sitting is the more useful one: 30 turns and $1.82 spent
+to produce **no commits**, refused before the gates and the work item released.
+Nothing merged, and the log says why — which is the whole point of the refusal
+being typed.
+
 **Watch it.** Nothing has run unattended for long enough to have earned trust,
-and `lingtai pause` exists because that is the honest state to be in.
+and `lingtai pause` exists because that is the honest state to be in. The log is
+56 events across ten streams; two of the three runs in it landed. `lingtai pause`
+has been used twice for real, both times because the queue offered work that had
+already been merged.
 
 See [`doc/roadmap.md`](doc/roadmap.md) for the phases and
 [`doc/README.md`](doc/README.md) for what is settled and what is open.
