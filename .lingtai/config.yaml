@@ -1,0 +1,94 @@
+# How Lingtai works on Lingtai.
+#
+# Read from origin/main, never from the branch an agent is working on. That rule
+# ([0005](../doc/decisions/0005-config-in-target-repo.md)) is what makes it safe
+# to keep this file in the repository the agent edits: an agent that changes it
+# changes nothing about the run in flight.
+#
+# It matters more here than anywhere else, because here the agent is editing the
+# conductor that is running it. Three different versions of this code are in play
+# during a run and it is worth being explicit about which is which:
+#
+#   the running conductor   ~/workspace/lingtai, modules already loaded — OLD
+#   the agent's worktree    ~/.lingtai/worktrees/lingtai/<runId>       — NEW
+#   the mirror              ~/.lingtai/repos/lingtai.git @ origin/main — BASE
+#
+# So the machinery judging the change is the old code, and the thing being
+# judged is the new code. That is the same separation GitHub Actions gets by
+# reading a workflow from the base branch, and here it is free: the process was
+# already running before the change existed.
+version: 1
+
+repo:
+  base: main
+  submodules: false
+
+source:
+  kinds: [bug, tech-debt, feature]
+
+  # `agent:hold` is on every open issue right now, deliberately. Self-hosting
+  # starts with nothing runnable and one ticket unheld at a time, because the
+  # backlog contains work no agent should take — #29 needs seven unattended days,
+  # #33 is the act of self-hosting itself.
+  exclude:
+    - blocked
+    - in-progress
+    - agent:hold
+    - agent:blocked
+    - agent:needs-schema-approval
+    - agent:review
+    - agent:wip
+
+env:
+  # The test database, and nothing else.
+  #
+  # The suite refuses to run without TEST_DATABASE_URL, and every test appends
+  # real events — so an agent needs it. What an agent must never have is
+  # DATABASE_URL: that is this system's own log, the thing it is keeping.
+  # Naming only these two is what keeps them apart.
+  allow:
+    - TEST_DATABASE_URL
+    - TEST_DIRECT_DATABASE_URL
+  # `@lingtai/env` loads `.env.local` from the workspace root, so that is where
+  # a worktree's copy has to land.
+  plantAt: .env.local
+
+gates:
+  admit: []
+
+  # `git worktree add` copies no node_modules, and this repository's own tests
+  # are what the `proposed` gate runs.
+  prepared:
+    - name: install
+      run: pnpm install --frozen-lockfile
+      timeout: 10m
+
+  proposed:
+    - name: build
+      run: pnpm typecheck && pnpm test
+      timeout: 20m
+
+  # Every merge waits for a person, with no exception written down.
+  #
+  # #31 proposed a `watch:` list over packages/conductor, store, hook, gates.
+  # A blanket hold is simpler and strictly stronger — a path list has to be kept
+  # correct, and the first thing it would miss is the file that defines it. When
+  # being asked every time becomes the annoyance rather than the point, that is
+  # the moment to narrow this, and not before.
+  merge:
+    - name: approval
+      human: Merge {branch} into main? This is Lingtai's own code.
+
+  end:
+    - name: close the ticket
+      when: landed
+      close: true
+
+runtime:
+  agent: claude-code
+  # Lower than admin's 300. A change here is meant to be small enough to read in
+  # one sitting; a run that needs hundreds of turns on this repository is a
+  # ticket that was scoped wrong, and stopping is the more useful answer.
+  limits:
+    turns: 150
+    wall: 1h
