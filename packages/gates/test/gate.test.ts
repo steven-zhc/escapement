@@ -112,7 +112,7 @@ describe("the pipeline", () => {
   it("puts onSha on every verdict", async () => {
     const { events, emit } = collector();
     await runGatePipeline({
-      point: "diff",
+      point: "proposed",
       gates: [createProcessGate({ name: "build", run: "exit 0" })],
       context,
       emit,
@@ -128,7 +128,7 @@ describe("the pipeline", () => {
   it("runs in recipe order", async () => {
     const { events, emit } = collector();
     await runGatePipeline({
-      point: "diff",
+      point: "proposed",
       gates: [
         createProcessGate({ name: "build", run: "exit 0" }),
         createProcessGate({ name: "lint", run: "exit 0" }),
@@ -142,7 +142,7 @@ describe("the pipeline", () => {
     // questions and one name could not answer both.
     const started = events.filter((e) => e.type === "GateStarted");
     expect(started.map((e) => e.data.action)).toEqual(["build", "lint"]);
-    expect(started.map((e) => e.data.gate)).toEqual(["diff", "diff"]);
+    expect(started.map((e) => e.data.gate)).toEqual(["proposed", "proposed"]);
   });
 
   /**
@@ -153,7 +153,7 @@ describe("the pipeline", () => {
   it("stops at the first failure and names what it skipped", async () => {
     const { events, emit } = collector();
     const result = await runGatePipeline({
-      point: "diff",
+      point: "proposed",
       gates: [
         createProcessGate({ name: "build", run: "exit 0" }),
         createProcessGate({ name: "lint", run: "echo nope; exit 1" }),
@@ -173,7 +173,7 @@ describe("the pipeline", () => {
   it("turns a gate that throws into a failure rather than an escaped exception", async () => {
     const { emit } = collector();
     const result = await runGatePipeline({
-      point: "diff",
+      point: "proposed",
       gates: [
         {
           name: "broken",
@@ -192,7 +192,7 @@ describe("the pipeline", () => {
 
   it("emits nothing at all for an empty pipeline", async () => {
     const { events, emit } = collector();
-    const result = await runGatePipeline({ point: "diff", gates: [], context, emit });
+    const result = await runGatePipeline({ point: "proposed", gates: [], context, emit });
     expect(result.ok).toBe(true);
     expect(events).toEqual([]);
   });

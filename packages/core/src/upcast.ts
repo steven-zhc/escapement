@@ -13,10 +13,9 @@
  * v2 payload to a v1 schema, which either fails a validation that names the
  * wrong problem or, worse, passes.
  *
- * The registry is empty today: every type is at version 1, so every chain has
- * length zero. It is here now rather than later because the first upcaster is
- * written under time pressure against real history, which is the worst moment to
- * also be designing the mechanism.
+ * It was here before it was needed, on purpose: the first upcaster is written
+ * under time pressure against real history, which is the worst moment to also be
+ * designing the mechanism.
  */
 import { type EventType, type PayloadOf, SCHEMA_VER, parsePayload } from "./events.ts";
 
@@ -25,6 +24,26 @@ export type Upcaster = (data: unknown) => unknown;
 
 /** `type → fromVersion → upcaster`. Steps must be contiguous. */
 export type UpcastRegistry = Partial<Record<EventType, Record<number, Upcaster>>>;
+
+/**
+ * 1 → 2 for every type whose payload carries a `GatePoint`: the point called
+ * `diff` is called `proposed` (ADR 0018).
+ *
+ * A pure rename, and the only one of these steps that could have been skipped
+ * by leaving the old value in the enum. It was not, because the enum is what a
+ * reader is shown: two spellings of one point would mean the board, `status`
+ * and every recipe had to know both forever, and the run that wrote `diff`
+ * would look like a different kind of run from the one that wrote `proposed`.
+ *
+ * It is written as a conditional rather than an unconditional overwrite so that
+ * a v1 event from one of the other four points is returned untouched — the
+ * upcaster's job is to move the one value that moved, not to assert what the
+ * rest were.
+ */
+const gatePointRenamed: Upcaster = (data) => {
+  const d = data as { gate?: string };
+  return d.gate === "diff" ? { ...d, gate: "proposed" } : data;
+};
 
 /**
  * Add a step here in the same commit that bumps that type's `SCHEMA_VER`, never
@@ -69,6 +88,20 @@ export const UPCASTERS: UpcastRegistry = {
      */
     1: (data) => ({ ...(data as object), title: null, kind: null }),
   },
+  GatesResolved: { 1: (data) => ({
+    ...(data as object),
+    points: ((data as { points?: { gate: string }[] }).points ?? []).map((p) =>
+      p.gate === "diff" ? { ...p, gate: "proposed" } : p,
+    ),
+  }) },
+  GateRequested: { 1: gatePointRenamed },
+  GateStarted: { 1: gatePointRenamed },
+  GatePassed: { 1: gatePointRenamed },
+  GateFailed: { 1: gatePointRenamed },
+  GateWaived: { 1: gatePointRenamed },
+  ApprovalRequested: { 1: gatePointRenamed },
+  ApprovalGranted: { 1: gatePointRenamed },
+  ApprovalRevoked: { 1: gatePointRenamed },
 };
 
 export class MissingUpcasterError extends Error {

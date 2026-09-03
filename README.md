@@ -93,7 +93,7 @@ the log; there is no timer, because Postgres notifies on every append.
 | **daemon** | The one process that holds the conductor and the projection follower. The board controls it and watches it; it never holds work ([ADR 0013](doc/decisions/0013-daemon-hosts-the-work.md)). |
 | **run** | One attempt at a work item. A work item can have several; each gets its own worktree, its own agent process and its own id. |
 | **recipe** | `.lingtai/config.yaml`, committed **in the managed repository**. Its team decides what may be picked up, what environment it gets, what must pass. Read from `origin/<base>`, never from the agent's branch. |
-| **gate** | One of **five fixed points in the loop** where the conductor waits for a verdict: `admit`, `prepared`, `diff`, `merge`, `end`. The set is closed. A gate is a *place*, not a kind of check. |
+| **gate** | One of **five fixed points in the loop** where the conductor waits for a verdict: `admit`, `prepared`, `proposed`, `merge`, `end`. The set is closed. A gate is a *place*, not a kind of check. |
 | **action** | What runs at a point, from the recipe: `run` a command, `agent` a cold reviewer, `watch` some globs, `human` a person, `close`/`labels` an effect at `end`. Verdicts are bound to **one commit**, so a force-push invalidates them by arithmetic. |
 | **skipped** | A point nobody configured. It is *shown*, never omitted — a point that is merely absent is indistinguishable from one that was configured and silently did not run. |
 | **tier** | How contained the agent runtime must be: `open`, `guarded`, `sandboxed`. The recipe's, in `runtime.tier`. |
@@ -203,7 +203,7 @@ flowchart LR
   A --> C[claim + worktree]
   C --> P{{prepared}}
   P --> AG[agent runs]
-  AG --> D{{diff}}
+  AG --> D{{proposed}}
   D --> M{{merge}}
   M --> I[integrate<br/>advisory lock]
   I --> E{{end}}
@@ -223,8 +223,8 @@ verdict — and what runs at each is the recipe's.
 |---|---|---|
 | `admit` | the queue offers an item, before it is claimed | yes — it stays queued |
 | `prepared` | the worktree exists, before the agent starts | yes — refuse before money is spent |
-| `diff` | the agent stopped and there are commits | yes |
-| `merge` | after `diff` passes, before the merge lane | yes |
+| `proposed` | the agent stopped and there are commits — a change has been proposed | yes |
+| `merge` | after `proposed` passes, before the merge lane | yes |
 | `end` | the item reached any terminal outcome | **no** — its actions are effects |
 
 **The set is closed.** No sixth point will ever be added. What runs *at* a point
@@ -243,7 +243,7 @@ are rendered, so the board and `lingtai add` list all five, always.
 ```
 admit     (skipped)
 prepared  (skipped)
-diff      build
+proposed  build
 merge     (skipped)
 end       close the ticket
 ```
@@ -258,7 +258,7 @@ gates:
   admit: []
   prepared: []
 
-  diff:
+  proposed:
     - name: build
       run: pnpm typecheck && pnpm lint && pnpm test
       timeout: 15m

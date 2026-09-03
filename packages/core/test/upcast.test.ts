@@ -129,3 +129,76 @@ describe("parseStoredPayload", () => {
     expect(() => parseStoredPayload("RunContextExhausted", 1, { turn: "forty-one" })).toThrow();
   });
 });
+
+/**
+ * The rename that made this file earn its keep: the `diff` point became
+ * `proposed` (ADR 0018).
+ *
+ * Nine types carry a `GatePoint`, and the enum no longer contains the old
+ * value — so a stored row is not merely stale, it is unparseable without the
+ * step. That is the good version of this failure and the reason the rename was
+ * affordable: it cannot pass wrongly.
+ */
+describe("the gate point rename", () => {
+  const GATE_CARRYING = [
+    "GateRequested",
+    "GateStarted",
+    "GatePassed",
+    "GateFailed",
+    "GateWaived",
+    "ApprovalRequested",
+    "ApprovalGranted",
+    "ApprovalRevoked",
+  ] as const;
+
+  const base = { action: "build", runId: "run-01JX", onSha: "sha-a" };
+  const extra: Record<(typeof GATE_CARRYING)[number], object> = {
+    GateRequested: {},
+    GateStarted: {},
+    GatePassed: { evidence: "exit 0" },
+    GateFailed: { evidence: "exit 1", findings: [] },
+    GateWaived: { by: "human:steven", reason: "known flake" },
+    ApprovalRequested: { question: "Merge?", artifacts: ["diff"] },
+    ApprovalGranted: { by: "human:steven", note: "" },
+    ApprovalRevoked: { by: "human:steven", reason: "force-push" },
+  };
+
+  it.each(GATE_CARRYING)("moves a v1 %s from diff to proposed", (type) => {
+    const v1 = { ...base, ...extra[type], gate: "diff" };
+    expect(parseStoredPayload(type, 1, v1)).toEqual({ ...v1, gate: "proposed" });
+  });
+
+  it.each(GATE_CARRYING)("leaves a v1 %s at another point alone", (type) => {
+    const v1 = { ...base, ...extra[type], gate: "merge", action: "human" };
+    expect(parseStoredPayload(type, 1, v1)).toEqual(v1);
+  });
+
+  /**
+   * The nested one. `GatesResolved` is the event the board reads to show an
+   * unconfigured point as `skipped`, so a half-upcast here would not throw —
+   * it would render a run as having a point nobody has ever heard of.
+   */
+  it("moves the point inside a v1 GatesResolved and keeps all five, in order", () => {
+    const v1 = {
+      runId: "run-01JX",
+      configHash: "abc",
+      points: [
+        { gate: "admit", actions: [] },
+        { gate: "prepared", actions: ["install"] },
+        { gate: "diff", actions: ["build", "review"] },
+        { gate: "merge", actions: [] },
+        { gate: "end", actions: ["close the ticket"] },
+      ],
+    };
+
+    const up = parseStoredPayload("GatesResolved", 1, v1);
+    expect(up.points.map((p) => p.gate)).toEqual(["admit", "prepared", "proposed", "merge", "end"]);
+    expect(up.points[2]!.actions).toEqual(["build", "review"]);
+  });
+
+  it("is the only reason those nine moved, so none of them is at v1", () => {
+    for (const type of [...GATE_CARRYING, "GatesResolved"] as const) {
+      expect(SCHEMA_VER[type], `${type} carries a GatePoint and must be past v1`).toBe(2);
+    }
+  });
+});

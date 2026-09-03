@@ -41,8 +41,13 @@ export type Tier = z.infer<typeof Tier>;
  * `end` is the one that cannot refuse — nothing can be stopped once a merge has
  * landed. Recorded as an imprecision rather than smoothed over: a separate
  * concept for it would cost more than the imprecision does.
+ *
+ * `proposed` was called `diff` until
+ * [ADR 0018](../../../doc/decisions/0018-the-proposed-point.md). Stored events
+ * still carry the old value and are upcast on read; a reader who finds `diff`
+ * in the log or in an old recipe is looking at history, not at a bug.
  */
-export const GatePoint = z.enum(["admit", "prepared", "diff", "merge", "end"]);
+export const GatePoint = z.enum(["admit", "prepared", "proposed", "merge", "end"]);
 export type GatePoint = z.infer<typeof GatePoint>;
 
 /**
@@ -198,8 +203,8 @@ export const RunFailed = z.object({
  * `gate` is the point; `action` is what ran there.
  *
  * Two fields rather than one because "the build failed" and "something at the
- * diff point failed" are different questions, and a single name could not answer
- * both. `onSha` binds the verdict to a commit, which is what makes a force-push
+ * `proposed` point failed" are different questions, and a single name could not
+ * answer both. `onSha` binds the verdict to a commit, which is what makes a force-push
  * invalidate it by arithmetic rather than by anybody noticing.
  */
 const gateBase = { gate: GatePoint, action: z.string(), runId: z.string(), onSha: z.string() };
@@ -505,6 +510,19 @@ const BUMPED: Partial<Record<EventType, number>> = {
   WorkItemClaimed: 2,
   // 2: each finding gained `action`. See Reconciled above.
   Reconciled: 2,
+  // 2: the `diff` gate point became `proposed` (ADR 0018). Nine types carry a
+  // `GatePoint`, so nine of them move together — a payload whose `gate` is
+  // still `diff` would fail the enum rather than pass wrongly, which is why
+  // every one of them needs the step and none of them can be skipped.
+  GatesResolved: 2,
+  GateRequested: 2,
+  GateStarted: 2,
+  GatePassed: 2,
+  GateFailed: 2,
+  GateWaived: 2,
+  ApprovalRequested: 2,
+  ApprovalGranted: 2,
+  ApprovalRevoked: 2,
 };
 
 export const SCHEMA_VER: Record<EventType, number> = Object.fromEntries(

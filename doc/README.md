@@ -30,6 +30,7 @@ Three kinds of thing live here, and the distinction matters.
 | [0015](decisions/0015-five-gates-and-two-extensions.md) | Five gates, and the two ways a plugin may extend the loop | superseded by 0016 |
 | [0016](decisions/0016-the-settled-model.md) | **The settled model: one loop, five gates, no policy** | accepted |
 | [0017](decisions/0017-the-project-is-called-lingtai.md) | The project is called Lingtai | accepted |
+| [0018](decisions/0018-the-proposed-point.md) | The gate point called `diff` is called `proposed` | accepted |
 
 ## Experiments
 

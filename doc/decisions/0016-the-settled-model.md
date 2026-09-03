@@ -65,6 +65,10 @@ A gate is a **fixed point in the loop**, not a kind of check.
 Four name branches the loop already had. `end` cannot refuse — recorded as an
 imprecision rather than smoothed over; a separate concept would cost more.
 
+The third point is called **`proposed`** from
+[0018](0018-the-proposed-point.md). The table above is left in the name it was
+decided under; nothing about the point changed but the word.
+
 `end` fires on **every** terminal outcome and the action is told which, so
 "close it when it lands, label it when it is blocked" is one configuration.
 

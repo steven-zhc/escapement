@@ -91,11 +91,21 @@ export type GateAction = z.infer<typeof GateAction>;
  * Order within a point is the array's. The first refusal wins and the actions
  * after it do not run — continuing would spend money producing verdicts about a
  * diff that is not going anywhere.
+ *
+ * **Strict, and that is what makes the closed set enforceable.** A key that is
+ * not one of the five is a typo or a stale name, and zod's default is to drop
+ * it silently — which would mean a recipe whose `merg:` block never runs and a
+ * board that says `skipped` because it was told nothing was configured. That is
+ * exactly the "configured and did not run" failure the model calls Lingtai's
+ * bug (ADR 0016 §4). It is also what a recipe still saying `diff:` would hit
+ * after [0018](../../../doc/decisions/0018-the-proposed-point.md): it fails to
+ * resolve, loudly, naming the key.
  */
-export const GateMap = z.object({
+export const GateMap = z.strictObject({
   admit: z.array(GateAction).default([]),
   prepared: z.array(GateAction).default([]),
-  diff: z.array(GateAction).default([]),
+  /** Was `diff` until [0018](../../../doc/decisions/0018-the-proposed-point.md). */
+  proposed: z.array(GateAction).default([]),
   merge: z.array(GateAction).default([]),
   end: z.array(GateAction).default([]),
 });
@@ -156,7 +166,7 @@ export const Recipe = z.object({
 
   // Spelled out rather than `.default({})`: all five points exist whether or
   // not a recipe mentions them, and writing that here says so once.
-  gates: GateMap.default({ admit: [], prepared: [], diff: [], merge: [], end: [] }),
+  gates: GateMap.default({ admit: [], prepared: [], proposed: [], merge: [], end: [] }),
 
   runtime: z.object({
     agent: RuntimeId.default("claude-code"),

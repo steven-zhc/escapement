@@ -142,15 +142,18 @@ Source: `GatePoint` and `GATE_POINTS` in `packages/core/src/events.ts`.
 |---|---|---|
 | `admit` | the queue offers an item, before it is claimed | yes |
 | `prepared` | after the worktree exists, before the agent starts | yes |
-| `diff` | the agent stopped and there are commits | yes |
-| `merge` | after `diff` passes, before the merge lane | yes |
+| `proposed` | the agent stopped and there are commits — a change has been proposed | yes |
+| `merge` | after `proposed` passes, before the merge lane | yes |
 | `end` | the work item reached any terminal outcome | **no** |
 
-Today only `diff` and `merge` have anything wired: `diff` runs the recipe's
-actions, `merge` holds when a `human` action asks or when `--no-merge` does.
-`end` now runs too: its actions are effects rather than verdicts, and they go
-through the outbox so they survive a crash. `admit` and `prepared` are declared
-and empty, which is what an unconfigured point *is* rather than a gap.
+`prepared` and `proposed` run the recipe's actions; `merge` holds when a `human`
+action asks or when `--no-merge` does; `end` runs too, its actions being effects
+rather than verdicts, and they go through the outbox so they survive a crash.
+`admit` is declared and empty, which is what an unconfigured point *is* rather
+than a gap.
+
+`proposed` was called `diff` until
+[0018](decisions/0018-the-proposed-point.md); stored events are upcast on read.
 
 ## gate action — 4 kinds
 
@@ -241,7 +244,8 @@ returns in `packages/conductor/src/run-once.ts`.
 `diff` · `integrate` · `unexpected`
 
 `diff: no commits` is the one worth recognising — the agent finished and wrote
-nothing.
+nothing. This `diff` is a *stage*, not the gate point: the run stopped while
+computing the diff, before anything at `proposed` could be asked about it.
 
 ## outbox kind — 3
 
@@ -317,7 +321,7 @@ passes.
 Source: `packages/config/src/presets.ts`.
 
 `pnpm-workspace` — a `pnpm install --frozen-lockfile` action at `prepared` and a
-`build` action at `diff`. A preset's *name* is not part of the recipe hash, because
+`build` action at `proposed`. A preset's *name* is not part of the recipe hash, because
 it is not part of what a run does.
 
 ## package — 9, plus 2 apps

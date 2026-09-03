@@ -70,11 +70,11 @@ describe("reduceRun", () => {
     const s = reduceRun([
       e("RunStarted", started),
       e("RunProposedCompletion", { headSha: "sha-a" }),
-      e("GateRequested", { gate: "diff", action: "build", runId: "run-01JX", onSha: "sha-a" }),
-      e("GateStarted", { gate: "diff", action: "build", runId: "run-01JX", onSha: "sha-a" }),
-      e("GatePassed", { gate: "diff", action: "build", runId: "run-01JX", onSha: "sha-a", evidence: "exit 0" }),
+      e("GateRequested", { gate: "proposed", action: "build", runId: "run-01JX", onSha: "sha-a" }),
+      e("GateStarted", { gate: "proposed", action: "build", runId: "run-01JX", onSha: "sha-a" }),
+      e("GatePassed", { gate: "proposed", action: "build", runId: "run-01JX", onSha: "sha-a", evidence: "exit 0" }),
       e("GateFailed", {
-        gate: "diff", action: "review",
+        gate: "proposed", action: "review",
         runId: "run-01JX",
         onSha: "sha-a",
         evidence: "1 finding",
@@ -91,10 +91,10 @@ describe("reduceRun", () => {
     ]);
 
     expect(s.lifecycle).toEqual({ status: "gating", headSha: "sha-a" });
-    expect(s.gates["diff:build"]!.verdict).toBe("passed");
-    expect(s.gates["diff:review"]!.verdict).toBe("failed");
-    expect(s.gates["diff:review"]!.findings[0]!.failureScenario).toContain("increment is lost");
-    expect(gatesOn(s).map((g) => g.gate).sort()).toEqual(["diff:build", "diff:review"]);
+    expect(s.gates["proposed:build"]!.verdict).toBe("passed");
+    expect(s.gates["proposed:review"]!.verdict).toBe("failed");
+    expect(s.gates["proposed:review"]!.findings[0]!.failureScenario).toContain("increment is lost");
+    expect(gatesOn(s).map((g) => g.gate).sort()).toEqual(["proposed:build", "proposed:review"]);
   });
 
   /**
@@ -107,7 +107,7 @@ describe("reduceRun", () => {
     const approved = [
       e("RunStarted", started),
       e("RunProposedCompletion", { headSha: "sha-a" }),
-      e("GatePassed", { gate: "diff", action: "build", runId: "run-01JX", onSha: "sha-a", evidence: "exit 0" }),
+      e("GatePassed", { gate: "proposed", action: "build", runId: "run-01JX", onSha: "sha-a", evidence: "exit 0" }),
       e("ApprovalGranted", {
         gate: "merge",
         action: "human",
@@ -119,7 +119,7 @@ describe("reduceRun", () => {
     ];
 
     const before = reduceRun(approved);
-    expect(gatesOn(before).map((g) => g.gate).sort()).toEqual(["diff:build", "merge:human"]);
+    expect(gatesOn(before).map((g) => g.gate).sort()).toEqual(["merge:human", "proposed:build"]);
 
     const after = reduceRun([...approved, e("RunProposedCompletion", { headSha: "sha-b" })]);
     expect(after.headSha).toBe("sha-b");
@@ -135,7 +135,7 @@ describe("reduceRun", () => {
       e("RunStarted", started),
       e("RunProposedCompletion", { headSha: "sha-a" }),
       e("GateWaived", {
-        gate: "diff", action: "review",
+        gate: "proposed", action: "review",
         runId: "run-01JX",
         onSha: "sha-a",
         by: "human:steven",
@@ -143,9 +143,9 @@ describe("reduceRun", () => {
       }),
     ]);
 
-    expect(s.gates["diff:review"]!.verdict).toBe("waived");
-    expect(s.gates["diff:review"]!.by).toBe("human:steven");
-    expect(s.gates["diff:review"]!.reason).toContain("docs typo");
+    expect(s.gates["proposed:review"]!.verdict).toBe("waived");
+    expect(s.gates["proposed:review"]!.by).toBe("human:steven");
+    expect(s.gates["proposed:review"]!.reason).toContain("docs typo");
   });
 
   it("waits on a person, then proceeds when they answer", () => {

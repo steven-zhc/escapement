@@ -89,7 +89,7 @@ describe("the human gate", () => {
 describe("the pipeline, when a gate wants a person", () => {
   const collect = async (gates: Parameters<typeof runGatePipeline>[0]["gates"]) => {
     const events: GateEvent[] = [];
-    const result = await runGatePipeline({ point: "diff", gates, context, emit: (e) => void events.push(e) });
+    const result = await runGatePipeline({ point: "proposed", gates, context, emit: (e) => void events.push(e) });
     return { result, types: events.map((e) => e.type) };
   };
 

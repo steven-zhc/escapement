@@ -15,7 +15,7 @@
  * nothing anywhere said "wrong scope".
  */
 import { RECIPE_PATH, RecipeMissingError, resolveRecipe } from "@lingtai/config";
-import { type Tier, parsePayload } from "@lingtai/core";
+import { GATE_POINTS, type Tier, parsePayload } from "@lingtai/core";
 import {
   NotInstalledError,
   createGitHubClient,
@@ -98,7 +98,12 @@ export async function add(options: AddOptions, log = console.log): Promise<numbe
   // All five points, including the empty ones. Onboarding is the first place a
   // person sees the shape of their workflow, and a point that is not mentioned
   // is exactly the thing that must not be invisible (ADR 0016 §4).
-  for (const point of ["admit", "prepared", "diff", "merge", "end"] as const) {
+  //
+  // From `GATE_POINTS` rather than a list written here, which is what that
+  // tuple is exported for: this line had its own copy of the five names, and
+  // renaming one of them (0018) would have left onboarding printing a point
+  // that no longer exists.
+  for (const point of GATE_POINTS) {
     const actions = resolved.recipe.gates[point];
     log(`  ${point.padEnd(9)} ${actions.length ? actions.map((a) => a.name).join(", ") : "(skipped)"}`);
   }

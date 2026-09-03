@@ -32,8 +32,8 @@ export const PRESETS: Record<string, Preset> = {
    * The lesson is in the comment as much as in the fix: a default derived from
    * a repository has to be read off that repository.
    *
-   * The install runs at the `prepared` point, not at `diff`. It was at `diff`
-   * briefly, which fixed the gate and left the agent holding the same empty
+   * The install runs at the `prepared` point, not at `proposed`. It was at the
+   * later point briefly, which fixed the gate and left the agent holding an empty
    * worktree — unable to run the tests it was being asked to keep green.
    *
    * `submodules: true` is not a stylistic default either. `git worktree add`
@@ -42,7 +42,7 @@ export const PRESETS: Record<string, Preset> = {
    */
   "pnpm-workspace": {
     repo: { submodules: true },
-    // Only `diff` is filled. The other four points are empty and stay empty
+    // Only `proposed` is filled. The other four points are empty and stay empty
     // until a project says otherwise — which the board renders as `skipped`
     // rather than omitting (ADR 0016 §4).
     gates: {
@@ -52,7 +52,7 @@ export const PRESETS: Record<string, Preset> = {
       // is an action at a gate point like anything else now — there is no
       // separate `prepare` section for it to live in.
       prepared: [{ name: "install", run: "pnpm install --frozen-lockfile", timeout: "10m" }],
-      diff: [{ name: "build", run: "pnpm typecheck && pnpm lint && pnpm test", timeout: "15m" }],
+      proposed: [{ name: "build", run: "pnpm typecheck && pnpm lint && pnpm test", timeout: "15m" }],
       merge: [],
       end: [],
     },

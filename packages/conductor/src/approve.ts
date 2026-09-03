@@ -25,11 +25,11 @@ import { integrate } from "./integrate.ts";
 import type { TokenSource } from "./worktree.ts";
 
 /**
- * `diff:build` → the point and the action.
+ * `proposed:build` → the point and the action.
  *
  * A person decides about the thing the card names, which is the composite key
  * (`point:action`); the event carries the two fields separately, because "the
- * build failed" and "something at the diff point failed" are different
+ * build failed" and "something at the `proposed` point failed" are different
  * questions. Splitting at the first colon, since a point never contains one.
  */
 function splitGate(key: string): { gate: string; action: string } {

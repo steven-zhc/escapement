@@ -17,7 +17,7 @@ env:
   allow: [DATABASE_URL, CLERK_SECRET_KEY]
   plantAt: apps/web/.env.local
 gates:
-  diff:
+  proposed:
     - name: build
       run: pnpm verify
 runtime:
@@ -34,7 +34,7 @@ describe("resolveRecipe", () => {
 
     expect(resolved.ref).toBe("develop");
     expect(resolved.recipe.repo.base).toBe("develop");
-    expect(resolved.recipe.gates.diff).toHaveLength(1);
+    expect(resolved.recipe.gates.proposed).toHaveLength(1);
     // The four a recipe did not mention are present and empty — which is what
     // makes "nothing is configured here" visible rather than absent.
     expect(resolved.recipe.gates.admit).toEqual([]);
@@ -54,12 +54,12 @@ describe("resolveRecipe", () => {
     };
 
     const resolved = await resolveRecipe(reader(files), "develop");
-    expect(resolved.recipe.gates.diff[0]!.name).toBe("build");
+    expect(resolved.recipe.gates.proposed[0]!.name).toBe("build");
 
     // And the tampered one really would have resolved differently, so the test
     // is not passing because both branches say the same thing.
     const other = await resolveRecipe(reader(files), "agent/117");
-    expect(other.recipe.gates.diff[0]!.name).toBe("nothing");
+    expect(other.recipe.gates.proposed[0]!.name).toBe("nothing");
     expect(other.configHash).not.toBe(resolved.configHash);
   });
 
@@ -77,6 +77,23 @@ describe("resolveRecipe", () => {
 
     expect(err).toBeInstanceOf(RecipeInvalidError);
     expect((err as RecipeInvalidError).problems.join("\n")).toContain("env.plantAt");
+  });
+
+  /**
+   * The half-move ADR 0017 was written about, caught this time. A recipe that
+   * still says `diff:` is not "a recipe with no gates configured" — it is a
+   * repository whose build and tests would have stopped running with the board
+   * reporting `skipped`, which looks exactly like a deliberate choice.
+   */
+  it("refuses a recipe still naming the point `diff`, rather than skipping it", async () => {
+    const stale = VALID.replace("  proposed:\n", "  diff:\n");
+    const err = await resolveRecipe(
+      reader({ [`develop:${RECIPE_PATH}`]: stale }),
+      "develop",
+    ).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(RecipeInvalidError);
+    expect((err as RecipeInvalidError).problems.join("\n")).toMatch(/diff/);
   });
 
   it("rejects YAML that is not a recipe at all", async () => {
@@ -103,7 +120,7 @@ repo:
 runtime:
   agent: claude-code
 gates:
-  diff:
+  proposed:
     - run: pnpm verify
       name: build
 env:

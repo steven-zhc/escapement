@@ -430,7 +430,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       ]);
       log(`run finished: ${outcome.turns} turns, ${outcome.costUsd ?? "unknown"} usd`);
 
-      // ---- 7. the diff the gates will be about --------------------------
+      // ---- 7. the diff the `proposed` gates will be about ----------------
       const headSha = await git(["rev-parse", "HEAD"], { ...{ token: options.token, env: options.gitEnv }, cwd: worktree.path });
       const stat = await git(["diff", "--numstat", `${worktree.baseSha}..HEAD`], {
         token: options.token,
@@ -501,12 +501,11 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         },
       };
 
-      // The `diff` point: the agent stopped and there are commits. `admit`,
-      // `prepared` and `end` are declared and empty for now — 3d fills `end`,
-      // and `prepared` takes over from `prepare` in its own step.
-      const gates = gatesFromRecipe(recipe.gates.diff, gateDeps);
+      // The `proposed` point: the agent stopped and there are commits, so a
+      // change has been proposed and the gates are about to judge it.
+      const gates = gatesFromRecipe(recipe.gates.proposed, gateDeps);
       const pipeline = await runGatePipeline({
-        point: "diff",
+        point: "proposed",
         gates,
         context: { runId, onSha: headSha, cwd: worktree.path, env: runnableEnv(env.values) },
         emit: async (event) => {
@@ -549,10 +548,10 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       // waiver is for — and pre-empting it would make the flag mean something
       // different on a red run than on a green one.
       if (pipeline.heldAt !== null || options.merge === false) {
-        // `heldAt` is an *action* name; the point it ran at is `diff`. The
+        // `heldAt` is an *action* name; the point it ran at is `proposed`. The
         // operator's `--no-merge` is a hold at the `merge` point instead, and
         // names itself as the action, so the two are told apart on the card.
-        const gate = pipeline.heldAt === null ? "merge" : "diff";
+        const gate = pipeline.heldAt === null ? "merge" : "proposed";
         const action = pipeline.heldAt ?? "no-merge";
 
         if (pipeline.heldAt === null) {
