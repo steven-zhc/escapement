@@ -243,3 +243,9 @@ costs nothing where it would otherwise need a permanent alias in the read path.
 The three real runs (admin #120, #155, #156) are archived in
 `doc/experiments/` before the reset. After it, the append-only rule resumes with
 no exceptions.
+
+**A second reset happened on 2026-09-03** ([0019](0019-a-second-reset.md)), for a
+defect this section caused: the argument above — that deleting a type is free
+when it has zero rows — was not re-run when 3c′ deleted the three
+`Preparation*` types, and the log held six rows of them. "Exactly once" is
+replaced there by a precondition, and by a `doctor` check.

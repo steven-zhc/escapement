@@ -22,6 +22,7 @@
  * check you will forget you never had.
  */
 import { deadOutbox, pendingOutbox, runnableEnv } from "@lingtai/conductor";
+import { isEventType } from "@lingtai/core";
 import { STALE_AFTER_MS, findOrphans, readControl, readStatus } from "@lingtai/daemon";
 import { githubApp, hasGitHubApp } from "@lingtai/env";
 import { REQUIRED_PERMISSIONS } from "@lingtai/github";
@@ -557,6 +558,44 @@ async function orphans(): Promise<CheckResult> {
 }
 
 /**
+ * Whether the log holds an event type this build cannot read.
+ *
+ * The check that would have caught the defect [ADR 0019](../../../doc/decisions/0019-a-second-reset.md)
+ * is about. 3c′ deleted three event types while the log held six rows of two of
+ * them, and `toEnvelope` throws on a type the catalogue does not know — so every
+ * run stream in the log was unreadable from its first row and
+ * `lingtai projection rebuild` could not run at all. **Nothing said so.** Both
+ * projections were past those rows, and a follower never looks back.
+ *
+ * A failure here means one of two things, and the detail says which is not
+ * knowable from here: a type was deleted while its rows were still in the log,
+ * or this build is older than the writer. Either way the log is not fully
+ * replayable, which is the one property the whole system rests on.
+ */
+async function readableTypes(url: string): Promise<CheckResult> {
+  const name = "log: every type is readable";
+  const rows = await withClient(url, (c) =>
+    c.query<{ type: string; n: number }>(
+      `select type, count(*)::int as n from events group by type order by type`,
+    ),
+  ).catch(() => null);
+  if (rows === null) return { name, status: "ok", detail: "no log to read yet" };
+
+  const orphaned = rows.rows.filter((r) => !isEventType(r.type));
+  if (orphaned.length === 0) {
+    return { name, status: "ok", detail: `${rows.rows.length} types, all in the catalogue` };
+  }
+  return {
+    name,
+    status: "fail",
+    detail:
+      `${orphaned.reduce((n, r) => n + r.n, 0)} row(s) of ${orphaned.length} type(s) this build cannot read — ` +
+      `${orphaned.map((r) => `${r.type} ×${r.n}`).join(", ")}. ` +
+      "Reading any stream that holds one throws, and a projection rebuild cannot run.",
+  };
+}
+
+/**
  * How much is queued to go out, and how much never will.
  *
  * Depth is reported; **dead letters fail**. That asymmetry is the point. A
@@ -613,6 +652,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
     results.push(...(await schema(direct)));
     results.push(await projections(pooled));
     results.push(await daemonLiveness());
+    results.push(await readableTypes(direct));
     results.push(await orphans());
     results.push(await outbox());
   } else {

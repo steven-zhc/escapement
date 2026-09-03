@@ -74,3 +74,7 @@ and no stream id — the `wi-` / `run-` / `int-` / `prj-` / `ctl-` prefixes are
 unchanged, and every event written under the old name replays identically under
 the new one. The reset allowance in [0016 §9](0016-the-settled-model.md) was
 spent on the model change and is not available again.
+
+**Overtaken by [0019](0019-a-second-reset.md),** which resets the log a second
+time and replaces the once-only allowance with a precondition that can be
+checked. The sentence above stands as what was believed when it was written.

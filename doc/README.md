@@ -31,6 +31,7 @@ Three kinds of thing live here, and the distinction matters.
 | [0016](decisions/0016-the-settled-model.md) | **The settled model: one loop, five gates, no policy** | accepted |
 | [0017](decisions/0017-the-project-is-called-lingtai.md) | The project is called Lingtai | accepted |
 | [0018](decisions/0018-the-proposed-point.md) | The gate point called `diff` is called `proposed` | accepted |
+| [0019](decisions/0019-a-second-reset.md) | The log is reset a second time, and what makes it the last | accepted |
 
 ## Experiments
 
