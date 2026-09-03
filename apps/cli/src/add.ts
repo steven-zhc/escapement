@@ -3,8 +3,7 @@
  *
  * Give it a repository slug and permissions; it does the rest. What it does
  * *not* do is take a configuration file: the recipe belongs to the managed
- * repository and is read from its base branch, and the policy is Lingtai's
- * and lives in Lingtai's own log. That split is
+ * repository and is read from its base branch. That split is
  * doc/decisions/0005-config-in-target-repo.md, and it is why this command needs
  * so few arguments.
  *
@@ -33,7 +32,11 @@ export interface AddOptions {
   /** Containment floor. `guarded` is what the first project runs at (0007). */
 }
 
-/** A project's own stream. Policy and configuration live here, not in the repo. */
+/**
+ * A project's own stream: what Lingtai records *about* a project — its owner,
+ * its base branch, and the hash of the recipe it last resolved. The recipe
+ * itself is not here; it stays in the managed repository.
+ */
 export function projectStream(project: string): string {
   return `prj-${project}`;
 }
@@ -109,9 +112,6 @@ export async function add(options: AddOptions, log = console.log): Promise<numbe
   }
   log(`  runtime ${resolved.recipe.runtime.agent}, kinds ${resolved.recipe.source.kinds.join(" > ")}`);
 
-  // Tier is the recipe's now (ADR 0016 §7). There is no policy to write here:
-  // nothing sits above a repository's own workflow, so onboarding records what
-  // the project *is* and stops.
   log(`  tier ${resolved.recipe.runtime.tier}`);
 
   const stream = projectStream(repo);

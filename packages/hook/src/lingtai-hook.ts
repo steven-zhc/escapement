@@ -2,16 +2,19 @@
 /**
  * `lingtai-hook` — the only hot path in the system.
  *
- * `PreToolUse` sits in front of every tool call an agent makes: tens of
- * thousands across a run. So this is a **thin client** and nothing else. It
- * reads JSON on stdin, sends one line to a unix socket, reads one line back, and
- * exits. No dependencies, no configuration parsing, no policy. Policy evaluation
- * and event persistence live in the long-running conductor, where they cost
- * nothing per call (doc/decisions/0002-typescript.md).
+ * `PostToolUse` fires after every tool call an agent makes: thousands across a
+ * run. So this is a **thin client** and nothing else. It reads JSON on stdin,
+ * sends one line to a unix socket, reads one line back, and exits. No
+ * dependencies, no configuration parsing, no decisions. Deciding and persisting
+ * live in the long-running conductor, where they cost nothing per call
+ * (doc/decisions/0002-typescript.md).
+ *
+ * `PreToolUse` was the hot one and is not wired at all any more: Lingtai
+ * refuses no tool call, so it had no job left ([ADR 0016 §6](../../../doc/decisions/0016-the-settled-model.md)).
  *
  * **It fails closed.** Socket unreachable, timeout, unparseable payload,
  * malformed reply — every one of them exits 2, which both runtimes read as
- * "refuse this tool call". A guard that fails open is worse than no guard,
+ * "refuse this tool call". A hook that fails open is worse than no hook,
  * because it is trusted. The conductor proves this path with a smoke test at
  * startup and refuses to start if the binary does not deny when the socket is
  * gone.
@@ -106,4 +109,4 @@ try {
 }
 
 if (reply.allow === true) process.exit(ALLOW);
-deny(reply.reason ?? "lingtai-hook: refused by policy");
+deny(reply.reason ?? "lingtai-hook: the conductor refused this call and gave no reason");

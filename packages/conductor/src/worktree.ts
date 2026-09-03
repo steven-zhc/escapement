@@ -94,10 +94,10 @@ export class ProductionValueError extends Error {
 /**
  * Host substrings that mean "do not give this to an agent".
  *
- * **Not yet policy-configurable, and it should be.** ADR 0005 puts production
- * host patterns configurable, but nothing carries them yet, so
- * these are a built-in default a caller can override. Adding the field is a
- * schema bump that belongs with the policy gate (#19) rather than here.
+ * **Not yet configurable, and it should be.** ADR 0005 puts production host
+ * patterns in configuration, but no field carries them yet, so these are a
+ * built-in default a caller can override. Adding that field is a change to the
+ * recipe schema, not to this list.
  *
  * Matched against the *host* of a URL-shaped value, by segment. Matching the
  * whole string trips on a password containing "prod"; matching the host by

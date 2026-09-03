@@ -2,15 +2,16 @@
  * The Project aggregate: `prj-{project}`, alive as long as the project is
  * managed.
  *
- * It holds the two things that are Lingtai's rather than the repository's:
- * the **policy**, which is what is not negotiable, and the last **resolved
- * configuration**, which is what the recipe came out as. The recipe itself is
- * not here — it lives in the managed repository and is re-read from
- * `origin/<base>` for every run, because a snapshot of it would be a second
- * source of truth (doc/decisions/0005-config-in-target-repo.md).
+ * It holds what is Lingtai's rather than the repository's: where to reach the
+ * repository — owner and base branch — and the last **resolved configuration**,
+ * which is the hash the recipe came out as and the commit it came from.
  *
- * A policy change is an event with a time and a reason, so "did results change
- * after I tightened the gates?" is answerable by replay rather than by memory.
+ * The recipe itself is not here. It lives in the managed repository and is
+ * re-read from `origin/<base>` for every run, because a snapshot of it would be
+ * a second source of truth (doc/decisions/0005-config-in-target-repo.md). The
+ * hash is kept instead: it says *whether the configuration changed* between two
+ * runs, which is what a reader of the log needs, without pretending to be the
+ * configuration.
  */
 import type { Envelope } from "./envelope.ts";
 import type { PayloadOf, Tier } from "./events.ts";

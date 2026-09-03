@@ -9,12 +9,10 @@
  * the diff, the `tamper` gate catches it, and it takes effect only after a
  * human approves and merges it.
  *
- * There is no policy above it any more (ADR 0016 §7): the workflow is the
- * repository's to define, and Lingtai does not second-guess it. What still
- * holds from [0005](../../../doc/decisions/0005-config-in-target-repo.md) is
- * where it is read from — `origin/<base>`, never the agent's branch, so a branch
- * cannot change the rules of the run it is part of. A recipe may add
- * strictness; it can never remove it.
+ * Nothing sits above this file. The workflow is the repository's to define,
+ * and Lingtai does not second-guess it — what Lingtai owns is *where the file
+ * is read from*, and that is the one thing a branch cannot change about the run
+ * it is part of.
  *
  * See doc/decisions/0005-config-in-target-repo.md.
  */
@@ -174,9 +172,9 @@ export const Recipe = z.object({
      * How contained the runtime must be. `run-once` refuses to dispatch when the
      * runtime cannot meet it, which is the whole of the enforcement.
      *
-     * Defaulted rather than optional since policy was deleted: there is no floor
-     * underneath it to fall back to, and an absent tier that meant "unspecified"
-     * would be a run whose containment nothing states. `guarded` is what every
+     * Defaulted rather than optional: nothing sits underneath it to fall back
+     * to, so an absent tier meaning "unspecified" would be a run whose
+     * containment nothing states. `guarded` is what every
      * run has actually used ([ADR 0007](../../../doc/decisions/0007-dual-runtime.md)).
      */
     tier: Tier.default("guarded"),

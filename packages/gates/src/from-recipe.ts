@@ -10,7 +10,7 @@ import { type GateAction, kindOfAction } from "@lingtai/config";
 import { type AgentGateDeps, createAgentGate } from "./agent-gate.ts";
 import type { Gate } from "./gate.ts";
 import { createHumanGate } from "./human-gate.ts";
-import { createPolicyGate, type PolicyGateDeps } from "./policy-gate.ts";
+import { createWatchGate, type WatchGateDeps } from "./watch-gate.ts";
 import { createProcessGate } from "./process-gate.ts";
 
 /**
@@ -22,7 +22,7 @@ import { createProcessGate } from "./process-gate.ts";
  */
 export interface GateDeps {
   agent?: AgentGateDeps;
-  policy?: PolicyGateDeps;
+  watch?: WatchGateDeps;
 }
 
 export class GateActionUnavailableError extends Error {
@@ -56,12 +56,12 @@ export function gatesFromRecipe(actions: readonly GateAction[], deps: GateDeps =
     }
 
     if ("watch" in action) {
-      if (!deps.policy) {
+      if (!deps.watch) {
         throw new GateActionUnavailableError(action.name, kind, "no file list was supplied to gatesFromRecipe");
       }
       // Compiles the globs here, so a bad pattern refuses at configuration time
       // rather than becoming a watch that quietly matches nothing.
-      return createPolicyGate({ name: action.name, watch: action.watch, then: action.then }, deps.policy);
+      return createWatchGate({ name: action.name, watch: action.watch, then: action.then }, deps.watch);
     }
 
     if ("human" in action) {

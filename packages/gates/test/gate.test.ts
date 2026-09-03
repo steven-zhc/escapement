@@ -217,7 +217,7 @@ describe("gatesFromRecipe", () => {
     expect(gatesFromRecipe([{ name: "approval", human: "Merge?" }])).toHaveLength(1);
     expect(
       gatesFromRecipe([{ name: "tamper", watch: ["**/x"], then: "fail" }], {
-        policy: { changedFiles: async () => [] },
+        watch: { changedFiles: async () => [] },
       }),
     ).toHaveLength(1);
   });

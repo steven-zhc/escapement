@@ -1,5 +1,5 @@
 /**
- * The policy gate: watch what the diff touches, and stop when it touches
+ * The `watch` action: look at what the diff touches, and stop when it touches
  * something a person should see.
  *
  * The cheapest gate there is — it reads a list of paths and matches globs, with
@@ -21,19 +21,19 @@
  * something nothing legitimate touches.
  *
  * The evidence names the files **and what to do about them**, because a card
- * that says "held: policy" sends the reader somewhere else to find out why, and
+ * that says "held: tamper" sends the reader somewhere else to find out why, and
  * that is the failure the board exists to remove.
  */
 import { compileWatch, type Watcher } from "@lingtai/config";
 import type { Gate, GateContext, GateResult } from "./gate.ts";
 
-export interface PolicyGateSpec {
+export interface WatchGateSpec {
   name: string;
   watch: readonly string[];
   then: "request-approval" | "fail";
 }
 
-export interface PolicyGateDeps {
+export interface WatchGateDeps {
   /** Paths in the diff, relative to the repository root. Supplied by the caller
    *  for the same reason the reviewer's diff is: this package has no git. */
   changedFiles: () => Promise<string[]>;
@@ -51,7 +51,7 @@ const ADVICE: Record<string, string> = {
     "and a branch that lands ahead of its schema is the expensive kind of broken.",
 };
 
-export function createPolicyGate(spec: PolicyGateSpec, deps: PolicyGateDeps): Gate {
+export function createWatchGate(spec: WatchGateSpec, deps: WatchGateDeps): Gate {
   // Compiled once, when the gate is built — which is also `lingtai doctor` time, so
   // a bad pattern is a configuration error rather than a gate that silently
   // matches nothing.

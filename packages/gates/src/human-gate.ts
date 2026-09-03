@@ -15,9 +15,9 @@
  * label survived any amount of rewriting and a rewritten branch inherited its
  * own approval.
  *
- * `approvers` is not here either, and that is deliberate: it comes from policy,
- * in Lingtai's own log, and never from the managed repository. A recipe that
- * could name its own approvers could approve itself.
+ * There is no `approvers` field, here or in the recipe, and that is deliberate:
+ * a recipe that could name its own approvers could approve itself. Who answered
+ * is recorded rather than restricted — `by` on the approval, in the log.
  */
 import type { Gate, GateContext, GateResult } from "./gate.ts";
 

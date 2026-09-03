@@ -184,32 +184,26 @@ runtime sandbox — see [ADR 0007](doc/decisions/0007-dual-runtime.md).
 
 ### What you configure, and why each one exists
 
-Four things, and they are on different sides of the line.
+Three things, and they are on different sides of the line.
 
 | | Where it lives | Why it exists |
 |---|---|---|
 | **A Postgres database of its own** | `.env.local` here, two connection strings | The log is the product, not a side effect. It must **not** be a managed project's database — Lingtai has to keep running while that project is the thing being changed. |
 | **A GitHub App** | `.env.local` here, App ID + private key | It reads issues and pushes branches as something that is not you. A fine-grained token can be wrong in a way nothing reports: one covered a repository's submodule but not the repository, and every run failed with a 403 that said nothing about scope. An installation makes reachability explicit and checkable — `lingtai add` verifies the four permissions before it writes anything. |
 | **A recipe, per managed repository** | `.lingtai/config.yaml`, committed **in that repository** | The repository's own team decides what an agent may pick up, what environment it gets, and what must pass before anything merges. It ships with the code and is reviewed like code. |
-| **A policy, per project** | Lingtai's log, set by `lingtai add --tier --require` | The part a managed repository **cannot** soften. Containment floor, mandatory gates, who may approve. |
 
 The board and the CLI need no configuration of their own. They read the same log
 the conductor writes, which is what makes them consistent by construction rather
 than by discipline.
 
-**Recipe and policy are the pair worth understanding before anything else.**
+**The recipe is the whole of what a run obeys.** Nothing sits above it — there
+is no second, privileged configuration that the managed repository cannot see.
+It is a workflow file, and it is reviewed the way one is.
 
-| | recipe | policy |
-|---|---|---|
-| Lives in | the managed repository | Lingtai's event log |
-| Changed by | that repository's team, through a pull request | whoever runs Lingtai |
-| Analogous to | a workflow file | branch protection |
-
-A recipe may add strictness and can never remove any. Asking for a looser
-containment tier than the policy's floor, or omitting a gate the policy marks
-mandatory, is rejected **by name** rather than quietly downgraded. And the
-recipe governing a run is read from `origin/<base>`, never from the agent's
-branch — so an agent that edits it changes nothing about the run in flight. See
+What Lingtai owns is *where* it is read from: `origin/<base>`, never the agent's
+branch. So an agent that edits it changes nothing about the run in flight — the
+edit shows up in the diff, a `watch` action catches it, and it takes effect only
+after a person approves and merges it. See
 [ADR 0005](doc/decisions/0005-config-in-target-repo.md).
 
 ### The loop, and the five places it stops
@@ -281,7 +275,7 @@ gates:
       timeout: 15m
 
   merge:
-    - name: migrations          # a policy hold, by path
+    - name: migrations          # a watch hold, by path
       watch: ["prisma/migrations/**"]
       then: request-approval
     - name: approval            # a person, and the question they are asked
@@ -299,8 +293,8 @@ diff that is not going anywhere.
 
 ### What Lingtai does not do
 
-**It does not restrict tool calls.** There is no guard and no policy engine.
-Tool limits belong to the agent runtime's own configuration —
+**It does not restrict tool calls.** Nothing intercepts them and nothing keeps
+a list. Tool limits belong to the agent runtime's own configuration —
 `permissions.deny` in `~/.claude/settings.json` or in the managed repository's
 `.claude/settings.json` — which holds even under `--permission-mode
 bypassPermissions`, and holds by *removing the tool from the model's list* so
@@ -325,18 +319,16 @@ the daemon takes for you:
    project was registered, not whatever GitHub currently calls the default
    branch. (Those differ more often than you would think; the repository this
    was first run against had a feature branch as its default.)
-2. **Check the recipe against the policy.** A conflict stops here, named.
-3. **Claim the issue** — an event, so two schedulers cannot take the same one.
-4. **Cut a worktree** from Lingtai's own mirror. Never your checkout.
-5. **Plant a filtered environment file.** Only the variable names the recipe
+2. **Claim the issue** — an event, so two schedulers cannot take the same one.
+3. **Cut a worktree** from Lingtai's own mirror. Never your checkout.
+4. **Plant a filtered environment file.** Only the variable names the recipe
    allowed exist in it. Everything else is *absent*, not redacted.
-6. **Start the agent** with the hook wired in, at the tier policy and recipe
-   agree on.
-7. **Run the gates** in recipe order, stopping at the first refusal.
-8. **Integrate** under a Postgres advisory lock: merge the base in, verify,
+5. **Start the agent** with the hook wired in, at the tier the recipe asks for.
+6. **Run the gates** in recipe order, stopping at the first refusal.
+7. **Integrate** under a Postgres advisory lock: merge the base in, verify,
    merge out. Every exit path appends an event — including the failures.
 
-Step 8 is shaped the way it is because of one expensive silence. The old
+Step 7 is shaped the way it is because of one expensive silence. The old
 harness's integrate step had six `return 1` paths and not one of them emitted a
 log line, a comment or a label; two tickets re-ran five times for roughly $29
 while the actual cause — uncommitted work in the operator's own checkout — was
@@ -347,12 +339,11 @@ never reported by anything at all.
 | | |
 |---|---|
 | `packages/core` | Event catalogue, upcasters and aggregate reducers. Zero I/O, so it tests without a database. |
-| `packages/env` | Where configuration values come from, for everything else. |
 | `packages/store` | The Postgres event store: append, read, subscribe, and the projection runner. Prisma 8 for reads and writes, `pg` for `LISTEN/NOTIFY`. |
-| `packages/config` | The recipe schema, the presets, and the policy rules a recipe is checked against. |
+| `packages/config` | The recipe schema, the presets, and the watch globs a recipe compiles to. |
 | `packages/github` | The App: JWT, installation tokens, and a **read-only** client. Writes go through git. |
-| `packages/conductor` | Discovery, the queue, claiming, worktrees, the guard, the hook socket, and the merge lane. |
-| `packages/gates` | The gate pipeline and all four gate kinds. |
+| `packages/conductor` | Discovery, the queue, claiming, worktrees, the hook socket, and the merge lane. |
+| `packages/gates` | The gate pipeline, and the four action kinds that produce a verdict. |
 | `packages/runtime` | Containment tiers, and starting Claude Code. |
 | `packages/hook` | `lingtai-hook` — the binary Claude Code calls before every tool use. |
 | `apps/cli` | `lingtai` — `add`, `run`, `approve`, `status`, `doctor`, `projection`. |
@@ -660,11 +651,13 @@ runtime. It resolves to the same run as spelling all of it out, and hashes the
 same — a preset's *name* is not part of what a run does, so it is not part of
 the hash.
 
-All four gate kinds run. `process` and `human` need nothing from the caller;
-`agent` needs a reviewer and `policy` needs the diff's file list, and `run-once`
-supplies both. A recipe naming a kind whose dependency is missing is **refused**
-by name rather than skipped — a pipeline that silently dropped a human approval
-would put a green board on a change nobody approved.
+Four action kinds produce a verdict, and all four run. `run` and `human` need
+nothing from the caller; `agent` needs a reviewer and `watch` needs the diff's
+file list, and `run-once` supplies both. A recipe naming a kind whose dependency
+is missing is **refused** by name rather than skipped — a pipeline that silently
+dropped a human approval would put a green board on a change nobody approved.
+(`close` and `labels` are the other two: effects, not verdicts, and only at
+`end`.)
 
 ### 2. Register it
 
@@ -674,23 +667,11 @@ pnpm lingtai add steven-zhc/nextloom-ai-admin
 
 It checks the installation and its permissions **before** it writes anything, so
 a half-onboarded project is not a state that exists. Then it reads the recipe
-from the base branch, hashes it, and records `ProjectConfigured` and
-`ProjectPolicySet`.
+from the base branch, hashes it, and records `ProjectConfigured`.
 
-Policy is Lingtai's, not the repository's — the tier floor and which gates are
-mandatory live in Lingtai's own log, where the agent cannot reach them:
-
-```bash
-pnpm lingtai add steven-zhc/nextloom-ai-admin --tier guarded --require build
-```
-
-A recipe may **add** strictness and can never remove it. One that drops a
-mandatory gate, or asks for a tier below the floor, is rejected by name:
-
-```
-gates: recipe says build, policy requires a gate named "review"
-       — the policy marks it mandatory, and a recipe cannot remove one
-```
+There is nothing else to write. The tier, the gates and the priority order are
+all the recipe's, in the managed repository — which is why this command takes a
+slug and a branch and nothing more.
 
 ### 3. Check it
 
@@ -833,7 +814,7 @@ pnpm lingtai run nextloom-ai-admin --issue 120
 ```
 
 It still stops for a person wherever the recipe says so — a `human` gate, or a
-`policy` gate that saw a migration.
+`watch` action that saw a migration.
 
 ### Take the queue
 

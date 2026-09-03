@@ -13,18 +13,22 @@
  * the old system approval was a label, and a label survives any amount of
  * rewriting.
  *
- * All four are implemented. `process` and `human` need nothing from the caller;
- * `agent` needs a reviewer and `policy` needs the diff's file list, and
+ * Four kinds of action produce a verdict — `run`, `agent`, `watch`, `human` —
+ * and all four are implemented. `run` and `human` need nothing from the caller;
+ * `agent` needs a reviewer and `watch` needs the diff's file list, and
  * `run-once` supplies both. A kind whose dependency is missing is refused by
  * name rather than skipped — see `from-recipe.ts`. The pipeline, the events and
  * `onSha` are the same for all four.
+ *
+ * `close` and `labels` are the other two kinds. They are effects rather than
+ * verdicts, they only run at `end`, and they never reach this interface.
  */
 import type { GatePoint, PayloadOf } from "@lingtai/core";
 
 /**
  * `needs-approval` is a third outcome, not a flavour of failure.
  *
- * A policy gate that sees a migration in the diff, and a human gate, both end
+ * A `watch` action that sees a migration in the diff, and a `human` one, both end
  * the same way: nothing is wrong, and nothing may proceed until a person says
  * so. Folding that into `failed` would put "the build is broken" on a card
  * whose build is fine, and folding it into `passed` would merge it.

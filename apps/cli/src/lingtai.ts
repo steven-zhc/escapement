@@ -137,8 +137,8 @@ async function addCommand(args: string[]): Promise<number> {
     console.error("lingtai add <owner>/<repo>");
     return 2;
   }
-  // No --tier, --require or --approver: there is no policy to write (ADR 0016
-  // §7). Tier and gates are the recipe's, in the managed repository.
+  // Tier and gates are the recipe's, in the managed repository, which is why
+  // this takes a slug and a branch and nothing else.
   return add({ slug, base: flags["base"] });
 }
 

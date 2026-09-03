@@ -9,13 +9,7 @@ examples instead of pretending to be exhaustive.
 
 **Counted 2026-09-02.**
 
-> **This describes the code as it is.** [ADR 0016](decisions/0016-the-settled-model.md)
-> has landed in full: the guard is gone, and with it `GuardTripped`, the
-> `guard_trips` projection and the `--no-guard` flag; the policy concept is gone,
-> with `tier` now the recipe's; gates are five fixed *points* rather than four
-> *kinds*; the `end` point closes issues; the board is four lanes with every gate
-> point rendered; and `prepare` is no longer a stage of its own — it is whatever
-> a recipe puts at the `prepared` point. This file is updated as each step lands, never ahead of it. A
+> **This describes the code as it is.** It is updated as each step lands, never ahead of it. A
 > reference that documents intent instead of behaviour is the defect this
 > repository hit four times on 2026-09-02, and it is the one thing this file
 > exists not to do.
@@ -204,10 +198,10 @@ event to the verdicts that follow is how the second becomes detectable.
 
 `open` · `guarded` · `sandboxed`. Source: `Tier` in `packages/core/src/events.ts:26`.
 
-**It is the recipe's** — `runtime.tier`, defaulting to `guarded` — since the
-policy that used to set a floor under it was deleted (ADR 0016 §7). There is no
-comparison left to make: `run-once.ts` refuses to dispatch when the runtime
-cannot meet what the recipe asks, and that is the whole of the enforcement.
+**It is the recipe's** — `runtime.tier`, defaulting to `guarded`. There is no
+comparison to make and no floor underneath: `run-once.ts` refuses to dispatch
+when the runtime cannot meet what the recipe asks, and that is the whole of the
+enforcement.
 
 `sandboxed` remains a value no runtime provides, so asking for it can only ever
 refuse.

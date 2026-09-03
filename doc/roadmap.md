@@ -223,9 +223,9 @@ the whole design degrades into the plugin free-for-all
 This is not a victory lap, it is the hardest correctness problem in the project:
 **an agent editing the conductor that is running it.** Three rules follow.
 
-- **Lingtai's own policy is the strictest one.** Every gate required, human
-  approval on everything, no waivers configured. It gets no benefit of the doubt
-  it would extend to a business repository.
+- **Lingtai's own recipe is the strictest one.** No point left empty, a `watch`
+  covering its own source, and `merge` always held for a person. It gets no
+  benefit of the doubt it would extend to a business repository.
 - **The conductor never restarts itself.** A merge to `main` lands; the running
   daemon keeps executing the old code until a person runs `lingtai restart`. That is
   the lingtai principle applied to the lingtai: energy released one tooth

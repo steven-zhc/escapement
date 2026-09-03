@@ -34,9 +34,6 @@ export async function status(options: StatusOptions = {}, log = console.log): Pr
 
   for (const project of projects) {
     const name = project.project!;
-    // No policy line any more (ADR 0016 §7). Tier, gates and everything else a
-    // run obeys are the recipe's, and the recipe lives in the managed
-    // repository — which is where to look, rather than here.
     log(`${name}  base=${project.base ?? "(unrecorded)"}`);
 
     // Priority order is the recipe's `kinds`, and the recipe lives in the

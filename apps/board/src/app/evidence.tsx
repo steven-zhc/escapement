@@ -10,7 +10,7 @@
  *
  * So a build failure shows its log tail, a review failure shows its findings
  * *with the failure scenarios* — the scenario is the finding, the claim alone
- * is an opinion — and a policy hold shows the files it matched. All collapsed
+ * is an opinion — and a `watch` hold shows the files it matched. All collapsed
  * by default, because a card that is three screens tall is its own kind of
  * unreadable.
  *
@@ -129,7 +129,7 @@ export function Evidence({
             </span>
           </summary>
           {g.findings.length > 0 ? <Findings findings={g.findings} /> : null}
-          {/* The log tail for a build, the matched files for a policy hold, the
+          {/* The log tail for a build, the matched files for a `watch` hold, the
               question for a human gate. Whatever the gate had to say. */}
           {g.evidence ? <pre className="gevidence">{g.evidence}</pre> : null}
         </details>

@@ -1,5 +1,5 @@
 /**
- * The globs a policy gate watches, compiled early.
+ * The globs a `watch` action matches, compiled early.
  *
  * Compiled at `lingtai doctor` time rather than mid-run, because a pattern with a
  * typo in it should be a refusal at configuration time, not a gate that quietly

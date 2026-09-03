@@ -34,9 +34,9 @@ patch.
 
 | Kind | What it is |
 |---|---|
-| `process` | Runs a command; the exit code is the verdict. `verify.sh`, unchanged. |
+| `run` | Runs a command; the exit code is the verdict. |
 | `agent` | A second agent, cold — only the diff and the issue, never the implementer's context. Structured findings are the verdict. |
-| `policy` | Globs against the diff. The migration hold that caught #117, generalised. |
+| `watch` | Globs against the diff's file list. The migration hold that caught #117, generalised, and `tamper`. |
 | `human` | Waits for a person. Identical event shape; the verdict arrives from the board. |
 
 All four emit `GatePassed` / `GateFailed` / `GateWaived`, all carry `onSha`, all
@@ -83,7 +83,7 @@ open GitHub to act, nothing has changed.
 |---|---|
 | Queued | discovered, prioritised, runnable |
 | Running | one in flight, with turn count, cost, guard trips, files touched |
-| Gates | build, tamper, review, policy — each with its verdict |
+| Gates | build, tamper, review — each with its verdict |
 | **Waiting on you** | the bottleneck, so it gets its own column and inline actions |
 | Landed | merged, each carrying any regression later filed against it |
 
@@ -167,7 +167,6 @@ which is the authority. Notable additions over what the old loop could express:
 | `WorkItemLinked` | connects a filed bug to the merge that caused it |
 | `DispatchRefused` | capability matching said no; never silently downgrade a tier |
 | `GateWaived` | the human escape hatch, recorded |
-| `ProjectPolicySet` | policy changes are events, with a time and a reason |
 
 ### Projections
 
@@ -248,9 +247,9 @@ it is not a security boundary.
 
 ## 6. Configuration
 
-Recipe in `<repo>/.lingtai/config.yaml`, policy in Lingtai's database, and
-a run's recipe read from `origin/<base>` rather than from the agent's branch.
-Full reasoning and the recipe/policy split: [decisions/0005](decisions/0005-config-in-target-repo.md).
+Recipe in `<repo>/.lingtai/config.yaml`, and a run's recipe read from
+`origin/<base>` rather than from the agent's branch. Nothing sits above it.
+Full reasoning: [decisions/0005](decisions/0005-config-in-target-repo.md).
 The schema is [`packages/config/src/recipe.ts`](../packages/config/src/recipe.ts).
 
 Onboarding is `lingtai add <owner>/<repo>`, and `lingtai doctor <project>` is the old
@@ -268,7 +267,7 @@ lingtai/
 │   ├── config/      recipe schema, presets, doctor checks
 │   ├── store/       Postgres: append / read / subscribe
 │   ├── runtime/     ClaudeCodeRuntime · CodexRuntime (stub)
-│   ├── gates/       process · agent · policy · human
+│   ├── gates/       run · agent · watch · human
 │   ├── conductor/   scheduler, dispatch, gate pipeline, integrator, hook socket
 │   └── hook/        the only hot path — Bun single file, no dependencies
 ├── apps/

@@ -1,5 +1,5 @@
 /**
- * The policy gate, the human gate, and the third verdict they both produce.
+ * The `watch` action, the `human` action, and the third verdict they both produce.
  *
  * The thing worth testing hardest is that `needs-approval` is not a synonym for
  * `failed`. A migration in the diff is not a broken build, and a card that says
@@ -10,23 +10,23 @@ import { describe, expect, it } from "vitest";
 import type { GateEvent } from "../src/gate.ts";
 import { runGatePipeline } from "../src/gate.ts";
 import { createHumanGate } from "../src/human-gate.ts";
-import { createPolicyGate } from "../src/policy-gate.ts";
+import { createWatchGate } from "../src/watch-gate.ts";
 import { createProcessGate } from "../src/process-gate.ts";
 
 const context = { runId: "run-1", onSha: "b".repeat(40), cwd: process.cwd(), env: {} };
 
-const policy = (watch: readonly string[], files: string[], then: "request-approval" | "fail" = "request-approval") =>
-  createPolicyGate({ name: "tamper", watch, then }, { changedFiles: async () => files });
+const watching = (watch: readonly string[], files: string[], then: "request-approval" | "fail" = "request-approval") =>
+  createWatchGate({ name: "tamper", watch, then }, { changedFiles: async () => files });
 
-describe("the policy gate", () => {
+describe("the watch action", () => {
   it("passes when the diff touches nothing it watches", async () => {
-    const result = await policy(TAMPER_WATCH, ["src/app/page.tsx", "README.md"]).run(context);
+    const result = await watching(TAMPER_WATCH, ["src/app/page.tsx", "README.md"]).run(context);
 
     expect(result.verdict).toBe("passed");
   });
 
   it("asks for a person when the diff edits what decides the verification", async () => {
-    const result = await policy(TAMPER_WATCH, ["src/x.ts", "package.json"]).run(context);
+    const result = await watching(TAMPER_WATCH, ["src/x.ts", "package.json"]).run(context);
 
     // Not `failed`. Editing package.json is not a defect; it is a thing a
     // person should see, and the two must not render the same.
@@ -35,10 +35,10 @@ describe("the policy gate", () => {
   });
 
   it("names the files and says what to do about them", async () => {
-    const result = await policy(TAMPER_WATCH, ["apps/web/vitest.config.ts"]).run(context);
+    const result = await watching(TAMPER_WATCH, ["apps/web/vitest.config.ts"]).run(context);
 
     expect(result.evidence).toContain("apps/web/vitest.config.ts");
-    // A card reading "held: policy" sends the reader somewhere else to find out
+    // A card reading "held: tamper" sends the reader somewhere else to find out
     // why, which is the failure the board exists to remove.
     expect(result.evidence).toMatch(/read the diff before approving/i);
   });
@@ -46,15 +46,15 @@ describe("the policy gate", () => {
   it("watches dotfiles, which is most of what is worth watching", async () => {
     // `.github/workflows/**` and `.lingtai/**` are both dotted, and a
     // matcher that skips them by default watches nothing while looking correct.
-    const workflows = await policy(TAMPER_WATCH, [".github/workflows/ci.yml"]).run(context);
-    const recipe = await policy(TAMPER_WATCH, [".lingtai/config.yaml"]).run(context);
+    const workflows = await watching(TAMPER_WATCH, [".github/workflows/ci.yml"]).run(context);
+    const recipe = await watching(TAMPER_WATCH, [".lingtai/config.yaml"]).run(context);
 
     expect(workflows.verdict).toBe("needs-approval");
     expect(recipe.verdict).toBe("needs-approval");
   });
 
   it("catches a migration and says to apply it by hand first", async () => {
-    const result = await createPolicyGate(
+    const result = await createWatchGate(
       { name: "migrations", watch: MIGRATION_WATCH, then: "request-approval" },
       { changedFiles: async () => ["prisma/migrations/0002_add_column/migration.sql"] },
     ).run(context);
@@ -64,7 +64,7 @@ describe("the policy gate", () => {
   });
 
   it("refuses outright when told to, for a watch nothing legitimate touches", async () => {
-    const result = await policy([".env*"], [".env.production"], "fail").run(context);
+    const result = await watching([".env*"], [".env.production"], "fail").run(context);
 
     expect(result.verdict).toBe("failed");
   });
@@ -73,7 +73,7 @@ describe("the policy gate", () => {
     // Built at `lingtai doctor` time. A watch that matches nothing looks exactly
     // like a watch with nothing to report, and `tamper` is supposed to fire
     // rarely — so the two must never be confusable.
-    expect(() => policy(["  "], [])).toThrow(BadWatchPatternError);
+    expect(() => watching(["  "], [])).toThrow(BadWatchPatternError);
   });
 });
 

@@ -15,7 +15,7 @@
  * decision is already made, so a slow store delays only a call that was going to
  * be refused.
  *
- * **It answers from memory.** Policy is resolved once when the run is
+ * **It answers from memory.** Everything it needs is resolved when the run is
  * registered. No read, no parse, no allocation beyond the reply.
  *
  * **A run it does not know is denied.** The socket is per-conductor, not

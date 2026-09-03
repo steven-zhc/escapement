@@ -6,13 +6,12 @@
  * is the part that has to be right:
  *
  *   resolve the recipe from origin/<base>   never from the agent's branch
- *   check it against policy                 a recipe may add strictness only
  *   discover, claim                         the constraint decides the race
  *   provision the worktree                  filtered env, submodules, 0600
  *   prove the hook fails closed             before anything is dispatched
  *   RunStarted                              the conductor knows more than the hook
- *   run the agent                           under the guard, on the socket
- *   diff → gates → integrate                each refusal typed and recorded
+ *   run the agent                           on the socket, restricted by nothing
+ *   the diff → `proposed` → integrate       each refusal typed and recorded
  *
  * **Every exit appends.** A run that ends leaves either `RunFinished` or
  * `RunFailed`, and a work item that does not land is either released or blocked
@@ -152,7 +151,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   const project = options.project.project!;
   const promptVersion = options.promptVersion ?? "ticket@1";
 
-  // ---- 1. the recipe, from the base branch, checked against policy ----------
+  // ---- 1. the recipe, from the base branch --------------------------------
   let resolved: ResolvedRecipe;
   try {
     // The base recorded at `lingtai add`, not the repository's default branch. Those
@@ -490,7 +489,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
             wallMs: parseDuration(recipe.runtime.limits.wall),
           },
         },
-        policy: {
+        watch: {
           changedFiles: async () => {
             const names = await git(["diff", "--name-only", `${worktree.baseSha}...HEAD`], {
               ...{ token: options.token, env: options.gitEnv },
@@ -534,7 +533,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
 
       // ---- 9. hold, if anything asked for a person -------------------------
       // Two things can ask: a gate whose verdict is `needs-approval` — the
-      // human gate, or a policy gate that saw a migration — and the operator,
+      // human action, or a `watch` action that saw a migration — and the operator,
       // with `--no-merge`.
       //
       // **One path, deliberately.** #38 shipped `--no-merge` emitting
