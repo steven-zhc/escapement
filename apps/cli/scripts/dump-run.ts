@@ -9,11 +9,11 @@
  * found: fifteen writes in the log, an empty diff on disk, and the disagreement
  * only visible with both in front of you.
  *
- * Deliberately not an `esc` subcommand. `esc status` and the board answer
+ * Deliberately not an `lingtai` subcommand. `lingtai status` and the board answer
  * "what is happening"; this answers "what exactly was appended", which is a
  * debugging question and should look like one.
  */
-import { eventStore } from "@escapement/store";
+import { eventStore } from "@lingtai/store";
 
 const id = process.argv[2] ?? "";
 if (!id) {

@@ -4,7 +4,7 @@ import type { Contract } from "./prisma/contract.d.ts";
 import contractJson from "./prisma/contract.json" with { type: "json" };
 
 /**
- * A client against Escapement's own database. Never one belonging to a managed
+ * A client against Lingtai's own database. Never one belonging to a managed
  * project — it has to keep running while a managed project is the thing being
  * changed.
  *

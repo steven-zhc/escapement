@@ -1,5 +1,5 @@
 {
-  "name": "@escapement/board",
+  "name": "@lingtai/board",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,15 +10,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@escapement/conductor": "workspace:*",
-    "@escapement/core": "workspace:*",
-    "@escapement/env": "workspace:*",
-    "@escapement/github": "workspace:*",
-    "@escapement/store": "workspace:*",
+    "@lingtai/conductor": "workspace:*",
+    "@lingtai/core": "workspace:*",
+    "@lingtai/env": "workspace:*",
+    "@lingtai/github": "workspace:*",
+    "@lingtai/store": "workspace:*",
     "next": "16.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "@escapement/daemon": "workspace:*"
+    "@lingtai/daemon": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

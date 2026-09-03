@@ -47,7 +47,7 @@ describe("upcast", () => {
 
   /**
    * The first real bump. `ProjectConfigured` v1 recorded the repository name but
-   * not its owner, so `esc status` could not resolve a recipe for a project it
+   * not its owner, so `lingtai status` could not resolve a recipe for a project it
    * had itself registered.
    */
   it("walks a v1 ProjectConfigured all the way up, filling both fields with null", () => {

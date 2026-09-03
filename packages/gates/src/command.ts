@@ -9,7 +9,7 @@
  * holds no verdict about anything. Sharing the runner is right; sharing the
  * result type would have quietly given prepare an `onSha` that means nothing.
  *
- * It lives in `@escapement/gates` rather than in a package of its own because
+ * It lives in `@lingtai/gates` rather than in a package of its own because
  * the dependency already runs that way — the conductor imports the gates — and a
  * package with one file in it is a worse answer than a slightly wide name.
  *

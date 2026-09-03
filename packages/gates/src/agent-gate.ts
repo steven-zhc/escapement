@@ -42,7 +42,7 @@
  * three findings in 001 were real. A filter with nothing to filter still costs
  * an agent call. Add it when false positives actually appear.
  */
-import type { Runtime } from "@escapement/runtime";
+import type { Runtime } from "@lingtai/runtime";
 import type { Gate, GateContext, GateFinding, GateResult } from "./gate.ts";
 
 export interface AgentGateSpec {

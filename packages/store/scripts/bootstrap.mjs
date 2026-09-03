@@ -2,7 +2,7 @@
  * Applies sql/notify.sql and proves the four properties the schema alone cannot
  * express. Run after `pnpm db:init`, and again any time you doubt the database.
  *
- *   pnpm --filter @escapement/store db:bootstrap
+ *   pnpm --filter @lingtai/store db:bootstrap
  *
  * Everything here uses the DIRECT url. Through a transaction pooler the
  * cross-connection NOTIFY check below fails silently, which is the whole reason
@@ -15,7 +15,7 @@ import pg from "pg";
 import { dbVar } from "../src/env.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// `ESCAPEMENT_TEST=1` points this at the test database instead, which is how
+// `LINGTAI_TEST=1` points this at the test database instead, which is how
 // that one gets its schema.
 const name = dbVar("DIRECT_DATABASE_URL");
 const url = process.env[name];
@@ -78,7 +78,7 @@ const listener = new pg.Client({ connectionString: url });
 await listener.connect();
 const heard = [];
 listener.on("notification", (m) => heard.push(m.payload));
-await listener.query("LISTEN escapement");
+await listener.query("LISTEN lingtai");
 await new Promise((r) => setTimeout(r, 500));
 
 const second = await c.query(INS, ev(2));
@@ -93,15 +93,15 @@ await listener.end();
 // ---- clean up the probe rows ----------------------------------------------
 // The rules block DELETE, so drop them the only way left. Real events are never
 // removed; these were never real.
-await c.query("alter table events disable rule escapement_events_no_delete");
+await c.query("alter table events disable rule lingtai_events_no_delete");
 await c.query("delete from events where stream_id = 'wi-probe-1'");
-await c.query("alter table events enable rule escapement_events_no_delete");
+await c.query("alter table events enable rule lingtai_events_no_delete");
 // Scoped to the probe stream, not the whole table.
 //
 // This counted every row in `events` and asserted zero. On an empty database
 // those are the same question; on any database that has recorded a single real
 // event they are not, so a script documented as "run it again any time you
-// doubt the database" would have started failing the moment Escapement did any
+// doubt the database" would have started failing the moment Lingtai did any
 // work at all. It surfaced against a database with a hundred events in it.
 const left = await c.query(
   "select count(*)::int n from events where stream_id = 'wi-probe-1'",

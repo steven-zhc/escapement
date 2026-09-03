@@ -17,9 +17,9 @@
  * than two vocabularies for one idea. What is here is what makes `--no-merge`
  * mean something before then.
  */
-import { parsePayload, reduceRun, reduceWorkItem } from "@escapement/core";
-import type { GitHubClient } from "@escapement/github";
-import { type EventStore, eventStore } from "@escapement/store";
+import { parsePayload, reduceRun, reduceWorkItem } from "@lingtai/core";
+import type { GitHubClient } from "@lingtai/github";
+import { type EventStore, eventStore } from "@lingtai/store";
 import { workItemStream } from "./discover.ts";
 import { integrate } from "./integrate.ts";
 import type { TokenSource } from "./worktree.ts";

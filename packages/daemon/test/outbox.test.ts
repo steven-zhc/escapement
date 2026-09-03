@@ -11,9 +11,9 @@
  * rebuilding the projection, which is what a crash plus a restart amounts to,
  * and checking the row is still pending and still singular.
  */
-import { databaseUrl, directDatabaseUrl } from "@escapement/env";
-import { createDb, createEventStore, createProjectionRunner, type Db, type EventStore } from "@escapement/store";
-import { outboxProjection, pendingOutbox, deadOutbox, labelsFor } from "@escapement/conductor/outbox";
+import { databaseUrl, directDatabaseUrl } from "@lingtai/env";
+import { createDb, createEventStore, createProjectionRunner, type Db, type EventStore } from "@lingtai/store";
+import { outboxProjection, pendingOutbox, deadOutbox, labelsFor } from "@lingtai/conductor/outbox";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deliverOutbox, type Deliverer } from "../src/index.ts";
@@ -117,13 +117,13 @@ afterAll(async () => {
   const c = new pg.Client({ connectionString: directDatabaseUrl() });
   await c.connect();
   try {
-    await c.query("alter table events disable rule escapement_events_no_delete");
+    await c.query("alter table events disable rule lingtai_events_no_delete");
     for (const id of [...created, `ctl-outbox-${PROJECT}`]) {
       await c.query("delete from events where stream_id = $1", [id]);
     }
     await c.query("delete from outbox where payload->>'project' = $1", [PROJECT]);
   } finally {
-    await c.query("alter table events enable rule escapement_events_no_delete");
+    await c.query("alter table events enable rule lingtai_events_no_delete");
     await c.end();
   }
 });
@@ -189,8 +189,8 @@ describe("the outbox", () => {
   it("computes the label set rather than adding to it", () => {
     // `--add-label` is set union, not a transition. #35 carried agent:blocked
     // and agent:review at once and nothing could notice.
-    expect(labelsFor("running")).toEqual(["escapement:working"]);
-    expect(labelsFor("waiting")).toEqual(["escapement:waiting"]);
+    expect(labelsFor("running")).toEqual(["lingtai:working"]);
+    expect(labelsFor("waiting")).toEqual(["lingtai:waiting"]);
     expect(labelsFor("landed")).toEqual([]);
   });
 });
@@ -215,11 +215,11 @@ describe("a delivery that fails", () => {
     const c = new pg.Client({ connectionString: directDatabaseUrl() });
     await c.connect();
     try {
-      await c.query("alter table events disable rule escapement_events_no_delete");
+      await c.query("alter table events disable rule lingtai_events_no_delete");
       await c.query("delete from events where stream_id = $1", [`ctl-outbox-${other}`]);
       await c.query("delete from outbox where payload->>'project' = $1", [other]);
     } finally {
-      await c.query("alter table events enable rule escapement_events_no_delete");
+      await c.query("alter table events enable rule lingtai_events_no_delete");
       await c.end();
     }
   });

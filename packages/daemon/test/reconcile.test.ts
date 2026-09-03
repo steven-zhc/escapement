@@ -9,8 +9,8 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { directDatabaseUrl } from "@escapement/env";
-import { createDb, createEventStore, type Db, type EventStore } from "@escapement/store";
+import { directDatabaseUrl } from "@lingtai/env";
+import { createDb, createEventStore, type Db, type EventStore } from "@lingtai/store";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { exists, findOrphans, reconcile } from "../src/index.ts";
@@ -51,7 +51,7 @@ const started = (taskId: string) => ({
 beforeAll(async () => {
   client = createDb();
   store = createEventStore(client);
-  home = await mkdtemp(join(tmpdir(), "esc-reconcile-"));
+  home = await mkdtemp(join(tmpdir(), "lingtai-reconcile-"));
 }, 120_000);
 
 afterAll(async () => {
@@ -59,10 +59,10 @@ afterAll(async () => {
   const c = new pg.Client({ connectionString: directDatabaseUrl() });
   await c.connect();
   try {
-    await c.query("alter table events disable rule escapement_events_no_delete");
+    await c.query("alter table events disable rule lingtai_events_no_delete");
     for (const id of created) await c.query("delete from events where stream_id = $1", [id]);
   } finally {
-    await c.query("alter table events enable rule escapement_events_no_delete");
+    await c.query("alter table events enable rule lingtai_events_no_delete");
     await c.end();
   }
 });
@@ -136,7 +136,7 @@ describe("reconciliation", () => {
   });
 
   it("appends nothing when there is nothing to say", async () => {
-    const quiet = await mkdtemp(join(tmpdir(), "esc-quiet-"));
+    const quiet = await mkdtemp(join(tmpdir(), "lingtai-quiet-"));
     const before = (await store.read("ctl-conductor")).length;
 
     const found = await reconcile({ home: quiet, store });

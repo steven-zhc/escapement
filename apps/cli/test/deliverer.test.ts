@@ -4,10 +4,10 @@
  * Pure — a fake client, no network. Worth its own file because the bug it
  * pins down was found by an end-to-end run and not by any unit test: the
  * first outbox drain stripped `enhancement` from admin #120, #155 and #156,
- * which is the label the recipe selects on. Escapement deleted its own
+ * which is the label the recipe selects on. Lingtai deleted its own
  * queue's selection criteria and the three issues silently went unrunnable.
  */
-import type { GitHubClient, Issue } from "@escapement/github";
+import type { GitHubClient, Issue } from "@lingtai/github";
 import { describe, expect, it } from "vitest";
 import { deliverer } from "../src/conduct.ts";
 
@@ -33,12 +33,12 @@ function fakeClient(labels: string[]) {
 }
 
 describe("setting labels without deleting somebody else's", () => {
-  it("keeps a foreign label while adding Escapement's own", async () => {
+  it("keeps a foreign label while adding Lingtai's own", async () => {
     const { client, state } = fakeClient(["enhancement"]);
-    await deliverer(new Map([["admin", client]])).setLabels("admin", 156, ["escapement:working"]);
+    await deliverer(new Map([["admin", client]])).setLabels("admin", 156, ["lingtai:working"]);
 
     expect(state.set).toContain("enhancement");
-    expect(state.set).toContain("escapement:working");
+    expect(state.set).toContain("lingtai:working");
   });
 
   /**
@@ -46,8 +46,8 @@ describe("setting labels without deleting somebody else's", () => {
    * returns `[]` for a landed item, and a whole-set replace with `[]` empties
    * the issue.
    */
-  it("an empty computed set clears Escapement's labels and nothing else", async () => {
-    const { client, state } = fakeClient(["enhancement", "escapement:working", "agent:review"]);
+  it("an empty computed set clears Lingtai's labels and nothing else", async () => {
+    const { client, state } = fakeClient(["enhancement", "lingtai:working", "agent:review"]);
     await deliverer(new Map([["admin", client]])).setLabels("admin", 156, []);
 
     expect(state.set).toEqual(["enhancement", "agent:review"]);
@@ -55,7 +55,7 @@ describe("setting labels without deleting somebody else's", () => {
 
   it("does not duplicate a label that is already there", async () => {
     const { client, state } = fakeClient(["enhancement"]);
-    await deliverer(new Map([["admin", client]])).setLabels("admin", 156, ["escapement:waiting"]);
+    await deliverer(new Map([["admin", client]])).setLabels("admin", 156, ["lingtai:waiting"]);
 
     expect(state.set).toHaveLength(2);
   });

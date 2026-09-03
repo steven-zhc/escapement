@@ -1,4 +1,4 @@
-# 004 — Where does `esc-hook`'s latency actually go?
+# 004 — Where does `lingtai-hook`'s latency actually go?
 
 **Run** 2026-08-31, on the development machine · **Result** ~16ms p50, p95
 anywhere from 19 to 47ms — and **all of it is Bun's runtime startup**. The 20ms
@@ -9,7 +9,7 @@ p95 target is not met.
 [0002](../decisions/0002-typescript.md) made the hook the one exception to
 "TypeScript everywhere": a Bun-compiled single file with no dependencies,
 because `PreToolUse` runs in front of every tool call — tens of thousands across
-a run. [#11](https://github.com/steven-zhc/escapement/issues/11) put a number on
+a run. [#11](https://github.com/steven-zhc/lingtai/issues/11) put a number on
 it: **under 20ms at the 95th percentile, measured, not assumed.**
 
 ## Method
@@ -40,7 +40,7 @@ Three things follow, and the second is the one that matters.
 
 **The round trip is free too.** The binary that connects to a socket, sends a
 request and reads a reply is *not slower* than the one that fails immediately
-because there is no socket — the difference is inside the noise. Escapement's
+because there is no socket — the difference is inside the noise. Lingtai's
 own code, the conductor's in-memory decision, and the unix socket together cost
 approximately nothing.
 
@@ -67,7 +67,7 @@ Recorded as [0011](../decisions/0011-hook-latency-is-runtime-startup.md).
 ## What the test asserts now
 
 Not 20ms, because that would be a test that fails for reasons nobody can fix.
-It asserts what Escapement actually controls and can regress:
+It asserts what Lingtai actually controls and can regress:
 
 - the **marginal** cost of the socket round trip over a fail-fast spawn stays
   small — this is the number that would move if the conductor started doing work

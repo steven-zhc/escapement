@@ -22,7 +22,7 @@ import {
   isEventType,
   parsePayload,
   parseStoredPayload,
-} from "@escapement/core";
+} from "@lingtai/core";
 import { type Db, db } from "./db.ts";
 import type { CodecTypes } from "./prisma/contract.d.ts";
 import { parseTimestamptz } from "./timestamptz.ts";
@@ -69,7 +69,7 @@ export class ConcurrencyError extends Error {
 }
 
 /**
- * A type that is not in `@escapement/core`'s catalogue. Thrown on the way in so
+ * A type that is not in `@lingtai/core`'s catalogue. Thrown on the way in so
  * a typo never reaches the log, and on the way out so a reader written against
  * an older catalogue says so instead of quietly skipping rows it does not
  * recognise.
@@ -79,7 +79,7 @@ export class UnknownEventTypeError extends Error {
   readonly type: string;
 
   constructor(type: string, where: "append" | "read") {
-    super(`"${type}" is not an event type in @escapement/core (on ${where})`);
+    super(`"${type}" is not an event type in @lingtai/core (on ${where})`);
     this.type = type;
   }
 }
@@ -93,7 +93,7 @@ export class UnknownEventTypeError extends Error {
  * Nothing can produce it yet: every type is at `schemaVer` 1, so every chain has
  * length zero. It exists because the alternative to failing loudly is handing a
  * v2 payload to a v1 zod schema, which is how a year of history gets
- * misinterpreted quietly. Upcasters live in `@escapement/core`'s registry.
+ * misinterpreted quietly. Upcasters live in `@lingtai/core`'s registry.
  */
 export class SchemaVersionUnsupportedError extends Error {
   override readonly name = "SchemaVersionUnsupportedError";

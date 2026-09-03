@@ -9,7 +9,7 @@
  *
  * **`onSha` is load-bearing.** A verdict is about a diff, not about a ticket.
  * Bind it to the commit and a force-push invalidates the approval by
- * arithmetic — `gatesOn()` in `@escapement/core` simply stops returning it. In
+ * arithmetic — `gatesOn()` in `@lingtai/core` simply stops returning it. In
  * the old system approval was a label, and a label survives any amount of
  * rewriting.
  *
@@ -19,7 +19,7 @@
  * name rather than skipped — see `from-recipe.ts`. The pipeline, the events and
  * `onSha` are the same for all four.
  */
-import type { GatePoint, PayloadOf } from "@escapement/core";
+import type { GatePoint, PayloadOf } from "@lingtai/core";
 
 /**
  * `needs-approval` is a third outcome, not a flavour of failure.

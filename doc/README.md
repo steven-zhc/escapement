@@ -29,6 +29,7 @@ Three kinds of thing live here, and the distinction matters.
 | [0014](decisions/0014-one-loop-one-log.md) | One loop, one log; everything else is a projection or a subscriber | superseded by 0016 |
 | [0015](decisions/0015-five-gates-and-two-extensions.md) | Five gates, and the two ways a plugin may extend the loop | superseded by 0016 |
 | [0016](decisions/0016-the-settled-model.md) | **The settled model: one loop, five gates, no policy** | accepted |
+| [0017](decisions/0017-the-project-is-called-lingtai.md) | The project is called Lingtai | accepted |
 
 ## Experiments
 
@@ -36,8 +37,8 @@ Three kinds of thing live here, and the distinction matters.
 |---|---|---|
 | [001](experiments/001-cold-review-issue-58.md) | Does a cold reviewer catch what four other checks missed? | yes, plus two nobody had found |
 | [002](experiments/002-subscriber-survives-a-kill.md) | Does the subscriber survive its connection being killed? | yes, no gap and no duplicate |
-| [003](experiments/003-doctor-catches-a-pooler.md) | Does `esc doctor` actually catch a transaction pooler? | yes, including the flagless case |
-| [004](experiments/004-hook-latency.md) | Where does `esc-hook`'s latency actually go? | all of it is Bun's startup; 20ms p95 not met |
+| [003](experiments/003-doctor-catches-a-pooler.md) | Does `lingtai doctor` actually catch a transaction pooler? | yes, including the flagless case |
+| [004](experiments/004-hook-latency.md) | Where does `lingtai-hook`'s latency actually go? | all of it is Bun's startup; 20ms p95 not met |
 | [005](experiments/005-rung-1-reaches-a-real-repository.md) | Does a run reach a real repository end to end? | yes, after four attempts, each buying a defect |
 | [006](experiments/006-the-loop-closes-unattended.md) | Does the loop close with nobody running a command? | yes — admin #156, 15 turns, $0.83 |
 | [007](experiments/007-the-log-before-the-reset.md) | What was in the log before ADR 0016 reset it? | 106 events, Phase 0 through 2a, kept because it is the only copy |
@@ -46,22 +47,16 @@ Three kinds of thing live here, and the distinction matters.
 
 ## Open
 
-- **[ADR 0016](decisions/0016-the-settled-model.md) is specified and not built.**
-  It is what the code is written against; nothing in the code has moved yet. The
-  order:
-
-  1. `guard` → `tools`, and the eight rules out of the core into a preset
-  2. delete the policy concept; `tier` moves to `runtime.tier` in the recipe
-  3. five gate points, `GatesResolved`, gate kinds become actions
-  4. the `end` gate, closing the issue, and `labelsFor` out of the outbox
-  5. the board: four states, five points, `skipped` shown
-  6. re-run one admin ticket end to end
-
-  Each step gets `pnpm install && contract:emit && typecheck && db:bootstrap`,
-  the full suite, and its own commit.
+- **[ADR 0016](decisions/0016-the-settled-model.md) is built.** Phase 3 landed
+  in six steps between 2026-09-01 and 2026-09-02: the guard deleted, the policy
+  concept deleted, five gate points with `GatesResolved`, the `end` point closing
+  its own issue, the board reduced to four lanes with every point rendered, and a
+  real admin ticket run end to end on the new model. `prepare` folded into the
+  `prepared` point last (`3c'`), which is why the event count fell from 41 to 38.
+  What is *not* proven is listed under experiment 009.
 
 - **The condition 0016 §4 rests on is the one to watch.** An unconfigured gate
-  must render as `skipped` on the board and in `esc status`, never be omitted.
+  must render as `skipped` on the board and in `lingtai status`, never be omitted.
   Skip that and the design collapses back into the plugin free-for-all
   [0014](decisions/0014-one-loop-one-log.md) rejected — which is why
   `GatesResolved` is an event and not a convention.
@@ -71,7 +66,7 @@ Three kinds of thing live here, and the distinction matters.
   the guard on, and the launchd install. See
   [experiment 006](experiments/006-the-loop-closes-unattended.md) for the full
   list of limits.
-- **Six of `esc doctor`'s checks are not implemented.** They print as `skip` with
+- **Six of `lingtai doctor`'s checks are not implemented.** They print as `skip` with
   the issue that fills them in — recipe, repository, environment allowlist, hook
   fail-closed, GitHub auth — rather than being omitted. A check you cannot see is
   a check you will forget you never had.
@@ -79,7 +74,7 @@ Three kinds of thing live here, and the distinction matters.
   runs and publishes it when the transaction commits, so under concurrent
   writers a subscriber can see `seq` 6 while 5 is still in flight, and a
   checkpoint advanced to 6 skips 5 forever. It cannot bite while the conductor
-  is the single writer. [#4](https://github.com/steven-zhc/escapement/issues/4)
+  is the single writer. [#4](https://github.com/steven-zhc/lingtai/issues/4)
   has to solve it rather than assume it away; the note is in `readAll`.
 - **Forward compatibility stops at the store.** The reducers ignore an event
   type they do not know, so an older projection survives a newer conductor. The

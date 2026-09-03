@@ -8,12 +8,12 @@
  * Each test uses its own key so the suite does not fight the operator's daemon
  * — or itself.
  */
-import { directDatabaseUrl } from "@escapement/env";
-import { taskViewProjection } from "@escapement/conductor";
+import { directDatabaseUrl } from "@lingtai/env";
+import { taskViewProjection } from "@lingtai/conductor";
 import { describe, expect, it } from "vitest";
 import { acquireDaemonLock, startDaemon } from "../src/index.ts";
 
-const key = () => `escapement:test:${crypto.randomUUID().slice(0, 8)}`;
+const key = () => `lingtai:test:${crypto.randomUUID().slice(0, 8)}`;
 
 describe("the daemon lock", () => {
   it("lets the first caller in and turns the second away", async () => {
@@ -23,7 +23,7 @@ describe("the daemon lock", () => {
 
     try {
       const second = await acquireDaemonLock({ key: k });
-      // Not an error. Running `esc daemon` while launchd's copy is up is a
+      // Not an error. Running `lingtai daemon` while launchd's copy is up is a
       // reasonable thing to do; it needs an answer, not a stack trace.
       expect(second.ok).toBe(false);
     } finally {

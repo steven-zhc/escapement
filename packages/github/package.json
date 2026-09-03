@@ -1,5 +1,5 @@
 {
-  "name": "@escapement/github",
+  "name": "@lingtai/github",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@escapement/core": "workspace:*",
-    "@escapement/env": "workspace:*"
+    "@lingtai/core": "workspace:*",
+    "@lingtai/env": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

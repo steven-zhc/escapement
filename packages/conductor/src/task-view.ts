@@ -1,7 +1,7 @@
 /**
  * `task_view` — the one projection.
  *
- * It replaces `board` and `queue`. One row per task Escapement
+ * It replaces `board` and `queue`. One row per task Lingtai
  * has touched, holding the latest state and the metadata a card shows, and
  * nothing else: the board's list view is a `select` against this table and no
  * second query ([0012](../../../doc/decisions/0012-one-task-view.md)).
@@ -38,14 +38,14 @@
  * the same reason: assignment is idempotent and appending is not. Only the
  * verdict is kept — the evidence that came with it is detail.
  */
-import type { PayloadOf } from "@escapement/core";
-import { databaseUrl } from "@escapement/env";
-import type { Projection, ProjectionContext } from "@escapement/store";
+import type { PayloadOf } from "@lingtai/core";
+import { databaseUrl } from "@lingtai/env";
+import type { Projection, ProjectionContext } from "@lingtai/store";
 import pg from "pg";
 
 /**
  * Where a task is. `queued` is the only one that can be true without
- * Escapement having appended anything — see `syncQueued`.
+ * Lingtai having appended anything — see `syncQueued`.
  */
 export type TaskState = "queued" | "running" | "gates" | "waiting" | "landed";
 
@@ -471,9 +471,9 @@ async function setGate(
  * few tabs open and an event stream refreshing them.
  *
  * Rows already past `queued` are left alone: GitHub still lists an issue that
- * Escapement has claimed, and the log is the authority on what happened to it.
+ * Lingtai has claimed, and the log is the authority on what happened to it.
  * Queued rows that GitHub no longer lists are dropped, because they were never
- * Escapement's state to keep.
+ * Lingtai's state to keep.
  */
 export async function syncQueued(
   project: string,

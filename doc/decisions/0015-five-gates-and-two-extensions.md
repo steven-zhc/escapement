@@ -32,12 +32,12 @@ finite.
 
 ## Unconfigured is skipped, and that is the user's call
 
-A gate with nothing configured is skipped. Escapement does not verify that a
+A gate with nothing configured is skipped. Lingtai does not verify that a
 project has configured the gates it "should" have — the workflow is the user's
 to define, and a run that merged with no review because none was configured is
 the user's decision, not a defect.
 
-The inverse is Escapement's responsibility: **configured and did not run is a
+The inverse is Lingtai's responsibility: **configured and did not run is a
 bug here.**
 
 This replaces `requiredGates`, which existed to make "should have happened and
@@ -47,7 +47,7 @@ did not" detectable. It is no longer needed, and the argument in
 declaration.
 
 **One condition makes that true, and it is load-bearing:** the board and
-`esc status` must render an unconfigured gate as `skipped`, never omit it. A
+`lingtai status` must render an unconfigured gate as `skipped`, never omit it. A
 closed set is only better than a plugin free-for-all because you can *see* the
 empty slots. Omit them and this collapses back into the model 0014 rejected.
 
@@ -61,7 +61,7 @@ It is a gate anyway, for the same reason the rest of this design works:
 **visibility**. Closing the issue, or labelling it, as a subscriber would be
 invisible — you could not tell from the recipe whether anything did it. As a
 gate point it is a declared, skippable, displayable step. Today nothing closes a
-landed issue, and nothing on GitHub shows that Escapement touched it; that gap
+landed issue, and nothing on GitHub shows that Lingtai touched it; that gap
 was invisible precisely because there was no place it was supposed to be.
 
 `end` fires on **any** terminal outcome, not only a landed one, and the action

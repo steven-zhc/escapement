@@ -1,5 +1,5 @@
 {
-  "name": "@escapement/store",
+  "name": "@lingtai/store",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -19,8 +19,8 @@
     "db:reset-test": "node scripts/reset-test-log.mjs"
   },
   "dependencies": {
-    "@escapement/core": "workspace:*",
-    "@escapement/env": "workspace:*",
+    "@lingtai/core": "workspace:*",
+    "@lingtai/env": "workspace:*",
     "@prisma/orm-postgres": "8.0.0-rc.8",
     "pg": "^8.16.3"
   },

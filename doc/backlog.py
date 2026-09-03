@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Backlog for steven-zhc/escapement, generated in dependency order so each
+"""Backlog for steven-zhc/lingtai, generated in dependency order so each
 issue can reference the real number of the ones it depends on."""
 
-REPO = "steven-zhc/escapement"
+REPO = "steven-zhc/lingtai"
 
 MILESTONES = [
     ("Phase 0 — System scaffold",      "An event round-trips through Postgres and a projection rebuilds from the log."),
-    ("Phase 1 — Minimum runnable unit","One real admin ticket goes discovery to merge with `esc run --once`, supervised."),
-    ("Phase 2 — Take over admin",      "Escapement works admin unattended for a week; agent-loop.sh is retired."),
-    ("Phase 3 — Self-hosting",         "Escapement lands a change to its own repository, through its own gates."),
+    ("Phase 1 — Minimum runnable unit","One real admin ticket goes discovery to merge with `lingtai run --once`, supervised."),
+    ("Phase 2 — Take over admin",      "Lingtai works admin unattended for a week; agent-loop.sh is retired."),
+    ("Phase 3 — Self-hosting",         "Lingtai lands a change to its own repository, through its own gates."),
     ("Phase 4 — Multi-project",        "A second repository runs with no code change, only a descriptor."),
     ("Phase 5 — Feedback loop",        "A gate change is evaluated by replay against history before it ships."),
 ]
@@ -54,7 +54,7 @@ to clean up after a `kill -9`.
 **Phase 0** · What makes the system event-driven rather than timed.
 
 ## What
-`subscribe(onSeq)` on a dedicated `pg` connection listening to the `escapement`
+`subscribe(onSeq)` on a dedicated `pg` connection listening to the `lingtai`
 channel. Prisma has no LISTEN/NOTIFY, so this sits alongside it — see
 [ADR 0004](../blob/main/doc/decisions/0004-prisma.md).
 
@@ -102,7 +102,7 @@ replay.
 - [ ] Catch-up and live modes, with the handoff losing nothing
 - [ ] A handler that throws stops that projection and leaves its checkpoint intact
 - [ ] `rebuild` produces a byte-identical table to the incremental path
-- [ ] Lag per projection is queryable — `esc doctor` reports it
+- [ ] Lag per projection is queryable — `lingtai doctor` reports it
 
 ## Notes
 This property is why no projection is declared in the Prisma contract yet: changing
@@ -111,11 +111,11 @@ one costs a truncate, not a migration.
 Depends on {{st-append}}, {{st-listen}}.
 """),
 
-("cli-doctor", 0, "feature", "CLI: the `esc` skeleton and `esc doctor`", """
+("cli-doctor", 0, "feature", "CLI: the `lingtai` skeleton and `lingtai doctor`", """
 **Phase 0** · The old `preflight()`, generalised.
 
 ## What
-The `esc` entry point, and `doctor` as its first real command. The old loop refused
+The `lingtai` entry point, and `doctor` as its first real command. The old loop refused
 to start when its guard hook failed a smoke test; that instinct was right and should
 apply to every check.
 
@@ -138,7 +138,7 @@ Depends on {{core-reduce}}, {{st-proj}}.
 **Phase 0** · The one task that needs a human first.
 
 ## What
-Point `DATABASE_URL` at Escapement's own database — not one belonging to a managed
+Point `DATABASE_URL` at Lingtai's own database — not one belonging to a managed
 project — and bring the schema up.
 
 ```
@@ -149,7 +149,7 @@ psql "$DATABASE_URL" -f packages/store/sql/notify.sql
 
 ## Done when
 - [ ] `events`, `checkpoints` and `outbox` exist, with `data` and `payload` as `jsonb`
-- [ ] The `escapement` NOTIFY trigger fires on insert
+- [ ] The `lingtai` NOTIFY trigger fires on insert
 - [ ] The append-only rules reject an `UPDATE` and a `DELETE` against `events`
 - [ ] `.env.local` is filled in and still untracked
 
@@ -159,13 +159,13 @@ triggers or rules.
 """),
 
 # ---------------------------------------------------------------- phase 1 ----
-("gh-app", 1, "feature", "GitHub: the App client and `esc add`", """
+("gh-app", 1, "feature", "GitHub: the App client and `lingtai add`", """
 **Phase 1** · Onboarding is a repo slug plus permissions, and nothing else.
 
 ## What
 A GitHub App client (installation tokens, not a PAT — see
-[ADR 0006](../blob/main/doc/decisions/0006-github-app.md)) and `esc add <owner>/<repo>`,
-which reads `.escapement/config.yaml` from the base branch, applies a default policy,
+[ADR 0006](../blob/main/doc/decisions/0006-github-app.md)) and `lingtai add <owner>/<repo>`,
+which reads `.lingtai/config.yaml` from the base branch, applies a default policy,
 and registers the project.
 
 ## Done when
@@ -185,7 +185,7 @@ Depends on {{cli-doctor}}.
 **Phase 1** · The governance rule, in code.
 
 ## What
-Read `.escapement/config.yaml` from `origin/<base>` — **never from the agent's
+Read `.lingtai/config.yaml` from `origin/<base>` — **never from the agent's
 branch** — merge the preset, validate against the schema, check it does not violate
 policy, and hash the result into `RunStarted`.
 
@@ -215,7 +215,7 @@ recipe's `kinds` order, oldest first.
 - [ ] Labels are read once at discovery and never consulted again for state
 - [ ] Your own `blocked` label and the `agent:*` namespace are both excluded
 - [ ] Re-discovering an existing item is a no-op, not a duplicate event
-- [ ] `esc status` prints the queue
+- [ ] `lingtai status` prints the queue
 
 ## Notes
 Phase 1 runs against issue numbers you nominate, not the queue — `agent-loop.sh` is
@@ -244,7 +244,7 @@ submodules initialised and the filtered env planted at the recipe's `plantAt`.
 Depends on {{discover}}.
 """),
 
-("hook-bin", 1, "feature", "Hook: the `esc-hook` binary and the conductor socket", """
+("hook-bin", 1, "feature", "Hook: the `lingtai-hook` binary and the conductor socket", """
 **Phase 1** · One channel, both directions.
 
 ## What
@@ -362,7 +362,7 @@ placeholder.
 Depends on {{integrate}}.
 """),
 
-("run-once", 1, "feature", "CLI: `esc run --once`, end to end", """
+("run-once", 1, "feature", "CLI: `lingtai run --once`, end to end", """
 **Phase 1** · The exit criterion for the phase.
 
 ## What
@@ -370,7 +370,7 @@ Wire everything together: one nominated issue, discovery through merge, with a p
 watching.
 
 ## Done when
-- [ ] A real `nextloom-ai-admin` issue is merged into `develop` by Escapement
+- [ ] A real `nextloom-ai-admin` issue is merged into `develop` by Lingtai
 - [ ] The board shows it in Landed with its receipt
 - [ ] The full event stream for that run reads as a coherent story with no gaps
 - [ ] `agent-loop.sh` is unaffected throughout and neither system claimed the same
@@ -409,11 +409,11 @@ Glob the diff's file list; on a match, request approval. Two instances ship toge
 the migration hold, and `tamper`.
 
 ## Done when
-- [ ] `tamper` watches `.escapement/**`, `package.json#scripts`, test configuration
+- [ ] `tamper` watches `.lingtai/**`, `package.json#scripts`, test configuration
       and `.github/workflows/**`
 - [ ] The migration hold catches an unapplied migration and holds the branch unmerged
 - [ ] A held branch says which file and what to do about it
-- [ ] Globs are compiled at `esc doctor` time, so a broken pattern fails early
+- [ ] Globs are compiled at `lingtai doctor` time, so a broken pattern fails early
 
 ## Notes
 `package.json` scripts and test config decide what the build gate actually verifies,
@@ -502,7 +502,7 @@ loop called `gh` inline, so a failed call vanished with no record and no retry.
 - [ ] Delivery is idempotent — a retry cannot double-post a comment
 - [ ] Permanent failures are visible, not silently retried forever
 - [ ] A crash between event and delivery loses nothing
-- [ ] Undelivered depth is a `esc doctor` check
+- [ ] Undelivered depth is a `lingtai doctor` check
 
 Depends on {{board-sse}}.
 """),
@@ -578,7 +578,7 @@ Depends on {{daemon}}.
 **Phase 2** · The cutover, at the end and not the start.
 
 ## What
-Run both systems in parallel, Escapement on a subset first, then stop the old loop
+Run both systems in parallel, Lingtai on a subset first, then stop the old loop
 and migrate what it left behind.
 
 ## Done when
@@ -587,29 +587,29 @@ and migrate what it left behind.
 - [ ] The 45 items in `agent:review` are imported as work items with their history
 - [ ] The old loop is stopped, its lock released and its worktrees accounted for
 - [ ] `loop/` is archived with a README pointing here
-- [ ] A written rollback: what to do if Escapement has to be turned off in week two
+- [ ] A written rollback: what to do if Lingtai has to be turned off in week two
 
 Depends on {{webhook}}.
 """),
 
 # ---------------------------------------------------------------- phase 3 ----
-("self-recipe", 3, "feature", "Self-hosting: Escapement's own recipe and its strictest policy", """
-**Phase 3** · Escapement gets no benefit of the doubt it extends to others.
+("self-recipe", 3, "feature", "Self-hosting: Lingtai's own recipe and its strictest policy", """
+**Phase 3** · Lingtai gets no benefit of the doubt it extends to others.
 
 ## What
-`.escapement/config.yaml` in this repository, and a policy that is the tightest in
+`.lingtai/config.yaml` in this repository, and a policy that is the tightest in
 the system.
 
 ## Done when
 - [ ] Every gate required: build, tamper, review, accept
 - [ ] **No waivers configured.** The escape hatch other projects get, this one does not
 - [ ] Tier is at least `guarded`, and the reason is written down
-- [ ] `esc doctor escapement` is green
+- [ ] `lingtai doctor lingtai` is green
 
 Depends on {{retire-loop}}.
 """),
 
-("self-tamper", 3, "feature", "Self-hosting: tamper must cover Escapement's own source", """
+("self-tamper", 3, "feature", "Self-hosting: tamper must cover Lingtai's own source", """
 **Phase 3** · The gate cannot be allowed to edit the gate.
 
 ## What
@@ -627,15 +627,15 @@ Depends on {{self-recipe}}.
 """),
 
 ("self-restart", 3, "feature", "Self-hosting: never restart into unverified code", """
-**Phase 3** · The escapement principle, applied to the escapement.
+**Phase 3** · The lingtai principle, applied to the lingtai.
 
 ## What
 A merge to `main` lands; the running daemon **keeps executing the old code** until a
-person runs `esc restart`. Before it swaps, `esc doctor` runs against the new code.
+person runs `lingtai restart`. Before it swaps, `lingtai doctor` runs against the new code.
 
 ## Done when
 - [ ] The conductor never restarts itself, under any condition
-- [ ] `esc restart` refuses if `doctor` fails against the new build
+- [ ] `lingtai restart` refuses if `doctor` fails against the new build
 - [ ] The version running is on the board, alongside the version merged
 - [ ] A merge that would break the scheduler is caught before the swap, not by the
       scheduler failing to start
@@ -652,11 +652,11 @@ Depends on {{self-tamper}}.
 **Phase 3** · The exit criterion for the phase.
 
 ## What
-Pick a small, real ticket in this repository. Let Escapement work it.
+Pick a small, real ticket in this repository. Let Lingtai work it.
 
 ## Done when
 - [ ] An agent implements it, all four gates pass, you approve on the board, it merges
-- [ ] `esc restart` brings the new code up after `doctor` passes
+- [ ] `lingtai restart` brings the new code up after `doctor` passes
 - [ ] The event stream for that run is complete and legible end to end
 - [ ] Anything the run taught us is written into `doc/decisions/` before Phase 4
 
@@ -694,7 +694,7 @@ defect set. [Experiment 001](../blob/main/doc/experiments/001-cold-review-issue-
 used one of them by hand — this phase makes that a command.
 
 ## Scope
-- [ ] `esc replay` — run a gate pipeline against historical diffs
+- [ ] `lingtai replay` — run a gate pipeline against historical diffs
 - [ ] False-positive rate for the review gate across all 31 merged diffs. **n=1 says
       nothing about the distribution**
 - [ ] `regressions` projection, injected into the reviewer's prompt: when a diff

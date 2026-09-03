@@ -3,7 +3,7 @@
  *
  * The board runs on localhost for one person, so Server-Sent Events are the
  * right shape: one direction, text, and the browser reconnects on its own.
- * Postgres already broadcasts every append on the `escapement` channel, so this
+ * Postgres already broadcasts every append on the `lingtai` channel, so this
  * is a bridge and not a poller — **`setInterval` appears exactly once in this
  * file and it sends a keep-alive comment**, which is the only timer the design
  * permits anywhere in this path.
@@ -20,7 +20,7 @@
  * open and would not be for anything larger — said here because the tradeoff is
  * invisible otherwise.
  */
-import { subscribe } from "@escapement/store";
+import { subscribe } from "@lingtai/store";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +87,7 @@ export function GET(request: Request): Response {
       try {
         subscription = subscribe({
           fromSeq,
-          name: "escapement-board",
+          name: "lingtai-board",
           onEvent: (event) => {
             const frame: Frame = {
               seq: event.seq.toString(),

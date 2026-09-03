@@ -5,7 +5,7 @@
  * out. A rebuild replays the whole log, so its cost is the log's length, and
  * the test suite appends to its own log on every run without ever pruning it.
  */
-import { directDatabaseUrl } from "@escapement/store";
+import { directDatabaseUrl } from "@lingtai/store";
 import pg from "pg";
 
 async function count(label: string, url: string): Promise<void> {

@@ -10,8 +10,8 @@
  * The remote is a bare repository in a temp directory. Real git, real merges,
  * real conflicts, no network.
  */
-import { directDatabaseUrl } from "@escapement/env";
-import { createDb, createEventStore, type Db, type EventStore } from "@escapement/store";
+import { directDatabaseUrl } from "@lingtai/env";
+import { createDb, createEventStore, type Db, type EventStore } from "@lingtai/store";
 import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -83,7 +83,7 @@ const base = () => ({
 });
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "esc-integrate-"));
+  root = await mkdtemp(join(tmpdir(), "lingtai-integrate-"));
   originPath = join(root, "origin.git");
   work = join(root, "work");
   home = join(root, "home");
@@ -102,10 +102,10 @@ afterAll(async () => {
   const c = new pg.Client({ connectionString: directDatabaseUrl() });
   await c.connect();
   try {
-    await c.query("alter table events disable rule escapement_events_no_delete");
+    await c.query("alter table events disable rule lingtai_events_no_delete");
     await c.query("delete from events where stream_id = any($1::text[])", [[...streams]]);
   } finally {
-    await c.query("alter table events enable rule escapement_events_no_delete");
+    await c.query("alter table events enable rule lingtai_events_no_delete");
     await c.end();
   }
   await rm(root, { recursive: true, force: true });

@@ -1,6 +1,6 @@
 # Design
 
-How Escapement is meant to work. *Why* each choice was made lives in
+How Lingtai is meant to work. *Why* each choice was made lives in
 [`decisions/`](decisions/); this file describes the system.
 
 ---
@@ -10,7 +10,7 @@ How Escapement is meant to work. *Why* each choice was made lives in
 The old model was poll → pick one → work → sleep 3600s. Once there is an event
 log, every moment worth acting on already announces itself.
 
-| Moment | Old loop | Escapement |
+| Moment | Old loop | Lingtai |
 |---|---|---|
 | A work item merged | sleep out the hour | `IntegrationSucceeded` → consider the next one now |
 | You approve on the board | invisible until the next pass | `ApprovalGranted` → enter the merge lane now |
@@ -208,7 +208,7 @@ channel through which the outside world reports facts to the event log** — and
 the same round trip carries the verdict back. One socket, both directions.
 
 ```
-agent tool call ─▶ esc-hook ─▶ unix socket ─▶ conductor ─▶ postgres
+agent tool call ─▶ lingtai-hook ─▶ unix socket ─▶ conductor ─▶ postgres
    JSON on stdin    Bun single    verdict from    append +    NOTIFY
                     file, ~10ms   memory          async       ↓
                     ◀────────────────────────────            board
@@ -248,12 +248,12 @@ it is not a security boundary.
 
 ## 6. Configuration
 
-Recipe in `<repo>/.escapement/config.yaml`, policy in Escapement's database, and
+Recipe in `<repo>/.lingtai/config.yaml`, policy in Lingtai's database, and
 a run's recipe read from `origin/<base>` rather than from the agent's branch.
 Full reasoning and the recipe/policy split: [decisions/0005](decisions/0005-config-in-target-repo.md).
 The schema is [`packages/config/src/recipe.ts`](../packages/config/src/recipe.ts).
 
-Onboarding is `esc add <owner>/<repo>`, and `esc doctor <project>` is the old
+Onboarding is `lingtai add <owner>/<repo>`, and `lingtai doctor <project>` is the old
 `preflight()` generalised — its value is not the first run but every time
 afterwards you change something and want to know what you broke.
 
@@ -262,7 +262,7 @@ afterwards you change something and want to know what you broke.
 ## 7. Layout
 
 ```
-escapement/
+lingtai/
 ├── packages/
 │   ├── core/        events, aggregates, reducers   ← zero I/O, tests without a database
 │   ├── config/      recipe schema, presets, doctor checks
@@ -273,7 +273,7 @@ escapement/
 │   └── hook/        the only hot path — Bun single file, no dependencies
 ├── apps/
 │   ├── board/       Next.js 16, App Router — projections + SSE  ← scaffolded
-│   └── cli/         esc doctor · esc projection                  ← doctor built
+│   └── cli/         lingtai doctor · lingtai projection                  ← doctor built
 ├── prompts/         ticket.md · cold-review.md   (versioned, recorded in events)
 └── doc/
 ```
@@ -300,7 +300,7 @@ multi-project — **not for scale**. So:
 - **No snapshots.** Streams are short. Add them when a replay exceeds a second, which will not happen.
 - **No sagas or process managers.** The scheduler is a loop over the `queue` projection.
 - **No general workflow engine.** Gates are one ordered list per project. Branching waits for a second project that needs it.
-- **No configuration UI.** YAML plus `esc doctor`. Configuration changes when a project is onboarded, not daily.
+- **No configuration UI.** YAML plus `lingtai doctor`. Configuration changes when a project is onboarded, not daily.
 - **No auth, no multi-user.** It runs on one machine.
 - **No work-item DAG.** The agent filing follow-up issues is the manual version and it is sufficient — but `WorkItemLinked` leaves the door open.
 

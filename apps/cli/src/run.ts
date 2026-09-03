@@ -1,15 +1,15 @@
 /**
- * `esc run --once <project> --issue <n>` — Phase 1's whole shape.
+ * `lingtai run --once <project> --issue <n>` — Phase 1's whole shape.
  *
  * One nominated issue, discovery through merge, with a person watching. It is
  * deliberately not "take the queue": `agent-loop.sh` is still working the same
  * repository on an hourly cycle, and the two must never both claim a ticket.
  * Nominating by number is the safety rule, not a limitation of the plumbing.
  */
-import { currentRecipe, loadProject, runOnce, runQueue } from "@escapement/conductor";
-import { githubApp, hasGitHubApp } from "@escapement/env";
-import { createGitHubClient } from "@escapement/github";
-import { createClaudeCodeRuntime } from "@escapement/runtime";
+import { currentRecipe, loadProject, runOnce, runQueue } from "@lingtai/conductor";
+import { githubApp, hasGitHubApp } from "@lingtai/env";
+import { createGitHubClient } from "@lingtai/github";
+import { createClaudeCodeRuntime } from "@lingtai/runtime";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,15 +41,15 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
 
   const project = await loadProject(options.project);
   if (!project) {
-    log(`no project named "${options.project}" — run esc add <owner>/<repo> first`);
+    log(`no project named "${options.project}" — run lingtai add <owner>/<repo> first`);
     return 1;
   }
   if (!project.owner) {
-    log(`${options.project} has no owner recorded — re-run esc add to record it`);
+    log(`${options.project} has no owner recorded — re-run lingtai add to record it`);
     return 1;
   }
 
-  const hookBinary = options.hookBinary ?? resolve(root, "packages/hook/bin/esc-hook");
+  const hookBinary = options.hookBinary ?? resolve(root, "packages/hook/bin/lingtai-hook");
   try {
     await readFile(hookBinary);
   } catch {
@@ -57,7 +57,7 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
     // now (ADR 0016 §6) but carries every event a run produces, so a run
     // without it is a run that records nothing — which must not start. There is
     // no flag to skip this any more: there is nothing left to skip.
-    log(`no esc-hook binary at ${hookBinary} — run: pnpm --filter @escapement/hook build`);
+    log(`no lingtai-hook binary at ${hookBinary} — run: pnpm --filter @lingtai/hook build`);
     return 1;
   }
 
@@ -94,10 +94,10 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
   // ---- the queue -----------------------------------------------------------
   if (options.issue === undefined) {
     // The project's *state*, not its name — the recipe is resolved from the
-    // base recorded at `esc add`.
+    // base recorded at `lingtai add`.
     const resolved = await currentRecipe(project, client).catch(() => null);
     if (!resolved) {
-      log(`could not read ${options.project}'s recipe — run esc doctor`);
+      log(`could not read ${options.project}'s recipe — run lingtai doctor`);
       return 1;
     }
 

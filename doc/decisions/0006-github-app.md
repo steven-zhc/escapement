@@ -4,7 +4,7 @@
 
 ## Context
 
-Escapement needs to read issues, write labels and comments, push branches, open
+Lingtai needs to read issues, write labels and comments, push branches, open
 pull requests and merge. A fine-grained PAT can do all of it.
 
 It can also do it wrong in a way that is hard to see. On 2026-08-30 the admin

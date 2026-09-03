@@ -7,8 +7,8 @@
  * Both are measured here rather than asserted — the binary is built with bun and
  * spawned as a process, which is exactly how a runtime invokes it.
  */
-import { directDatabaseUrl } from "@escapement/env";
-import { createDb, createEventStore, type Db, type EventStore } from "@escapement/store";
+import { directDatabaseUrl } from "@lingtai/env";
+import { createDb, createEventStore, type Db, type EventStore } from "@lingtai/store";
 import { execFile, spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -30,7 +30,7 @@ import {
 
 const exec = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
-const hookSource = resolve(here, "../../hook/src/esc-hook.ts");
+const hookSource = resolve(here, "../../hook/src/lingtai-hook.ts");
 
 
 let root: string;
@@ -73,8 +73,8 @@ const postToolUse = (tool: string, filePath: string) =>
   });
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "esc-hook-"));
-  binary = join(root, "esc-hook");
+  root = await mkdtemp(join(tmpdir(), "lingtai-hook-"));
+  binary = join(root, "lingtai-hook");
   // The real artefact, not the source: a compiled single file with no
   // dependencies is what doc/decisions/0002 specified and what gets measured.
   await exec("bun", ["build", "--compile", "--outfile", binary, hookSource]);
@@ -98,10 +98,10 @@ afterAll(async () => {
   const c = new pg.Client({ connectionString: directDatabaseUrl() });
   await c.connect();
   try {
-    await c.query("alter table events disable rule escapement_events_no_delete");
+    await c.query("alter table events disable rule lingtai_events_no_delete");
     await c.query("delete from events where stream_id = $1", [runId]);
   } finally {
-    await c.query("alter table events enable rule escapement_events_no_delete");
+    await c.query("alter table events enable rule lingtai_events_no_delete");
     await c.end();
   }
   await rm(root, { recursive: true, force: true });
@@ -109,7 +109,7 @@ afterAll(async () => {
 
 const env = () => ({ ESC_HOOK_SOCKET: server.socketPath, ESC_RUN_ID: runId });
 
-describe("esc-hook fails closed", () => {
+describe("lingtai-hook fails closed", () => {
   /**
    * The old loop refused to start when `test-guard.sh` failed, and that instinct
    * was right. A guard that fails *open* is worse than no guard, because it is
@@ -145,14 +145,14 @@ describe("esc-hook fails closed", () => {
   });
 });
 
-describe("esc-hook refuses nothing", () => {
+describe("lingtai-hook refuses nothing", () => {
   it("allows an ordinary command", async () => {
     const { code } = await runHook(binary, env(), preToolUse("pnpm verify"));
     expect(code).toBe(0);
   });
 
   /**
-   * The contract, pinned. Escapement restricts no tool call (ADR 0016 §6) —
+   * The contract, pinned. Lingtai restricts no tool call (ADR 0016 §6) —
    * tool limits are the runtime's own configuration, where `permissions.deny`
    * removes the tool from the model's list instead of refusing the call it
    * already decided to make ([experiment 008](../../../doc/experiments/008-deny-survives-bypass.md)).
@@ -195,7 +195,7 @@ describe("redact", () => {
   });
 });
 
-describe("esc-hook latency", () => {
+describe("lingtai-hook latency", () => {
   const quantile = (s: number[], q: number) =>
     [...s].sort((a, b) => a - b)[Math.floor(s.length * q)]!;
 
@@ -245,7 +245,7 @@ describe("esc-hook latency", () => {
    * change to this repository can fix. See doc/decisions/0011 and
    * doc/experiments/004.
    *
-   * So this asserts the part Escapement owns and can regress — the marginal cost
+   * So this asserts the part Lingtai owns and can regress — the marginal cost
    * of talking to the conductor — and prints the real distribution.
    */
   it("adds almost nothing to the cost of starting the binary", async () => {
@@ -257,7 +257,7 @@ describe("esc-hook latency", () => {
     );
 
     console.log(
-      `esc-hook: round trip p50 ${full.p50.toFixed(1)}ms p95 ${full.p95.toFixed(1)}ms · ` +
+      `lingtai-hook: round trip p50 ${full.p50.toFixed(1)}ms p95 ${full.p95.toFixed(1)}ms · ` +
         `startup only p50 ${bare.p50.toFixed(1)}ms p95 ${bare.p95.toFixed(1)}ms`,
     );
 
@@ -360,8 +360,8 @@ describe("hook wiring", () => {
   });
 
   it("wires the four shared hooks, and Claude Code's extras only when asked", () => {
-    const shared = renderSettings({ runId: "r", hookBinary: "/bin/esc-hook", includeClaudeOnly: false });
-    const all = renderSettings({ runId: "r", hookBinary: "/bin/esc-hook" });
+    const shared = renderSettings({ runId: "r", hookBinary: "/bin/lingtai-hook", includeClaudeOnly: false });
+    const all = renderSettings({ runId: "r", hookBinary: "/bin/lingtai-hook" });
 
     // No `PreToolUse`: nothing refuses a tool call any more, and it was the
     // only hook on the hot path (ADR 0016 §6).
@@ -385,12 +385,12 @@ describe("hook wiring", () => {
    * exits 127, which the runtime carries on past.
    */
   it("refuses a relative hook path rather than writing a hook that never runs", () => {
-    expect(() => renderSettings({ runId: "r", hookBinary: "packages/hook/bin/esc-hook" })).toThrow(
+    expect(() => renderSettings({ runId: "r", hookBinary: "packages/hook/bin/lingtai-hook" })).toThrow(
       /must be absolute/,
     );
-    expect(() => renderSettings({ runId: "r", hookBinary: "./esc-hook" })).toThrow(/must be absolute/);
+    expect(() => renderSettings({ runId: "r", hookBinary: "./lingtai-hook" })).toThrow(/must be absolute/);
     // The real one, as `run.ts` builds it.
-    expect(() => renderSettings({ runId: "r", hookBinary: "/opt/escapement/packages/hook/bin/esc-hook" })).not.toThrow();
+    expect(() => renderSettings({ runId: "r", hookBinary: "/opt/lingtai/packages/hook/bin/lingtai-hook" })).not.toThrow();
   });
 });
 
@@ -405,7 +405,7 @@ describe("socket paths", () => {
     // already is. The socket does not live there, which is the point.
     const longHome = join(
       "/private/var/folders/y7/b4lkp2c90p165_gygx2txt100000gn/T",
-      "esc-runonce-80F6pP",
+      "lingtai-runonce-80F6pP",
       "home",
     );
     const path = socketPathFor(`run-${crypto.randomUUID()}`, longHome);

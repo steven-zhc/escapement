@@ -46,14 +46,14 @@ The subscriber and the merge lane's `pg_advisory_lock` use it too.
 
 ## Consequences
 
-- **`esc doctor` must assert the direct connection is genuinely session mode**,
+- **`lingtai doctor` must assert the direct connection is genuinely session mode**,
   by holding a listener open and notifying from a second connection. A check that
   only opens a connection would pass against a transaction pooler and prove
   nothing. This is now issue
-  [#5](https://github.com/steven-zhc/escapement/issues/5)'s job.
+  [#5](https://github.com/steven-zhc/lingtai/issues/5)'s job.
 - `packages/store/scripts/bootstrap.mjs` runs that check, along with the
   append-only rules and the unique constraint. Ten assertions, all passing.
-- A deployment that can only offer a transaction pooler cannot run Escapement.
+- A deployment that can only offer a transaction pooler cannot run Lingtai.
   Worth knowing before choosing a host, not after.
 - Generalises past Supabase: PgBouncer, RDS Proxy and Neon's pooled endpoint all
   behave this way.

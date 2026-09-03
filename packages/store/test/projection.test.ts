@@ -8,7 +8,7 @@
  * checkpoint intact** — a projection that skipped what it could not handle would
  * be quietly wrong, which is the failure mode this whole system exists to end.
  */
-import type { Envelope } from "@escapement/core";
+import type { Envelope } from "@lingtai/core";
 import pg from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { directDatabaseUrl } from "../src/env.ts";
@@ -41,7 +41,7 @@ function runStream(): string {
  * later deleted outright (ADR 0016 §6) and took a day's worth of machinery
  * coverage with it. Owning the subject here means the next deletion cannot.
  */
-const TEST_TABLE = "esc_test_touches";
+const TEST_TABLE = "lingtai_test_touches";
 
 const testProjection: Projection = {
   name: TEST_TABLE,
@@ -139,8 +139,8 @@ afterAll(async () => {
   // so it goes entirely rather than being emptied.
   await direct(async (c) => {
     await c.query(`drop table if exists ${TEST_TABLE}`);
-    await c.query("delete from checkpoints where name in ('esc_test_touches', 'esc_test_boom')");
-    await c.query("drop table if exists esc_test_boom");
+    await c.query("delete from checkpoints where name in ('lingtai_test_touches', 'lingtai_test_boom')");
+    await c.query("drop table if exists lingtai_test_boom");
   });
 });
 
@@ -256,19 +256,19 @@ describe("projection runner", () => {
     // A projection that refuses one specific event, in its own table so the real
     // one is unaffected.
     const boom: Projection = {
-      name: "esc_test_boom",
+      name: "lingtai_test_boom",
       async create(ctx) {
-        await ctx.query("create table if not exists esc_test_boom (seq bigint primary key)");
+        await ctx.query("create table if not exists lingtai_test_boom (seq bigint primary key)");
       },
       async reset(ctx) {
-        await ctx.query("truncate table esc_test_boom");
+        await ctx.query("truncate table lingtai_test_boom");
       },
       async apply(events: readonly Envelope[], ctx) {
         for (const e of events) {
           if ((e.data as { path?: string }).path === "poison") {
             throw new Error("this projection cannot handle that");
           }
-          await ctx.query("insert into esc_test_boom (seq) values ($1) on conflict do nothing", [
+          await ctx.query("insert into lingtai_test_boom (seq) values ($1) on conflict do nothing", [
             e.seq.toString(),
           ]);
         }
@@ -310,13 +310,13 @@ describe("projection runner", () => {
 
     // Nothing partial survived: the batch and its checkpoint advance were one
     // transaction, so the good event before the poison rolled back with it.
-    const rows = await direct((c) => c.query("select seq from esc_test_boom").then((r) => r.rowCount));
+    const rows = await direct((c) => c.query("select seq from lingtai_test_boom").then((r) => r.rowCount));
     expect(rows).toBe(0);
 
     // Checkpoint intact means: still where it started. It never advances past an
     // event the projection refused.
     const lag = await projectionLag();
-    expect(lag.find((p) => p.name === "esc_test_boom")?.lastSeq).toBe(base);
+    expect(lag.find((p) => p.name === "lingtai_test_boom")?.lastSeq).toBe(base);
     expect(written).toHaveLength(2);
   });
 

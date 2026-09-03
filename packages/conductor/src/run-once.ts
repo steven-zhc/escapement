@@ -19,18 +19,18 @@
  * with a question. The old loop could end in silence in at least seven places;
  * that is the thing being replaced, so `finally` blocks here are not tidiness.
  */
-import { type GateAction, type ResolvedRecipe, parseDuration } from "@escapement/config";
-import { type Tier, parsePayload } from "@escapement/core";
-import { gatesFromRecipe, runGatePipeline } from "@escapement/gates";
-import type { GitHubClient } from "@escapement/github";
-import { type Runtime, missingForTier } from "@escapement/runtime";
-import { type EventStore, eventStore } from "@escapement/store";
+import { type GateAction, type ResolvedRecipe, parseDuration } from "@lingtai/config";
+import { type Tier, parsePayload } from "@lingtai/core";
+import { gatesFromRecipe, runGatePipeline } from "@lingtai/gates";
+import type { GitHubClient } from "@lingtai/github";
+import { type Runtime, missingForTier } from "@lingtai/runtime";
+import { type EventStore, eventStore } from "@lingtai/store";
 import { claimWorkItem, releaseWorkItem } from "./claim.ts";
 import { refreshQueue, workItemStream } from "./discover.ts";
 import { smokeTestFailClosed, writeHookWiring } from "./hook-config.ts";
 import { createHookServer } from "./hook-socket.ts";
 import { integrate } from "./integrate.ts";
-import { GATE_POINTS, type ProjectState } from "@escapement/core";
+import { GATE_POINTS, type ProjectState } from "@lingtai/core";
 import { DEFAULT_PRODUCTION_PATTERNS, type TokenSource, filterEnv, git, provisionWorktree, removeWorktree, runnableEnv, stateDir } from "./worktree.ts";
 import { spawn } from "node:child_process";
 
@@ -40,7 +40,7 @@ export interface RunOnceOptions {
   runtime: Runtime;
   /** The issue to work. Phase 1 nominates by number rather than taking the queue. */
   issue: number;
-  /** Absolute path to the compiled `esc-hook`. */
+  /** Absolute path to the compiled `lingtai-hook`. */
   hookBinary: string;
   /** False wires no hooks and skips the smoke test. See `RenderOptions.guard`. */
   guard?: boolean;
@@ -155,13 +155,13 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   // ---- 1. the recipe, from the base branch, checked against policy ----------
   let resolved: ResolvedRecipe;
   try {
-    // The base recorded at `esc add`, not the repository's default branch. Those
+    // The base recorded at `lingtai add`, not the repository's default branch. Those
     // are the same only by convention, and `nextloom-ai-admin`'s default is a
     // feature branch — reading the rules from one branch while merging into
     // another is exactly the confusion 0005 exists to prevent.
     const from = options.project.base ?? (await options.client.defaultBranch());
     resolved = await (
-      await import("@escapement/config")
+      await import("@lingtai/config")
     ).resolveRecipe((p, r) => options.client.fileAt(p, r), from);
   } catch (err) {
     // Refusing here is the point of 0005: an unreadable or non-compliant recipe
@@ -383,7 +383,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       // said "read the issue" and handed over a number: no title, no body, and
       // no `gh` to fetch it with. The first real run spent 30 turns and $1.11
       // discovering that there was nothing to work from, and wrote to
-      // `.escapement/config.yaml` — the only file in the worktree that looked
+      // `.lingtai/config.yaml` — the only file in the worktree that looked
       // like an instruction.
       //
       // Fetched once here and shared with the review gate below, so a run costs

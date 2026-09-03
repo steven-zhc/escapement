@@ -1,4 +1,4 @@
-# Escapement
+# Lingtai
 
 **One agent loop, driven by an append-only event log. Everything else is a
 projection of that log or a subscriber to it.**
@@ -9,7 +9,7 @@ mutable state somewhere. Here the log is the only truth: every table is
 derived, can be dropped, and rebuilds to exactly what it was
 ([ADR 0014](doc/decisions/0014-one-loop-one-log.md)).
 
-An escapement is the part of a clock that lets the mainspring out one tooth at a
+An lingtai is the part of a clock that lets the mainspring out one tooth at a
 time. Without it the spring releases all at once. That is the job: take a queue
 of work, hand each item to an agent, hold it at a series of gates, and release
 it only when every gate — including a human one — has passed.
@@ -30,17 +30,17 @@ and the merge lane under its advisory lock. 13 turns, $0.86. #120 landed the
 same way. It took four attempts and each failure bought a real defect; the
 [roadmap](doc/roadmap.md) has the table.
 
-**Phase 2 stages 2a-2d are built, and 2a is verified.** `esc daemon` holds the
+**Phase 2 stages 2a-2d are built, and 2a is verified.** `lingtai daemon` holds the
 projections and takes work, driven by completion events rather than a timer,
-and `esc pause` stops it. The `Reconciled` pass for orphaned worktrees and the
+and `lingtai pause` stops it. The `Reconciled` pass for orphaned worktrees and the
 webhook route are both in. On 2026-09-02 admin #156 went queue to landed at
-`06e8bbe` from a single `esc now`, with no command issued after it and the
+`06e8bbe` from a single `lingtai now`, with no command issued after it and the
 completion event driving the next pass by itself — 15 turns, $0.83
 ([experiment 006](doc/experiments/006-the-loop-closes-unattended.md), which
 also lists what that run did *not* prove).
 
 **Watch it.** Nothing has run unattended for long enough to have earned trust,
-and `esc pause` exists because that is the honest state to be in.
+and `lingtai pause` exists because that is the honest state to be in.
 
 See [`doc/roadmap.md`](doc/roadmap.md) for the phases and
 [`doc/README.md`](doc/README.md) for what is settled and what is open.
@@ -68,7 +68,7 @@ There are two projections:
 
 | Name | Feeds | Rebuild with |
 |---|---|---|
-| `task_view` | The board, `esc status`, and what the conductor takes next | `esc projection rebuild task_view` |
+| `task_view` | The board, `lingtai status`, and what the conductor takes next | `lingtai projection rebuild task_view` |
 
 `task_view` holds one row per task and **only what a card shows**. Gate
 evidence, findings, the diff and the trips themselves are folded from the event
@@ -76,28 +76,28 @@ stream when somebody opens a task — a list view and a detail view have opposit
 economics, and only the list has to be cheap. See
 [ADR 0012](doc/decisions/0012-one-task-view.md).
 
-`esc projection lag` shows how far behind each one is. `rebuild` drops the
+`lingtai projection lag` shows how far behind each one is. `rebuild` drops the
 table, resets the checkpoint and replays from the beginning — safe by
 construction, because the log is the only thing that was ever authoritative,
 and possible only because no projection reads the clock.
 
-**The daemon advances them.** `esc daemon` holds one advisory lock and follows
+**The daemon advances them.** `lingtai daemon` holds one advisory lock and follows
 the log; there is no timer, because Postgres notifies on every append.
 
-### Escapement's own words
+### Lingtai's own words
 
 | Term | What it is |
 |---|---|
 | **task** (work item) | One ticket under management, from the moment it is claimed to the moment it lands or is dropped. What a board card shows. |
-| **the queue** | What GitHub currently lists that the recipe will take, minus what the log says is claimed. **Not in the log** — Escapement never decided which issues exist ([ADR 0012](doc/decisions/0012-one-task-view.md)). |
+| **the queue** | What GitHub currently lists that the recipe will take, minus what the log says is claimed. **Not in the log** — Lingtai never decided which issues exist ([ADR 0012](doc/decisions/0012-one-task-view.md)). |
 | **daemon** | The one process that holds the conductor and the projection follower. The board controls it and watches it; it never holds work ([ADR 0013](doc/decisions/0013-daemon-hosts-the-work.md)). |
 | **run** | One attempt at a work item. A work item can have several; each gets its own worktree, its own agent process and its own id. |
-| **recipe** | `.escapement/config.yaml`, committed **in the managed repository**. Its team decides what may be picked up, what environment it gets, what must pass. Read from `origin/<base>`, never from the agent's branch. |
+| **recipe** | `.lingtai/config.yaml`, committed **in the managed repository**. Its team decides what may be picked up, what environment it gets, what must pass. Read from `origin/<base>`, never from the agent's branch. |
 | **gate** | One of **five fixed points in the loop** where the conductor waits for a verdict: `admit`, `prepared`, `diff`, `merge`, `end`. The set is closed. A gate is a *place*, not a kind of check. |
 | **action** | What runs at a point, from the recipe: `run` a command, `agent` a cold reviewer, `watch` some globs, `human` a person, `close`/`labels` an effect at `end`. Verdicts are bound to **one commit**, so a force-push invalidates them by arithmetic. |
 | **skipped** | A point nobody configured. It is *shown*, never omitted — a point that is merely absent is indistinguishable from one that was configured and silently did not run. |
 | **tier** | How contained the agent runtime must be: `open`, `guarded`, `sandboxed`. The recipe's, in `runtime.tier`. |
-| **mirror** | Escapement's own bare clone of a managed repository, at `~/.escapement/repos/<project>.git`. Never your checkout. |
+| **mirror** | Lingtai's own bare clone of a managed repository, at `~/.lingtai/repos/<project>.git`. Never your checkout. |
 | **worktree** | The disposable checkout a run works in, cut from the mirror and removed when the run ends. |
 | **integrate** | The merge lane: under a Postgres advisory lock, merge the base in, verify, merge out. Every exit path appends an event, including the failures. |
 
@@ -106,26 +106,26 @@ the log; there is no timer, because Postgres notifies on every append.
 There are two sides, and almost everything confusing about the configuration
 comes from not knowing which side a thing is on.
 
-**Escapement runs on one machine of yours.** It owns a Postgres database, a
+**Lingtai runs on one machine of yours.** It owns a Postgres database, a
 clone of each repository it manages, and the agent processes it starts.
 
 **The repositories it manages live on GitHub and stay ordinary.** Nothing is
 installed in them. There is no bot account, no webhook, no CI job, no label
-state machine — one committed file, `.escapement/config.yaml`, and that is all.
-If you deleted Escapement tomorrow the managed repository would not notice.
+state machine — one committed file, `.lingtai/config.yaml`, and that is all.
+If you deleted Lingtai tomorrow the managed repository would not notice.
 
 ```mermaid
 flowchart TB
   subgraph github["GitHub"]
-    repo["<b>managed repository</b><br/>issues, branches,<br/>.escapement/config.yaml"]
+    repo["<b>managed repository</b><br/>issues, branches,<br/>.lingtai/config.yaml"]
   end
 
   subgraph yours["your machine"]
     cond["<b>conductor</b><br/>discover → claim → worktree →<br/>run → gate → integrate"]
     agent["<b>agent runtime</b><br/>claude-code, in a worktree<br/>of its own"]
-    hook["<b>esc-hook</b><br/>allow or deny<br/>each tool call"]
+    hook["<b>lingtai-hook</b><br/>allow or deny<br/>each tool call"]
     log[("<b>event log</b><br/>Postgres, append-only")]
-    cli["<b>esc</b><br/>the CLI"]
+    cli["<b>lingtai</b><br/>the CLI"]
     board["<b>board</b><br/>the web UI"]
   end
 
@@ -154,11 +154,11 @@ and an unparsed log file respectively, which is why it could answer none of them
 |---|---|---|
 | **conductor** | The scheduler. Finds work, claims it, cuts the worktree, starts the agent, runs the gates, merges. Everything it decides, it appends. | Never edits code itself. |
 | **agent runtime** | The thing that actually writes the code — Claude Code today, in a worktree and an environment of its own. | Never talks to GitHub, and never sees a secret the recipe did not name. |
-| **esc-hook** | A small binary Claude Code calls before every tool use. Exit 0 allows, exit 2 denies. Fails closed on anything it cannot understand. | Not a security boundary — see below. |
+| **lingtai-hook** | A small binary Claude Code calls before every tool use. Exit 0 allows, exit 2 denies. Fails closed on anything it cannot understand. | Not a security boundary — see below. |
 | **gates** | Five fixed points, each running the actions its recipe declares. A point with nothing configured is skipped, and the skip is rendered. | Not tied to a ticket, so a force-push invalidates a verdict by arithmetic. |
 | **board** | Reads `task_view` and shows one card per work item, with its diff, its cost and every gate point — including the skipped ones. Approve, Reject and Waive are on the card. | Cannot advance its own projection — see [Terms](#terms). |
-| **daemon** | `esc daemon` — one advisory lock, the projection follower and the conductor. Wakes on a completion event; there is no timer. | Never killed a running agent. Pause stops it *taking* work. |
-| **esc** | Configures projects, drives runs by hand, and controls the daemon: `pause`, `resume`, `now`. | — |
+| **daemon** | `lingtai daemon` — one advisory lock, the projection follower and the conductor. Wakes on a completion event; there is no timer. | Never killed a running agent. Pause stops it *taking* work. |
+| **lingtai** | Configures projects, drives runs by hand, and controls the daemon: `pause`, `resume`, `now`. | — |
 
 The hook deserves the caveat it gets. It is a *coordination* mechanism, not a
 sandbox: an agent that wants to get around it can. The three boundaries that
@@ -171,10 +171,10 @@ Four things, and they are on different sides of the line.
 
 | | Where it lives | Why it exists |
 |---|---|---|
-| **A Postgres database of its own** | `.env.local` here, two connection strings | The log is the product, not a side effect. It must **not** be a managed project's database — Escapement has to keep running while that project is the thing being changed. |
-| **A GitHub App** | `.env.local` here, App ID + private key | It reads issues and pushes branches as something that is not you. A fine-grained token can be wrong in a way nothing reports: one covered a repository's submodule but not the repository, and every run failed with a 403 that said nothing about scope. An installation makes reachability explicit and checkable — `esc add` verifies the four permissions before it writes anything. |
-| **A recipe, per managed repository** | `.escapement/config.yaml`, committed **in that repository** | The repository's own team decides what an agent may pick up, what environment it gets, and what must pass before anything merges. It ships with the code and is reviewed like code. |
-| **A policy, per project** | Escapement's log, set by `esc add --tier --require` | The part a managed repository **cannot** soften. Containment floor, mandatory gates, who may approve. |
+| **A Postgres database of its own** | `.env.local` here, two connection strings | The log is the product, not a side effect. It must **not** be a managed project's database — Lingtai has to keep running while that project is the thing being changed. |
+| **A GitHub App** | `.env.local` here, App ID + private key | It reads issues and pushes branches as something that is not you. A fine-grained token can be wrong in a way nothing reports: one covered a repository's submodule but not the repository, and every run failed with a 403 that said nothing about scope. An installation makes reachability explicit and checkable — `lingtai add` verifies the four permissions before it writes anything. |
+| **A recipe, per managed repository** | `.lingtai/config.yaml`, committed **in that repository** | The repository's own team decides what an agent may pick up, what environment it gets, and what must pass before anything merges. It ships with the code and is reviewed like code. |
+| **A policy, per project** | Lingtai's log, set by `lingtai add --tier --require` | The part a managed repository **cannot** soften. Containment floor, mandatory gates, who may approve. |
 
 The board and the CLI need no configuration of their own. They read the same log
 the conductor writes, which is what makes them consistent by construction rather
@@ -184,8 +184,8 @@ than by discipline.
 
 | | recipe | policy |
 |---|---|---|
-| Lives in | the managed repository | Escapement's event log |
-| Changed by | that repository's team, through a pull request | whoever runs Escapement |
+| Lives in | the managed repository | Lingtai's event log |
+| Changed by | that repository's team, through a pull request | whoever runs Lingtai |
 | Analogous to | a workflow file | branch protection |
 
 A recipe may add strictness and can never remove any. Asking for a looser
@@ -237,8 +237,8 @@ rather than smoothed over.
 **A point nobody configured is skipped, and the skip is shown.** That is the
 condition everything else rests on. A gate with nothing at it does not run, and
 that is your decision, not a defect; a gate that *was* configured and did not
-run is Escapement's bug. Those two are only distinguishable if the empty ones
-are rendered, so the board and `esc add` list all five, always.
+run is Lingtai's bug. Those two are only distinguishable if the empty ones
+are rendered, so the board and `lingtai add` list all five, always.
 
 ```
 admit     (skipped)
@@ -280,7 +280,7 @@ Order within a point is the array's, the first refusal wins, and the actions
 after it do not run — continuing would spend money producing verdicts about a
 diff that is not going anywhere.
 
-### What Escapement does not do
+### What Lingtai does not do
 
 **It does not restrict tool calls.** There is no guard and no policy engine.
 Tool limits belong to the agent runtime's own configuration —
@@ -294,14 +294,14 @@ Containment is the **filtered environment** and the **disposable worktree**.
 Neither was ever the guard's, and both still hold.
 
 **It does not second-guess your workflow.** Nothing sits above a repository's
-own recipe. `esc doctor` reports what else is configuring a run — your
-`~/.claude/settings.json` is in scope for every one, because Escapement cannot
+own recipe. `lingtai doctor` reports what else is configuring a run — your
+`~/.claude/settings.json` is in scope for every one, because Lingtai cannot
 set `HOME` without breaking the runtime's own credentials. Being unable to
 control that is acceptable. Being unable to see it is not.
 
 ### What one run actually does
 
-`esc run nextloom-ai-admin --issue 120`, end to end — and the same eight steps
+`lingtai run nextloom-ai-admin --issue 120`, end to end — and the same eight steps
 the daemon takes for you:
 
 1. **Resolve the recipe** from `origin/develop` — the base recorded when the
@@ -310,7 +310,7 @@ the daemon takes for you:
    was first run against had a feature branch as its default.)
 2. **Check the recipe against the policy.** A conflict stops here, named.
 3. **Claim the issue** — an event, so two schedulers cannot take the same one.
-4. **Cut a worktree** from Escapement's own mirror. Never your checkout.
+4. **Cut a worktree** from Lingtai's own mirror. Never your checkout.
 5. **Plant a filtered environment file.** Only the variable names the recipe
    allowed exist in it. Everything else is *absent*, not redacted.
 6. **Start the agent** with the hook wired in, at the tier policy and recipe
@@ -337,25 +337,25 @@ never reported by anything at all.
 | `packages/conductor` | Discovery, the queue, claiming, worktrees, the guard, the hook socket, and the merge lane. |
 | `packages/gates` | The gate pipeline and all four gate kinds. |
 | `packages/runtime` | Containment tiers, and starting Claude Code. |
-| `packages/hook` | `esc-hook` — the binary Claude Code calls before every tool use. |
-| `apps/cli` | `esc` — `add`, `run`, `approve`, `status`, `doctor`, `projection`. |
+| `packages/hook` | `lingtai-hook` — the binary Claude Code calls before every tool use. |
+| `apps/cli` | `lingtai` — `add`, `run`, `approve`, `status`, `doctor`, `projection`. |
 | `apps/board` | The web UI. Real cards, read from the projection. |
 | `doc/` | The design, every decision, and the experiments that back them. |
 
 ## What it writes to disk
 
-**Nothing in your checkout of the managed repository.** `esc add` takes a
+**Nothing in your checkout of the managed repository.** `lingtai add` takes a
 GitHub coordinate — `steven-zhc/nextloom-ai-admin` — not a local path, and
-Escapement clones its own copy. Your working tree is never read, never written
+Lingtai clones its own copy. Your working tree is never read, never written
 and never looked at, which is the whole reason the integrator exists: the old
 harness merged in the operator's own checkout, and uncommitted work there is
 what made #58 and #59 re-run five times for roughly $29 with nothing reporting
 why.
 
-Everything lives under `ESCAPEMENT_HOME`, which defaults to `~/.escapement`:
+Everything lives under `LINGTAI_HOME`, which defaults to `~/.lingtai`:
 
 ```
-~/.escapement/
+~/.lingtai/
 ├── repos/<project>.git          bare mirror — persistent
 ├── worktrees/<project>/<runId>  one per run — disposable
 └── runs/<runId>/settings.json   the hook wiring
@@ -366,20 +366,20 @@ Everything lives under `ESCAPEMENT_HOME`, which defaults to `~/.escapement`:
 | `repos/<project>.git` | Persistent | Expensive. The first clone is a network round trip; after that every run is a `fetch`. This is why cutting a worktree took 1.7s in [experiment 005](doc/experiments/005-rung-1-reaches-a-real-repository.md). |
 | `worktrees/<project>/<runId>` | One run | Cheap. Cut from the mirror, removed when the run ends — and removed *before* the integrator runs, because a worktree holding `agent/<n>` checked out stops git updating that ref. |
 | `runs/<runId>/settings.json` | One run | **Outside the worktree, deliberately.** An agent that can edit its own hook configuration has no hook configuration. |
-| `$TMPDIR/escapement/*.sock` | One run | The hook's socket. In `$TMPDIR` rather than under `ESCAPEMENT_HOME` because a unix socket path has a hard 104-byte limit and a home directory plus a run id exceeds it — see [ADR 0011](doc/decisions/0011-hook-latency-is-runtime-startup.md). |
+| `$TMPDIR/lingtai/*.sock` | One run | The hook's socket. In `$TMPDIR` rather than under `LINGTAI_HOME` because a unix socket path has a hard 104-byte limit and a home directory plus a run id exceeds it — see [ADR 0011](doc/decisions/0011-hook-latency-is-runtime-startup.md). |
 
 Two things in this repository are also not committed: `.env.local`, and
-`packages/hook/bin/esc-hook` — a 55 MB compiled binary that `pnpm --filter
-@escapement/hook build` produces.
+`packages/hook/bin/lingtai-hook` — a 55 MB compiled binary that `pnpm --filter
+@lingtai/hook build` produces.
 
-**`rm -rf ~/.escapement` is safe.** Everything in it is either re-clonable from
+**`rm -rf ~/.lingtai` is safe.** Everything in it is either re-clonable from
 GitHub or belongs to a run that is over. The part that matters — the event log —
 is in Postgres, and none of it is here.
 
-[#18]: https://github.com/steven-zhc/escapement/issues/18
-[#19]: https://github.com/steven-zhc/escapement/issues/19
-[#20]: https://github.com/steven-zhc/escapement/issues/20
-[#28]: https://github.com/steven-zhc/escapement/issues/28
+[#18]: https://github.com/steven-zhc/lingtai/issues/18
+[#19]: https://github.com/steven-zhc/lingtai/issues/19
+[#20]: https://github.com/steven-zhc/lingtai/issues/20
+[#28]: https://github.com/steven-zhc/lingtai/issues/28
 
 ## Getting started
 
@@ -399,7 +399,7 @@ and advisory locks. A transaction pooler breaks all three, and breaks them
 without erroring — see [ADR 0009](doc/decisions/0009-two-connections.md).
 
 The event store must be **its own database**, not one belonging to a managed
-project — Escapement has to keep running while a managed project is the thing
+project — Lingtai has to keep running while a managed project is the thing
 being changed.
 
 **The tests need a third and fourth string, and refuse to run without them.**
@@ -413,7 +413,7 @@ the cards straight back; the only way to remove them is to delete from an
 append-only table.
 
 Give the test database its schema the same way the main one gets it, with
-`ESCAPEMENT_TEST=1` in front — see [Bringing the database up](#bringing-the-database-up).
+`LINGTAI_TEST=1` in front — see [Bringing the database up](#bringing-the-database-up).
 
 **Empty its log now and then.** The suite cleans up its own streams but the log
 only grows, and one test rebuilds a projection — which replays the whole log, so
@@ -421,7 +421,7 @@ its cost is the log's length. After a few weeks that test crossed its 60s
 timeout and started failing for reasons unrelated to the code it covers.
 
 ```bash
-ESCAPEMENT_TEST=1 pnpm --filter @escapement/store db:reset-test
+LINGTAI_TEST=1 pnpm --filter @lingtai/store db:reset-test
 ```
 
 It refuses twice over if you point it at anything else: the flag has to be set,
@@ -437,7 +437,7 @@ pnpm db:init                      # create the tables and sign the database
 pnpm db:bootstrap                 # apply notify.sql, then prove it worked
 ```
 
-The test database takes the same two, with `ESCAPEMENT_TEST=1` in front of each
+The test database takes the same two, with `LINGTAI_TEST=1` in front of each
 so they resolve `TEST_DIRECT_DATABASE_URL` instead.
 
 `db:bootstrap` is not optional and is not Prisma's job. Prisma models tables, not
@@ -453,11 +453,11 @@ only needed after the contract changes.
 ### Checking it
 
 ```bash
-pnpm esc doctor                   # non-zero exit on any failure
-pnpm esc projection lag           # how far each projection is behind the log
+pnpm lingtai doctor                   # non-zero exit on any failure
+pnpm lingtai projection lag           # how far each projection is behind the log
 ```
 
-`esc doctor` never writes to the event log — every check reads the catalogue,
+`lingtai doctor` never writes to the event log — every check reads the catalogue,
 and the one exception is a `NOTIFY`, which touches no table. It holds a listener
 open, pauses long enough for a pool to churn, and notifies from a second
 connection, because a check that merely opens the direct connection passes
@@ -469,11 +469,11 @@ the issue that will fill them in.
 
 ## Connecting GitHub
 
-Escapement talks to GitHub as a **GitHub App**, not as a personal access token.
+Lingtai talks to GitHub as a **GitHub App**, not as a personal access token.
 The reason is a measured failure: on 2026-08-30 a fine-grained PAT covered the
 admin repository's *submodule* but not the repository itself, and every CI run
 failed with a 403 that said nothing about scope. An App's reach is explicit in
-its installation, so `esc add` can ask and answer that question at onboarding
+its installation, so `lingtai add` can ask and answer that question at onboarding
 time instead of a day later. See
 [ADR 0006](doc/decisions/0006-github-app.md).
 
@@ -487,21 +487,21 @@ Go to **Settings → Developer settings → GitHub Apps → New GitHub App**
 
 | Field | What to put |
 |---|---|
-| **GitHub App name** | Anything free — it is globally unique. `escapement-<your-handle>` works. |
+| **GitHub App name** | Anything free — it is globally unique. `lingtai-<your-handle>` works. |
 | **Homepage URL** | Required by the form and otherwise unused. The repository URL is fine. |
-| **Webhook → Active** | **Uncheck it.** Webhooks arrive with [#28](https://github.com/steven-zhc/escapement/issues/28); until then there is nothing listening and a failing delivery is noise. |
+| **Webhook → Active** | **Uncheck it.** Webhooks arrive with [#28](https://github.com/steven-zhc/lingtai/issues/28); until then there is nothing listening and a failing delivery is noise. |
 | **Where can this App be installed** | *Only on this account.* |
 
 Then, under **Repository permissions**, set exactly these four:
 
-| Permission | Level | What Escapement does with it |
+| Permission | Level | What Lingtai does with it |
 |---|---|---|
 | **Issues** | Read and write | reading work items, writing `agent:*` labels and comments |
 | **Contents** | Read and write | cloning, pushing `agent/*`, merging into the base branch |
 | **Pull requests** | Read and write | opening and reading pull requests |
 | **Metadata** | Read-only | mandatory; GitHub selects it for you |
 
-Leave every other permission at *No access*. `esc add` checks these four by name
+Leave every other permission at *No access*. `lingtai add` checks these four by name
 and refuses to onboard a repository that is missing one, so a gap becomes a
 message at onboarding rather than a 403 in the middle of a merge.
 
@@ -519,30 +519,30 @@ Move the `.pem` somewhere **outside this repository**. It is the one credential
 that is not short-lived, and `.gitignore` is not a place to rely on for it:
 
 ```bash
-mv ~/Downloads/escapement-*.private-key.pem ~/.escapement-app.pem
-chmod 600 ~/.escapement-app.pem
+mv ~/Downloads/lingtai-*.private-key.pem ~/.lingtai-app.pem
+chmod 600 ~/.lingtai-app.pem
 ```
 
 ### 3. Install it on the repositories it should manage
 
 **Install App** in the left sidebar → your account → **Only select
-repositories** → pick each repository Escapement will manage.
+repositories** → pick each repository Lingtai will manage.
 
 An App that exists but is not installed on a repository is the exact failure
-0006 is about, and `esc add` reports it as such:
+0006 is about, and `lingtai add` reports it as such:
 
 ```
 the GitHub App is not installed on steven-zhc/nextloom-ai-admin. Install it on
-that repository (Settings → GitHub Apps → Configure), then run esc add again.
+that repository (Settings → GitHub Apps → Configure), then run lingtai add again.
 ```
 
-### 4. Point Escapement at it
+### 4. Point Lingtai at it
 
 In `.env.local` at the repository root:
 
 ```bash
 GITHUB_APP_ID=123456
-GITHUB_APP_PRIVATE_KEY_PATH=~/.escapement-app.pem
+GITHUB_APP_PRIVATE_KEY_PATH=~/.lingtai-app.pem
 ```
 
 `~` is expanded, and a relative path is relative to *this repository's root* —
@@ -556,33 +556,33 @@ turns "the App is not installed there" into a sentence rather than a 404.
 Check it:
 
 ```bash
-pnpm esc doctor
+pnpm lingtai doctor
 ```
 
 ```
   ok   github: app credentials
-       app 123456, key from ~/.escapement-app.pem · requires issues:write,
+       app 123456, key from ~/.lingtai-app.pem · requires issues:write,
        contents:write, pull_requests:write, metadata:read (verified per
-       repository by esc add)
+       repository by lingtai add)
 ```
 
 That check parses the key to prove it is a key rather than a path typo or a
 truncated paste. It does **not** contact GitHub — whether an installation
 actually grants those four permissions is a per-repository question, and
-`esc add` is what asks it.
+`lingtai add` is what asks it.
 
 ## Onboarding a repository
 
 ### 1. Give the repository a recipe
 
-Escapement reads `<repo>/.escapement/config.yaml` **from the base branch**,
+Lingtai reads `<repo>/.lingtai/config.yaml` **from the base branch**,
 never from the branch an agent is working on. An agent that edits this file
 changes nothing about the run in flight; the edit shows up in the diff and takes
 effect from the next work item. That rule is borrowed from GitHub Actions and is
 [ADR 0005](doc/decisions/0005-config-in-target-repo.md).
 
 Commit this to the base branch of the repository being managed — not to
-Escapement:
+Lingtai:
 
 ```yaml
 version: 1
@@ -652,7 +652,7 @@ would put a green board on a change nobody approved.
 ### 2. Register it
 
 ```bash
-pnpm esc add steven-zhc/nextloom-ai-admin
+pnpm lingtai add steven-zhc/nextloom-ai-admin
 ```
 
 It checks the installation and its permissions **before** it writes anything, so
@@ -660,11 +660,11 @@ a half-onboarded project is not a state that exists. Then it reads the recipe
 from the base branch, hashes it, and records `ProjectConfigured` and
 `ProjectPolicySet`.
 
-Policy is Escapement's, not the repository's — the tier floor and which gates are
-mandatory live in Escapement's own log, where the agent cannot reach them:
+Policy is Lingtai's, not the repository's — the tier floor and which gates are
+mandatory live in Lingtai's own log, where the agent cannot reach them:
 
 ```bash
-pnpm esc add steven-zhc/nextloom-ai-admin --tier guarded --require build
+pnpm lingtai add steven-zhc/nextloom-ai-admin --tier guarded --require build
 ```
 
 A recipe may **add** strictness and can never remove it. One that drops a
@@ -678,7 +678,7 @@ gates: recipe says build, policy requires a gate named "review"
 ### 3. Check it
 
 ```bash
-pnpm esc status nextloom-ai-admin   # what is runnable, and what is holding the rest
+pnpm lingtai status nextloom-ai-admin   # what is runnable, and what is holding the rest
 ```
 
 Onboarding is done. How you actually run work is next.
@@ -689,8 +689,8 @@ Two things have to exist before anything runs, and both refuse loudly rather
 than degrading:
 
 ```bash
-pnpm --filter @escapement/hook build      # the guard binary; not committed
-pnpm --filter @escapement/board dev       # the board, on :3200
+pnpm --filter @lingtai/hook build      # the guard binary; not committed
+pnpm --filter @lingtai/board dev       # the board, on :3200
 ```
 
 The board is a reader. It renders `task_view` and issues control events; it
@@ -719,7 +719,7 @@ The first thing to do with a repository, and the thing to keep doing until you
 trust it:
 
 ```bash
-pnpm esc run nextloom-ai-admin --issue 120 --no-merge
+pnpm lingtai run nextloom-ai-admin --issue 120 --no-merge
 ```
 
 Discovery, claim, worktree, the `prepared` point, agent, the remaining gates — then it **stops** and asks.
@@ -733,7 +733,7 @@ nothing was merged. Re-run without --no-merge to merge it.
 ### Let the daemon do it
 
 ```bash
-pnpm esc daemon
+pnpm lingtai daemon
 ```
 
 One process, holding one advisory lock. It keeps the projections current and
@@ -745,9 +745,9 @@ Running it while another copy is up is fine; the second exits saying who holds
 the lock.
 
 ```bash
-pnpm esc pause "the importer is flaky today"   # take nothing new
-pnpm esc resume
-pnpm esc now nextloom-ai-admin --issue 155     # one, ahead of the queue
+pnpm lingtai pause "the importer is flaky today"   # take nothing new
+pnpm lingtai resume
+pnpm lingtai now nextloom-ai-admin --issue 155     # one, ahead of the queue
 ```
 
 **Pause stops it taking new work; a run in flight finishes.** Killing a running
@@ -759,7 +759,7 @@ Control goes through the log, so a pause issued while the daemon is down is
 waiting when it comes back.
 
 It also comments on the ticket when something is waiting on you, sets an
-`escapement:*` label as a task moves, and sends a macOS notification for the
+`lingtai:*` label as a task moves, and sends a macOS notification for the
 four things that mean nothing moves until you act. The comments and labels go
 through an **outbox** — queued from the log, retried with backoff, and given up
 on with a reason rather than retried forever. Notifications deliberately do
@@ -790,7 +790,7 @@ raw history with every actor. Nothing on that page is maintained in a table — 
 detail view is read rarely, by one person, about one task.
 
 The page updates itself: Postgres notifies on every append, the daemon advances
-the projection, and the board re-reads. If it stops moving, `esc doctor` says
+the projection, and the board re-reads. If it stops moving, `lingtai doctor` says
 whether the daemon is up and whether somebody paused it.
 
 That is the whole bet: if deciding still means opening GitHub, nothing changed.
@@ -798,8 +798,8 @@ That is the whole bet: if deciding still means opening GitHub, nothing changed.
 The same three decisions from the terminal, if you prefer:
 
 ```bash
-pnpm esc approve nextloom-ai-admin --issue 120
-pnpm esc approve nextloom-ai-admin --issue 120 --reject "wrong approach"
+pnpm lingtai approve nextloom-ai-admin --issue 120
+pnpm lingtai approve nextloom-ai-admin --issue 120 --reject "wrong approach"
 ```
 
 `approve` merges **what the held run actually produced**, not a fresh attempt.
@@ -812,7 +812,7 @@ the item back to the gate, not back to the queue.
 Drop the flag once you are willing:
 
 ```bash
-pnpm esc run nextloom-ai-admin --issue 120
+pnpm lingtai run nextloom-ai-admin --issue 120
 ```
 
 It still stops for a person wherever the recipe says so — a `human` gate, or a
@@ -823,8 +823,8 @@ It still stops for a person wherever the recipe says so — a `human` gate, or a
 No `--issue`, and it picks work itself, in the recipe's priority order:
 
 ```bash
-pnpm esc run nextloom-ai-admin --max 2    # Phase 2's exit criterion
-pnpm esc run nextloom-ai-admin            # until nothing runnable is left
+pnpm lingtai run nextloom-ai-admin --max 2    # Phase 2's exit criterion
+pnpm lingtai run nextloom-ai-admin            # until nothing runnable is left
 ```
 
 **`--max` matters more than it looks.** Without it this drains the queue, and a
@@ -843,10 +843,10 @@ Every refusal names itself. The common ones:
 |---|---|
 | `the GitHub App is not installed on …` | Step 3 above — install it on that repository. |
 | `the installation is missing permissions:` | Step 1's table; each gap is listed with what it has, what it needs and what it is for. |
-| `no .escapement/config.yaml on develop` | The recipe is missing from the **base branch**. A copy on the agent's branch is not read, by design. |
-| `runtime: signed in — claude-code reports not signed in` | `esc doctor` asks in the environment a *run* gets, not yours. If you are signed in and this fails, that environment is missing something the credential store needs. `/login` will not help. |
-| `no esc-hook binary at …` | `pnpm --filter @escapement/hook build`. A run without the guard must not start. |
-| `ENOENT … escapement-app.pem` | The key path is wrong. `~` and relative paths both work; relative is from this repository's root. |
+| `no .lingtai/config.yaml on develop` | The recipe is missing from the **base branch**. A copy on the agent's branch is not read, by design. |
+| `runtime: signed in — claude-code reports not signed in` | `lingtai doctor` asks in the environment a *run* gets, not yours. If you are signed in and this fails, that environment is missing something the credential store needs. `/login` will not help. |
+| `no lingtai-hook binary at …` | `pnpm --filter @lingtai/hook build`. A run without the guard must not start. |
+| `ENOENT … lingtai-app.pem` | The key path is wrong. `~` and relative paths both work; relative is from this repository's root. |
 | `stopped at recipe: …` | The recipe did not parse, or names an action this build does not have. The message is the validation failure. |
 | `stopped at discover: owned-by-another-agent` | That issue carries an `agent:*` label. Pick one the old loop has not touched. |
 | `stopped at prepare: the install action refused` | An action at the `prepared` point refused — usually dependencies that did not install in a fresh worktree. Nothing expensive ran; that is the point of failing here. |

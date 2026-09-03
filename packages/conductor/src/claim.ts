@@ -15,8 +15,8 @@
  *
  * A crash therefore costs a wait, not an intervention.
  */
-import { ConcurrencyError, type EventStore, eventStore } from "@escapement/store";
-import { parsePayload, reduceWorkItem } from "@escapement/core";
+import { ConcurrencyError, type EventStore, eventStore } from "@lingtai/store";
+import { parsePayload, reduceWorkItem } from "@lingtai/core";
 
 /** Long enough to outlive a slow gate, short enough that a crash is not an outage. */
 export const DEFAULT_LEASE_MS = 30 * 60_000;

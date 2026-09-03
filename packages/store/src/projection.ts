@@ -17,7 +17,7 @@
  * Reads still go through the store, and therefore through Prisma: `readAll` is
  * the only cursor, and its payloads are validated and upcast on the way out.
  */
-import type { Envelope } from "@escapement/core";
+import type { Envelope } from "@lingtai/core";
 import pg from "pg";
 import { databaseUrl } from "./env.ts";
 import { type EventStore, eventStore } from "./event-store.ts";
@@ -133,7 +133,7 @@ const ADVANCE_CHECKPOINT = `
  *
  * A projection with no events yet would otherwise have no checkpoint at all,
  * and `projectionLag` cannot tell that apart from a projection nobody ever
- * started — so `esc doctor` would report "nothing running" about something that
+ * started — so `lingtai doctor` would report "nothing running" about something that
  * is running fine and merely has nothing to do.
  */
 const REGISTER_CHECKPOINT = `
@@ -205,7 +205,7 @@ export function createProjectionRunner(options: ProjectionRunnerOptions): Projec
     const sub = subscribe({
       fromSeq,
       store,
-      name: `escapement-projection-${projection.name}`,
+      name: `lingtai-projection-${projection.name}`,
       onBatch: commitBatch,
       batchSize: options.batchSize ?? 500,
       onError: (error, phase) => {
@@ -294,7 +294,7 @@ export function createProjectionRunner(options: ProjectionRunnerOptions): Projec
 /**
  * Lag for every projection with a checkpoint, without starting a runner.
  *
- * This is what `esc doctor` reports. A projection that is far behind and whose
+ * This is what `lingtai doctor` reports. A projection that is far behind and whose
  * `updatedAt` is old is a stopped subscriber, and the old loop had no way to
  * notice the equivalent at all.
  */

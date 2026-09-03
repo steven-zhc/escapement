@@ -28,7 +28,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Escapement",
+  title: "Lingtai",
   description: "Event-sourced scheduler for autonomous code agents",
 };
 

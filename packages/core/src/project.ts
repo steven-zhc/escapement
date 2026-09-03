@@ -2,7 +2,7 @@
  * The Project aggregate: `prj-{project}`, alive as long as the project is
  * managed.
  *
- * It holds the two things that are Escapement's rather than the repository's:
+ * It holds the two things that are Lingtai's rather than the repository's:
  * the **policy**, which is what is not negotiable, and the last **resolved
  * configuration**, which is what the recipe came out as. The recipe itself is
  * not here — it lives in the managed repository and is re-read from
@@ -20,12 +20,12 @@ export interface ProjectState {
   project: string | null;
   /**
    * The GitHub owner. Null for a project registered before `ProjectConfigured`
-   * carried one — re-run `esc add` to record it.
+   * carried one — re-run `lingtai add` to record it.
    */
   owner: string | null;
   /**
    * The branch this project's recipe is read from and merged into. Null for a
-   * project registered before it was recorded — re-run `esc add` to record it.
+   * project registered before it was recorded — re-run `lingtai add` to record it.
    */
   base: string | null;
 

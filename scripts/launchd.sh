@@ -11,7 +11,7 @@
 # `KeepAlive` makes the daemon a thing that is *always supposed to be up* —
 # restarted if it crashes, started again at login, brought back after sleep.
 # What an operator actually controls is therefore not whether the process
-# exists but whether it is taking work, which is `esc pause` and `esc resume`
+# exists but whether it is taking work, which is `lingtai pause` and `lingtai resume`
 # (doc/decisions/0013-daemon-hosts-the-work.md).
 #
 # That is what let the UI stay a controller instead of a process manager. A web
@@ -26,9 +26,9 @@
 # person's paths pretending to be configuration.
 set -euo pipefail
 
-LABEL="ai.nextloom.escapement.daemon"
+LABEL="ai.nextloom.lingtai.daemon"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-LOGS="${ESCAPEMENT_HOME:-$HOME/.escapement}/logs"
+LOGS="${LINGTAI_HOME:-$HOME/.lingtai}/logs"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
@@ -63,7 +63,7 @@ install_agent() {
   <key>ProgramArguments</key>
   <array>
     <string>$node</string>
-    <string>$ROOT/apps/cli/src/esc.ts</string>
+    <string>$ROOT/apps/cli/src/lingtai.ts</string>
     <string>daemon</string>
   </array>
 
@@ -112,7 +112,7 @@ PLIST_EOF
   echo "  logs    $LOGS/daemon.log"
   echo
   echo "It is taking work. To stop it doing that without stopping the process:"
-  echo "  pnpm esc pause \"why\""
+  echo "  pnpm lingtai pause \"why\""
 }
 
 uninstall_agent() {
@@ -130,7 +130,7 @@ status_agent() {
   echo
   # The authority on whether it is *working*, as opposed to merely running.
   # launchd knows the process exists; only the beacon knows it is beating.
-  (cd "$ROOT" && pnpm --silent esc doctor 2>/dev/null | grep -A1 "daemon: liveness") || true
+  (cd "$ROOT" && pnpm --silent lingtai doctor 2>/dev/null | grep -A1 "daemon: liveness") || true
 }
 
 case "${1:-}" in

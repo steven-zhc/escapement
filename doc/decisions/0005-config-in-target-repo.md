@@ -11,7 +11,7 @@ policy for it to be measured against. The workflow is the user's to define.
 ## Context
 
 Onboarding a repository should be: give a repo path and GitHub permissions.
-That argues for `<repo>/.escapement/config.yaml`, the way GitHub Actions uses
+That argues for `<repo>/.lingtai/config.yaml`, the way GitHub Actions uses
 `.github/workflows/`.
 
 The objection is real: the managed repository is exactly what the agent edits.
@@ -31,15 +31,15 @@ Definition may live in the repo. Enforcement must not.
 
 ## Decision
 
-**Recipe** in `<repo>/.escapement/config.yaml`, committed to the managed
-repository. **Policy** in Escapement's own database as `ProjectPolicySet`
+**Recipe** in `<repo>/.lingtai/config.yaml`, committed to the managed
+repository. **Policy** in Lingtai's own database as `ProjectPolicySet`
 events.
 
-| | recipe · in the repo | policy · in Escapement |
+| | recipe · in the repo | policy · in Lingtai |
 |---|---|---|
 | Answers | how this project runs | what is not negotiable |
 | Holds | build/test commands, where the env file is planted, which gates exist, which prompt, submodules, priority labels | tier floor, which gates are mandatory, production host patterns, deny list, concurrency, who may approve |
-| Written by | the project, evolving with its code | you, from the board or `esc policy` |
+| Written by | the project, evolving with its code | you, from the board or `lingtai policy` |
 | Can the agent change it | it can edit the file, but not this run's rules, and never without passing `tamper` | no |
 | GitHub's equivalent | `.github/workflows/*.yml` | branch protection |
 
@@ -48,7 +48,7 @@ events.
 **A run's configuration is read from `origin/<base>`, never from the agent's
 branch.** So:
 
-- an agent that edits `.escapement/config.yaml` changes nothing about the run in
+- an agent that edits `.lingtai/config.yaml` changes nothing about the run in
   flight — the recipe was already snapshotted, and its hash recorded in
   `RunStarted`;
 - the edit appears in the diff, where the `tamper` gate catches it and routes to
@@ -56,13 +56,13 @@ branch.** So:
 - it takes effect from the next work item, after a human approves and merges it.
 
 A recipe may **add** strictness. It can never remove a gate policy marks
-mandatory, nor lower the tier. `esc doctor` fails loudly on a conflict and names
+mandatory, nor lower the tier. `lingtai doctor` fails loudly on a conflict and names
 the clause.
 
 ## Consequences
 
-- `esc add <owner>/<repo>` is the whole onboarding step.
-- `tamper` becomes a standard gate, watching `.escapement/**` plus the rest of
+- `lingtai add <owner>/<repo>` is the whole onboarding step.
+- `tamper` becomes a standard gate, watching `.lingtai/**` plus the rest of
   the verification surface the agent can reach: `package.json#scripts`, test
   configuration, `.github/workflows/**`. The old loop had no defence here at all.
 - The recipe holds **variable names only**, never values — so it is safe to

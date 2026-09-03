@@ -6,7 +6,7 @@
  * supplied it would produce a green board for a change nobody approved — which
  * is worse than a run that will not start.
  */
-import { type GateAction, kindOfAction } from "@escapement/config";
+import { type GateAction, kindOfAction } from "@lingtai/config";
 import { type AgentGateDeps, createAgentGate } from "./agent-gate.ts";
 import type { Gate } from "./gate.ts";
 import { createHumanGate } from "./human-gate.ts";
@@ -16,7 +16,7 @@ import { createProcessGate } from "./process-gate.ts";
 /**
  * What the actions that are not pure processes need from the caller.
  *
- * Optional, because `esc doctor` and the config tests build gates purely to
+ * Optional, because `lingtai doctor` and the config tests build gates purely to
  * check that a recipe *can* be built. Absent deps make an `agent` action refuse
  * loudly, rather than by quietly not running.
  */

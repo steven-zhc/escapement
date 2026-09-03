@@ -10,8 +10,8 @@
  * aggregates on purpose (design.md §4), and joining them is a reader's job
  * rather than a reducer's.
  */
-import { eventStore } from "@escapement/store";
-import { GATE_POINTS, type Envelope } from "@escapement/core";
+import { eventStore } from "@lingtai/store";
+import { GATE_POINTS, type Envelope } from "@lingtai/core";
 
 export interface Finding {
   file: string;
@@ -41,7 +41,7 @@ export interface GateVerdict {
  * a gate nobody configured does not run, and that is the user's decision — but
  * it has to be *shown*, because a point that is merely omitted is
  * indistinguishable from one that was configured and silently did not run. That
- * second case is Escapement's bug, and this is where it becomes visible.
+ * second case is Lingtai's bug, and this is where it becomes visible.
  */
 export interface PointView {
   point: string;

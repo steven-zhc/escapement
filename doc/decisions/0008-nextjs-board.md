@@ -20,9 +20,9 @@ muscle memory carry across.
 | Need | How |
 |---|---|
 | Read projections without an API layer | Server Components query the store directly. The board and the store share a process and a type. |
-| Live updates | **SSE** at `/api/stream`. Postgres already broadcasts every append on the `escapement` channel; this bridges it. One direction, plain text, reconnects on its own. |
+| Live updates | **SSE** at `/api/stream`. Postgres already broadcasts every append on the `lingtai` channel; this bridges it. One direction, plain text, reconnects on its own. |
 | Approve / reject / waive | Server Actions appending events. Every one is recorded — a waiver is never silent. |
-| Types shared with the scheduler | `@escapement/core` via `transpilePackages`. Changing an event definition breaks both sides at compile time. |
+| Types shared with the scheduler | `@lingtai/core` via `transpilePackages`. Changing an event definition breaks both sides at compile time. |
 
 SSE rather than WebSockets because nothing flows upward: the client reads, and
 writes go through Server Actions. SSE rather than polling because polling is the
@@ -33,7 +33,7 @@ thing this whole design exists to remove — `interval` should not appear anywhe
 - The board needs a Node runtime; it cannot be a static export. Fine — it is a
   local daemon's front end, not a deployed site.
 - **`apps/board` is a separate application, not a page inside
-  `nextloom-ai-admin`.** The admin is production-adjacent, and Escapement has to
+  `nextloom-ai-admin`.** The admin is production-adjacent, and Lingtai has to
   keep running while the admin is the thing being changed.
 - Port 3200, localhost, **no authentication**. It runs on one machine for one
   person. Before that stops being true, three things need doing: authentication,

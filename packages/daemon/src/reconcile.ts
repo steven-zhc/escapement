@@ -5,7 +5,7 @@
  * them cleans itself up. The **claim** has a lease, so it expires without
  * anybody releasing it and the task returns to the queue on its own
  * (`claim.ts`). The **worktree** does not: a directory under
- * `~/.escapement/worktrees/` outlives every process that knew about it, and it
+ * `~/.lingtai/worktrees/` outlives every process that knew about it, and it
  * is holding a branch checked out, which stops git updating that ref on the
  * next attempt.
  *
@@ -34,8 +34,8 @@
  */
 import { readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { reduceWorkItem, parsePayload } from "@escapement/core";
-import { type EventStore, eventStore } from "@escapement/store";
+import { reduceWorkItem, parsePayload } from "@lingtai/core";
+import { type EventStore, eventStore } from "@lingtai/store";
 import { CONTROL_STREAM } from "./control.ts";
 
 export interface Finding {
@@ -49,10 +49,10 @@ export interface Finding {
 }
 
 export interface ReconcileOptions {
-  /** Defaults to `ESCAPEMENT_HOME`, as the conductor uses it. */
+  /** Defaults to `LINGTAI_HOME`, as the conductor uses it. */
   home?: string;
   /**
-   * True reports without touching anything. `esc doctor` uses this — a check
+   * True reports without touching anything. `lingtai doctor` uses this — a check
    * that changed the thing it was checking would be a bad check.
    */
   dryRun?: boolean;
@@ -64,7 +64,7 @@ export interface ReconcileOptions {
 /**
  * Finds every worktree the log says should not exist.
  *
- * Reads only. `reconcile` is what acts, and `esc doctor` calls this on its own
+ * Reads only. `reconcile` is what acts, and `lingtai doctor` calls this on its own
  * so it can say what would happen without making it happen.
  */
 export async function findOrphans(options: ReconcileOptions = {}): Promise<Finding[]> {
@@ -184,7 +184,7 @@ export async function reconcile(options: ReconcileOptions = {}): Promise<Finding
 }
 
 function defaultHome(): string {
-  return process.env["ESCAPEMENT_HOME"] ?? join(process.env["HOME"] ?? ".", ".escapement");
+  return process.env["LINGTAI_HOME"] ?? join(process.env["HOME"] ?? ".", ".lingtai");
 }
 
 /** Exported for a test that wants to know the directory really went. */

@@ -39,8 +39,8 @@
  * flag and the loop goes round again when it finishes — which also collapses a
  * burst of events into one extra pass rather than one each.
  */
-import { directDatabaseUrl } from "@escapement/env";
-import { subscribe, type Subscription } from "@escapement/store";
+import { directDatabaseUrl } from "@lingtai/env";
+import { subscribe, type Subscription } from "@lingtai/store";
 import pg from "pg";
 
 /**
@@ -113,7 +113,7 @@ export interface WorkLoopOptions {
    * with its own connection would be another session-mode connection held open
    * for the life of the daemon, for something that is already being read.
    */
-  notify?: (event: import("@escapement/core").Envelope) => Promise<void>;
+  notify?: (event: import("@lingtai/core").Envelope) => Promise<void>;
   /**
    * How often to sweep for work nothing announced. `0` disables it, which is
    * what a test wants and what a machine with a reachable webhook can afford.
@@ -195,7 +195,7 @@ export function createWorkLoop(options: WorkLoopOptions): WorkLoop {
 
       subscription = subscribe({
         fromSeq: from,
-        name: "escapement-daemon",
+        name: "lingtai-daemon",
         ...(options.url === undefined ? {} : { url: options.url }),
         onEvent: (event) => {
           // Before the trigger check: the events worth interrupting somebody

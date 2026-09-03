@@ -16,12 +16,12 @@
  * Two exclusions, and the second is a Phase 1 safety rule rather than a
  * preference. `agent-loop.sh` is still working the same repository on an hourly
  * cycle, and the two systems must never both claim a ticket. An issue carrying
- * any `agent:*` label is one the old loop has touched, so Escapement does not
+ * any `agent:*` label is one the old loop has touched, so Lingtai does not
  * discover it at all.
  */
-import type { Recipe } from "@escapement/config";
-import { type WorkKind, WorkKind as WorkKindSchema } from "@escapement/core";
-import type { GitHubClient, Issue } from "@escapement/github";
+import type { Recipe } from "@lingtai/config";
+import { type WorkKind, WorkKind as WorkKindSchema } from "@lingtai/core";
+import type { GitHubClient, Issue } from "@lingtai/github";
 import { syncQueued } from "./task-view.ts";
 
 /** `wi-{project}-{n}`, the work item's own stream. */
@@ -69,7 +69,7 @@ export interface Considered {
 /**
  * Whether an issue is eligible, and if not, why — without touching the log.
  *
- * Separated from the appending so `esc status` can explain a queue's *absences*,
+ * Separated from the appending so `lingtai status` can explain a queue's *absences*,
  * which is the question the old loop's `pick_ticket` could never answer.
  */
 export function considerIssue(issue: Issue, recipe: Recipe): Considered {
@@ -111,9 +111,9 @@ export interface RefreshQueueOptions {
  * Ask GitHub what is runnable and write it into `task_view`.
  *
  * **Nothing is appended.** Which issues exist is GitHub's state, not
- * Escapement's, and mirroring it into an append-only log meant one event per
+ * Lingtai's, and mirroring it into an append-only log meant one event per
  * issue per pass to reproduce a fact that GitHub answers correctly on request
- * ([0012](../../../doc/decisions/0012-one-task-view.md)). What Escapement
+ * ([0012](../../../doc/decisions/0012-one-task-view.md)). What Lingtai
  * decides — which one it claimed — is still an event, and still the whole of
  * the mutual exclusion.
  *

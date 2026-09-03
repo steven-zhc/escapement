@@ -1,5 +1,5 @@
 {
-  "name": "escapement",
+  "name": "lingtai",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,13 +12,13 @@
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --workspace-concurrency=1 --if-present test",
-    "esc": "node apps/cli/src/esc.ts",
-    "contract:emit": "pnpm --filter @escapement/store contract:emit",
-    "db:plan": "pnpm --filter @escapement/store db:plan",
-    "db:init": "pnpm --filter @escapement/store db:init",
-    "db:bootstrap": "pnpm --filter @escapement/store db:bootstrap",
-    "db:migrate": "pnpm --filter @escapement/store db:migrate",
-    "db:verify": "pnpm --filter @escapement/store db:verify"
+    "lingtai": "node apps/cli/src/lingtai.ts",
+    "contract:emit": "pnpm --filter @lingtai/store contract:emit",
+    "db:plan": "pnpm --filter @lingtai/store db:plan",
+    "db:init": "pnpm --filter @lingtai/store db:init",
+    "db:bootstrap": "pnpm --filter @lingtai/store db:bootstrap",
+    "db:migrate": "pnpm --filter @lingtai/store db:migrate",
+    "db:verify": "pnpm --filter @lingtai/store db:verify"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

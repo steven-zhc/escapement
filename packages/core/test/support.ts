@@ -1,5 +1,5 @@
 /**
- * Envelope fixtures. No database — `@escapement/core` is zero-I/O on purpose,
+ * Envelope fixtures. No database — `@lingtai/core` is zero-I/O on purpose,
  * which is the whole point of the split: the old loop's least testable code, the
  * six branches of `integrate()`, is a pure function here.
  *

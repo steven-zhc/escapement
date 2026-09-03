@@ -14,8 +14,8 @@
  * **Retention is a query.** A landed task falling out of the window must still
  * be a row. Deleting it would make the projection depend on when it last ran.
  */
-import { directDatabaseUrl } from "@escapement/env";
-import { createDb, createEventStore, createProjectionRunner, type Db, type EventStore } from "@escapement/store";
+import { directDatabaseUrl } from "@lingtai/env";
+import { createDb, createEventStore, createProjectionRunner, type Db, type EventStore } from "@lingtai/store";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { integrationStream, readTasks, syncQueued, taskViewProjection } from "../src/index.ts";
@@ -134,10 +134,10 @@ afterAll(async () => {
   const c = new pg.Client({ connectionString: directDatabaseUrl() });
   await c.connect();
   try {
-    await c.query("alter table events disable rule escapement_events_no_delete");
+    await c.query("alter table events disable rule lingtai_events_no_delete");
     for (const id of created) await c.query("delete from events where stream_id = $1", [id]);
   } finally {
-    await c.query("alter table events enable rule escapement_events_no_delete");
+    await c.query("alter table events enable rule lingtai_events_no_delete");
     await c.end();
   }
 });
@@ -227,7 +227,7 @@ describe("the queue GitHub reported", () => {
     expect(tasks.map((t) => t.issue).sort()).toEqual(["10", "11"]);
 
     // GitHub stops listing 11 — it was closed by a person, and it was never
-    // Escapement's state to keep.
+    // Lingtai's state to keep.
     await syncQueued(other, [{ ref: "10", title: "one", kind: "bug" }]);
     tasks = await readTasks({ project: other });
     expect(tasks.map((t) => t.issue)).toEqual(["10"]);

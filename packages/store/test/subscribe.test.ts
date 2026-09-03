@@ -10,7 +10,7 @@
  * **direct** one — two connections, which is the only shape that proves
  * anything (doc/decisions/0009-two-connections.md).
  */
-import type { Envelope } from "@escapement/core";
+import type { Envelope } from "@lingtai/core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createDb, createEventStore, type Db, type EventStore, subscribe } from "../src/index.ts";
 import type { Subscription } from "../src/index.ts";
@@ -53,7 +53,7 @@ describe("subscribe", () => {
     const seen: Envelope[] = [];
     const from = await currentMaxSeq();
     const sub = track(
-      subscribe({ fromSeq: from, store, onEvent: (e) => void seen.push(e), name: "esc-test-live" }),
+      subscribe({ fromSeq: from, store, onEvent: (e) => void seen.push(e), name: "lingtai-test-live" }),
     );
     await sub.caughtUp();
 
@@ -78,7 +78,7 @@ describe("subscribe", () => {
 
     const seen: Envelope[] = [];
     const sub = track(
-      subscribe({ fromSeq: from, store, onEvent: (e) => void seen.push(e), name: "esc-test-catchup" }),
+      subscribe({ fromSeq: from, store, onEvent: (e) => void seen.push(e), name: "lingtai-test-catchup" }),
     );
     await sub.caughtUp();
 
@@ -88,7 +88,7 @@ describe("subscribe", () => {
   });
 
   it("survives its backend being killed: no gap, no duplicate", async () => {
-    const name = `esc-test-kill-${crypto.randomUUID().slice(0, 8)}`;
+    const name = `lingtai-test-kill-${crypto.randomUUID().slice(0, 8)}`;
     const seen: Envelope[] = [];
     const errors: string[] = [];
 
@@ -148,7 +148,7 @@ describe("subscribe", () => {
       subscribe({
         fromSeq: from,
         store,
-        name: "esc-test-handler",
+        name: "lingtai-test-handler",
         onEvent: (e) => {
           if ((e.data as { title?: string }).title === "boom") throw new Error("handler said no");
         },

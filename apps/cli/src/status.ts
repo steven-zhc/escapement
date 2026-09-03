@@ -1,15 +1,15 @@
 /**
- * `esc status` — what is runnable, and what is not.
+ * `lingtai status` — what is runnable, and what is not.
  *
  * The old loop's equivalent was `pick_ticket`, a GitHub issue search re-run every
  * hour whose result nobody could see. The important half of this command is
  * therefore not the queue but the **absences**: an issue that is not being
  * worked has a reason, and until now the reason was never written down anywhere.
  */
-import { hasGitHubApp, githubApp } from "@escapement/env";
-import { currentRecipe, loadProjects, readRunnable, readTasks } from "@escapement/conductor";
-import { createGitHubClient } from "@escapement/github";
-import type { WorkKind } from "@escapement/core";
+import { hasGitHubApp, githubApp } from "@lingtai/env";
+import { currentRecipe, loadProjects, readRunnable, readTasks } from "@lingtai/conductor";
+import { createGitHubClient } from "@lingtai/github";
+import type { WorkKind } from "@lingtai/core";
 
 export interface StatusOptions {
   /** Restrict to one project. */
@@ -26,8 +26,8 @@ export async function status(options: StatusOptions = {}, log = console.log): Pr
   if (projects.length === 0) {
     log(
       options.project
-        ? `no project named "${options.project}" — run esc add <owner>/<repo> first`
-        : "no projects registered — run esc add <owner>/<repo>",
+        ? `no project named "${options.project}" — run lingtai add <owner>/<repo> first`
+        : "no projects registered — run lingtai add <owner>/<repo>",
     );
     return 0;
   }
@@ -48,7 +48,7 @@ export async function status(options: StatusOptions = {}, log = console.log): Pr
     } else if (!project.owner) {
       // Registered before ProjectConfigured carried an owner. Saying so beats
       // guessing at one.
-      log("  (priority order unavailable: no owner recorded — re-run esc add to record it)");
+      log("  (priority order unavailable: no owner recorded — re-run lingtai add to record it)");
     } else {
       try {
         const client = await createGitHubClient({

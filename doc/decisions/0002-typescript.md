@@ -15,14 +15,14 @@ TypeScript throughout, except the hook binary.
 |---|---|---|
 | Event schemas with versioned upgrades | `jq` string-assembly; one field change breaks everything downstream silently | zod schemas plus upcasters, checked at compile time |
 | Postgres `LISTEN/NOTIFY` | a long-lived `psql` is not maintainable | the `pg` client, with reconnect and cursor resume |
-| Board and scheduler sharing types | impossible | one `@escapement/core`; changing an event definition breaks both at compile time |
+| Board and scheduler sharing types | impossible | one `@lingtai/core`; changing an event definition breaks both at compile time |
 | Two agent runtimes | branching everywhere | one interface, two implementations, capabilities as flags |
 | Hook answering in under 20 ms | fork per call, and failure modes are hard to control | a compiled single-file binary |
 
 The third row is the one that matters most. In the old system the concept of
 "state" existed separately in bash, in GitHub labels, and in a person's head —
 which is how #35 ended up in two contradictory states at once. Here it exists
-only as a type in `@escapement/core`, and both the scheduler and the board read
+only as a type in `@lingtai/core`, and both the scheduler and the board read
 it from there.
 
 ## The exception: the hook

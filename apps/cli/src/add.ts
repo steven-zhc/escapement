@@ -1,10 +1,10 @@
 /**
- * `esc add <owner>/<repo>` — the whole of onboarding.
+ * `lingtai add <owner>/<repo>` — the whole of onboarding.
  *
  * Give it a repository slug and permissions; it does the rest. What it does
  * *not* do is take a configuration file: the recipe belongs to the managed
- * repository and is read from its base branch, and the policy is Escapement's
- * and lives in Escapement's own log. That split is
+ * repository and is read from its base branch, and the policy is Lingtai's
+ * and lives in Lingtai's own log. That split is
  * doc/decisions/0005-config-in-target-repo.md, and it is why this command needs
  * so few arguments.
  *
@@ -14,17 +14,17 @@
  * submodule but not the repository itself produced a day of 403s on CI, and
  * nothing anywhere said "wrong scope".
  */
-import { RECIPE_PATH, RecipeMissingError, resolveRecipe } from "@escapement/config";
-import { type Tier, parsePayload } from "@escapement/core";
+import { RECIPE_PATH, RecipeMissingError, resolveRecipe } from "@lingtai/config";
+import { type Tier, parsePayload } from "@lingtai/core";
 import {
   NotInstalledError,
   createGitHubClient,
   installationForRepo,
   parseSlug,
   permissionGaps,
-} from "@escapement/github";
-import { githubApp } from "@escapement/env";
-import { eventStore } from "@escapement/store";
+} from "@lingtai/github";
+import { githubApp } from "@lingtai/env";
+import { eventStore } from "@lingtai/store";
 
 export interface AddOptions {
   slug: string;
@@ -56,7 +56,7 @@ export async function add(options: AddOptions, log = console.log): Promise<numbe
   }
   log(`installation ${installation.id} on ${installation.account} (${installation.repositorySelection})`);
 
-  // 2. Does it grant what Escapement actually needs? Named individually, with
+  // 2. Does it grant what Lingtai actually needs? Named individually, with
   //    what each one is for — a gap here becomes a 403 in the middle of a merge.
   const gaps = permissionGaps(installation);
   if (gaps.length > 0) {
@@ -89,7 +89,7 @@ export async function add(options: AddOptions, log = console.log): Promise<numbe
       log("");
       log(`Nothing named a base, so this used ${base} — the repository's default branch.`);
       log("If that is not the branch work merges into, say which is:");
-      log(`  esc add ${owner}/${repo} --base <branch>`);
+      log(`  lingtai add ${owner}/${repo} --base <branch>`);
     }
     return 1;
   }

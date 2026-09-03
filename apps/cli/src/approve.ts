@@ -1,14 +1,14 @@
 /**
- * `esc approve <project> --issue <n>` — merge what a held run actually produced.
+ * `lingtai approve <project> --issue <n>` — merge what a held run actually produced.
  *
- * The counterpart to `esc run --once --no-merge`. Without it that flag is half a
+ * The counterpart to `lingtai run --once --no-merge`. Without it that flag is half a
  * feature: the only other way to finish a held run is to run it again without
  * the flag, which starts a new run with a new worktree and a new diff — so the
  * thing that merges is not the thing anyone looked at.
  */
-import { approve as approveRun, loadProject } from "@escapement/conductor";
-import { githubApp, hasGitHubApp } from "@escapement/env";
-import { createGitHubClient } from "@escapement/github";
+import { approve as approveRun, loadProject } from "@lingtai/conductor";
+import { githubApp, hasGitHubApp } from "@lingtai/env";
+import { createGitHubClient } from "@lingtai/github";
 import { userInfo } from "node:os";
 
 export interface ApproveCommandOptions {
@@ -31,7 +31,7 @@ export async function approveCommand(
 
   const project = await loadProject(options.project);
   if (!project?.owner) {
-    log(`no project named "${options.project}" — run esc add <owner>/<repo> first`);
+    log(`no project named "${options.project}" — run lingtai add <owner>/<repo> first`);
     return 1;
   }
 
@@ -44,7 +44,7 @@ export async function approveCommand(
   const by = options.by ?? `human:${userInfo().username}`;
 
   if (options.reject !== undefined) {
-    const { reject } = await import("@escapement/conductor");
+    const { reject } = await import("@lingtai/conductor");
     const outcome = await reject({
       project: options.project,
       issue: options.issue,

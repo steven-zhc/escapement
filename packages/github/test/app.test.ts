@@ -8,7 +8,7 @@
  * observed against a live GitHub without waiting an hour.
  *
  * What is not covered here is whether a real installation answers — that is
- * `esc add`'s job against a real App, and it is the reason `esc add` checks
+ * `lingtai add`'s job against a real App, and it is the reason `lingtai add` checks
  * permissions before it writes anything.
  */
 import { createPublicKey, createVerify, generateKeyPairSync } from "node:crypto";

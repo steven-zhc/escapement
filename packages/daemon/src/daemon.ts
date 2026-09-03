@@ -25,8 +25,8 @@
  * nobody checks — and the incident that motivated all of this was two work
  * items merging for real while their cards sat still, which nothing reported.
  */
-import type { Projection, ProjectionRunner } from "@escapement/store";
-import { createProjectionRunner } from "@escapement/store";
+import type { Projection, ProjectionRunner } from "@lingtai/store";
+import { createProjectionRunner } from "@lingtai/store";
 import { type DaemonLock, acquireDaemonLock } from "./lock.ts";
 
 export interface DaemonOptions {
@@ -41,7 +41,7 @@ export interface DaemonOptions {
 export type DaemonStart =
   | { ok: true; daemon: Daemon }
   /**
-   * Another daemon holds the lock. Not an error: running `esc daemon` while
+   * Another daemon holds the lock. Not an error: running `lingtai daemon` while
    * launchd's copy is up is a reasonable thing to do, and the right answer is
    * to say who has it and exit 0.
    */

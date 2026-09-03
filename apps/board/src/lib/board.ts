@@ -14,7 +14,7 @@
 // The subpath, not the barrel: importing the barrel pulls in the gate
 // pipeline and its child-process types, which a page rendering cards has no
 // business compiling.
-import { readTasks, type TaskCard } from "@escapement/conductor/task-view";
+import { readTasks, type TaskCard } from "@lingtai/conductor/task-view";
 
 /**
  * Four, not five. `gates` folded into `running` (ADR 0016 §8).

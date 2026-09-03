@@ -17,22 +17,22 @@ importers:
 
   apps/board:
     dependencies:
-      '@escapement/conductor':
+      '@lingtai/conductor':
         specifier: workspace:*
         version: link:../../packages/conductor
-      '@escapement/core':
+      '@lingtai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@escapement/daemon':
+      '@lingtai/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
-      '@escapement/env':
+      '@lingtai/env':
         specifier: workspace:*
         version: link:../../packages/env
-      '@escapement/github':
+      '@lingtai/github':
         specifier: workspace:*
         version: link:../../packages/github
-      '@escapement/store':
+      '@lingtai/store':
         specifier: workspace:*
         version: link:../../packages/store
       next:
@@ -60,28 +60,28 @@ importers:
 
   apps/cli:
     dependencies:
-      '@escapement/conductor':
+      '@lingtai/conductor':
         specifier: workspace:*
         version: link:../../packages/conductor
-      '@escapement/config':
+      '@lingtai/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@escapement/core':
+      '@lingtai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@escapement/daemon':
+      '@lingtai/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
-      '@escapement/env':
+      '@lingtai/env':
         specifier: workspace:*
         version: link:../../packages/env
-      '@escapement/github':
+      '@lingtai/github':
         specifier: workspace:*
         version: link:../../packages/github
-      '@escapement/runtime':
+      '@lingtai/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
-      '@escapement/store':
+      '@lingtai/store':
         specifier: workspace:*
         version: link:../../packages/store
       pg:
@@ -103,25 +103,25 @@ importers:
 
   packages/conductor:
     dependencies:
-      '@escapement/config':
+      '@lingtai/config':
         specifier: workspace:*
         version: link:../config
-      '@escapement/core':
+      '@lingtai/core':
         specifier: workspace:*
         version: link:../core
-      '@escapement/env':
+      '@lingtai/env':
         specifier: workspace:*
         version: link:../env
-      '@escapement/gates':
+      '@lingtai/gates':
         specifier: workspace:*
         version: link:../gates
-      '@escapement/github':
+      '@lingtai/github':
         specifier: workspace:*
         version: link:../github
-      '@escapement/runtime':
+      '@lingtai/runtime':
         specifier: workspace:*
         version: link:../runtime
-      '@escapement/store':
+      '@lingtai/store':
         specifier: workspace:*
         version: link:../store
       pg:
@@ -143,7 +143,7 @@ importers:
 
   packages/config:
     dependencies:
-      '@escapement/core':
+      '@lingtai/core':
         specifier: workspace:*
         version: link:../core
       picomatch:
@@ -187,16 +187,16 @@ importers:
 
   packages/daemon:
     dependencies:
-      '@escapement/conductor':
+      '@lingtai/conductor':
         specifier: workspace:*
         version: link:../conductor
-      '@escapement/core':
+      '@lingtai/core':
         specifier: workspace:*
         version: link:../core
-      '@escapement/env':
+      '@lingtai/env':
         specifier: workspace:*
         version: link:../env
-      '@escapement/store':
+      '@lingtai/store':
         specifier: workspace:*
         version: link:../store
       pg:
@@ -234,13 +234,13 @@ importers:
 
   packages/gates:
     dependencies:
-      '@escapement/config':
+      '@lingtai/config':
         specifier: workspace:*
         version: link:../config
-      '@escapement/core':
+      '@lingtai/core':
         specifier: workspace:*
         version: link:../core
-      '@escapement/runtime':
+      '@lingtai/runtime':
         specifier: workspace:*
         version: link:../runtime
     devDependencies:
@@ -256,10 +256,10 @@ importers:
 
   packages/github:
     dependencies:
-      '@escapement/core':
+      '@lingtai/core':
         specifier: workspace:*
         version: link:../core
-      '@escapement/env':
+      '@lingtai/env':
         specifier: workspace:*
         version: link:../env
     devDependencies:
@@ -287,7 +287,7 @@ importers:
 
   packages/runtime:
     dependencies:
-      '@escapement/core':
+      '@lingtai/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -303,10 +303,10 @@ importers:
 
   packages/store:
     dependencies:
-      '@escapement/core':
+      '@lingtai/core':
         specifier: workspace:*
         version: link:../core
-      '@escapement/env':
+      '@lingtai/env':
         specifier: workspace:*
         version: link:../env
       '@prisma/orm-postgres':

@@ -12,7 +12,7 @@
  *
  * Each one appends an event and nothing else. There is no board-specific state
  * and no second write path: `approve` here is the same `approve` that
- * `esc approve` calls, which is what stops the two from drifting into two
+ * `lingtai approve` calls, which is what stops the two from drifting into two
  * systems that disagree about what happened.
  *
  * **Every action carries the sha the card was showing.** A person approves a
@@ -23,11 +23,11 @@
 // Subpaths, not the barrel. The root export pulls in `run-once`, which pulls
 // in the gates and the runtime, which the board has no business compiling —
 // the same reason `./board` and `./projects` exist.
-import { approve, reject, waive } from "@escapement/conductor/decide";
-import { loadProject } from "@escapement/conductor/projects";
-import { git, stateDir } from "@escapement/conductor/worktree";
-import { githubApp, hasGitHubApp } from "@escapement/env";
-import { createGitHubClient } from "@escapement/github";
+import { approve, reject, waive } from "@lingtai/conductor/decide";
+import { loadProject } from "@lingtai/conductor/projects";
+import { git, stateDir } from "@lingtai/conductor/worktree";
+import { githubApp, hasGitHubApp } from "@lingtai/env";
+import { createGitHubClient } from "@lingtai/github";
 import { revalidatePath } from "next/cache";
 // A "use server" module may only export async functions, so the shapes and the
 // limit live next door.
@@ -47,7 +47,7 @@ function actor(): string {
 
 async function project(name: string) {
   const state = await loadProject(name);
-  if (!state?.owner) throw new Error(`no project named "${name}" — run esc add first`);
+  if (!state?.owner) throw new Error(`no project named "${name}" — run lingtai add first`);
   return state;
 }
 
@@ -148,7 +148,7 @@ export async function waiveGate(input: {
 }
 
 /**
- * The diff, read from Escapement's own mirror.
+ * The diff, read from Lingtai's own mirror.
  *
  * On demand rather than in the projection: a diff can be megabytes, projections
  * are rebuilt by replaying everything, and a card that is never expanded should

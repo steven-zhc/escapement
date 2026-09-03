@@ -22,8 +22,8 @@
  * per-run, and a request carrying an unknown run id is a misconfiguration rather
  * than a permission.
  */
-import { type PayloadOf, parsePayload } from "@escapement/core";
-import { type EventStore, eventStore } from "@escapement/store";
+import { type PayloadOf, parsePayload } from "@lingtai/core";
+import { type EventStore, eventStore } from "@lingtai/store";
 import { mkdir, rm } from "node:fs/promises";
 import { type Server, createServer } from "node:net";
 import { dirname } from "node:path";
@@ -154,7 +154,7 @@ export function createHookServer(options: HookServerOptions): HookServer {
     if (!run) {
       // Fail closed on an unknown run: the conductor renders the wiring, so this
       // means the wiring is wrong, not that this call is exempt.
-      return { allow: false, reason: `esc-hook: run ${request.runId ?? "(none)"} is not registered` };
+      return { allow: false, reason: `lingtai-hook: run ${request.runId ?? "(none)"} is not registered` };
     }
 
     const hook = (request.payload?.hook_event_name ?? "PreToolUse") as HookName;
@@ -221,7 +221,7 @@ export function createHookServer(options: HookServerOptions): HookServer {
       return { allow: true };
     }
 
-    // Everything else, `PreToolUse` included. Escapement refuses no tool call
+    // Everything else, `PreToolUse` included. Lingtai refuses no tool call
     // (ADR 0016 §6): tool restrictions are the runtime's own configuration, and
     // `permissions.deny` is enforced even under `bypassPermissions` — by
     // removing the tool from the model's list, so nothing is ever attempted.
@@ -288,7 +288,7 @@ export function createHookServer(options: HookServerOptions): HookServer {
               try {
                 reply = await decide(JSON.parse(line) as Request);
               } catch (err) {
-                reply = { allow: false, reason: `esc-hook: ${redact(String(err))}` };
+                reply = { allow: false, reason: `lingtai-hook: ${redact(String(err))}` };
               }
               socket.write(`${JSON.stringify(reply)}\n`);
             })();

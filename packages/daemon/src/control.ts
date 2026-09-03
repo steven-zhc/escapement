@@ -26,9 +26,9 @@
  * the claim returns. Saying so is better than shipping a Stop button that
  * quietly means Pause.
  */
-import { directDatabaseUrl } from "@escapement/env";
-import { type EventStore, eventStore } from "@escapement/store";
-import { parsePayload } from "@escapement/core";
+import { directDatabaseUrl } from "@lingtai/env";
+import { type EventStore, eventStore } from "@lingtai/store";
+import { parsePayload } from "@lingtai/core";
 import pg from "pg";
 
 /** One stream for the whole installation. Control is not per-project. */

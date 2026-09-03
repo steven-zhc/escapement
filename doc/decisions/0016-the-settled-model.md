@@ -10,7 +10,7 @@ the code is built against. Where it disagrees with them, it wins.
 
 ## 1. What the core is
 
-> **Escapement takes a ticket, calls an agent to work on it, and merges the
+> **Lingtai takes a ticket, calls an agent to work on it, and merges the
 > result into a base branch. Everything else is declared in the recipe.**
 
 That sentence is the whole of what is not configurable. Concretely the core
@@ -19,7 +19,7 @@ owns, and will not delegate:
 | | Why it cannot be a plugin |
 |---|---|
 | the append-only log | it is the truth; see 0014's reasoning, which stands |
-| refreshing the queue from GitHub | Escapement never decides which issues exist ([0012](0012-one-task-view.md)) |
+| refreshing the queue from GitHub | Lingtai never decides which issues exist ([0012](0012-one-task-view.md)) |
 | claim, with its lease and uniqueness | `UNIQUE (stream_id, version)` is the concurrency control |
 | the worktree lifecycle | the isolation boundary a run actually has |
 | dispatching the agent | this is the thing being scheduled |
@@ -29,7 +29,7 @@ owns, and will not delegate:
 **`integrate` stays in the core, and this is the boundary worth defending.** If
 merging were pluggable there is no scheduler left, only a generic event workflow
 engine — and the advisory lock that makes concurrent merges safe would become
-the plugin author's problem. Escapement is opinionated about exactly one thing:
+the plugin author's problem. Lingtai is opinionated about exactly one thing:
 it merges to a base branch.
 
 ## 2. No defaults in the core
@@ -74,8 +74,8 @@ budget: all are actions attached to a point. Adding a point is not possible.
 ## 4. Unconfigured is skipped, and skipped is visible
 
 A gate nobody configured does not run, and that is the user's decision, not a
-defect. Escapement does not check that a project configured the gates it
-"should" have. **Configured and did not run is Escapement's bug.**
+defect. Lingtai does not check that a project configured the gates it
+"should" have. **Configured and did not run is Lingtai's bug.**
 
 This is what removed `requiredGates`, and with it the last reason for a policy
 concept. The argument in 0014 — that something must declare requirements
@@ -129,9 +129,9 @@ daemon's process with the daemon's credentials, including the GitHub App key.
 Said plainly here so nobody later assumes otherwise — that assumption is exactly
 the mistake the old README made about the guard hook.
 
-## 6. Escapement does not restrict tool calls
+## 6. Lingtai does not restrict tool calls
 
-This section previously renamed the guard to `tools` and kept Escapement's own
+This section previously renamed the guard to `tools` and kept Lingtai's own
 rule engine. **The guard is deleted instead**, and the reasoning is worth keeping
 because it is a case of a measurement removing a subsystem.
 
@@ -142,9 +142,9 @@ checkout of that repository. A third level in the recipe is a third answer to
 "where do I configure this?", and the question is common enough that three
 answers is the wrong number.
 
-The objection was that Escapement passes `--permission-mode bypassPermissions`
+The objection was that Lingtai passes `--permission-mode bypassPermissions`
 deliberately — a run once spent 45 turns and $3.35 unable to write a file
-because Claude Code's permission layer refused everything before `esc-hook` saw
+because Claude Code's permission layer refused everything before `lingtai-hook` saw
 it. Delegating to a layer we turn off would delegate to nothing.
 
 [Experiment 008](../experiments/008-deny-survives-bypass.md) settled it:
@@ -162,7 +162,7 @@ so nothing is lost by not seeing it.
 
 So the honest statement is:
 
-> **Escapement does not restrict tool calls.** Containment is the filtered
+> **Lingtai does not restrict tool calls.** Containment is the filtered
 > environment and the disposable worktree. Tool restrictions belong to the agent
 > runtime's own configuration, at its user or project level.
 
@@ -181,13 +181,13 @@ the mechanism.
 **What is lost, recorded rather than waved away.** One recipe can no longer
 describe tool limits for both runtimes, since each has its own configuration —
 weak today, because Codex has never run against a real repository. And nothing
-on Escapement's side records what an agent was not allowed to do: a project's
+on Lingtai's side records what an agent was not allowed to do: a project's
 `.claude/settings.json` can change with nothing in the log noticing.
 
-That second cost makes one thing mandatory rather than nice: **`esc doctor` must
+That second cost makes one thing mandatory rather than nice: **`lingtai doctor` must
 report which settings sources are live** for a run — whether
 `~/.claude/settings.json` exists and whether it carries `permissions`, `hooks`
-or MCP servers. Escapement does not set `HOME`, so the operator's personal
+or MCP servers. Lingtai does not set `HOME`, so the operator's personal
 configuration is in scope for every run, and the recipe is therefore *not* a
 complete description of one. Being unable to control that is acceptable. Being
 unable to see it is not.

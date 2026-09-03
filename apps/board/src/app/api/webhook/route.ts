@@ -18,10 +18,10 @@
  * regardless, so a webhook that never arrives costs latency and nothing else —
  * which is the property that makes it safe to leave unconfigured.
  */
-import { verifyWebhook, DELIVERY_HEADER, EVENT_HEADER, SIGNATURE_HEADER } from "@escapement/github";
-import { CONTROL_STREAM } from "@escapement/daemon";
-import { eventStore } from "@escapement/store";
-import { parsePayload } from "@escapement/core";
+import { verifyWebhook, DELIVERY_HEADER, EVENT_HEADER, SIGNATURE_HEADER } from "@lingtai/github";
+import { CONTROL_STREAM } from "@lingtai/daemon";
+import { eventStore } from "@lingtai/store";
+import { parsePayload } from "@lingtai/core";
 
 export const dynamic = "force-dynamic";
 

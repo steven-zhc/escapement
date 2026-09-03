@@ -11,25 +11,25 @@
  *   4. the prepare stage, against a real dependency tree
  *
  * **It starts no agent and writes nothing to GitHub.** It clones, prepares, and
- * reports. The only things it touches are Escapement's own mirror and worktree
- * under `ESCAPEMENT_HOME`, and it removes the worktree afterwards.
+ * reports. The only things it touches are Lingtai's own mirror and worktree
+ * under `LINGTAI_HOME`, and it removes the worktree afterwards.
  *
  * It also uses an in-memory event store rather than the real one. A run that
  * never happened should not leave a run-shaped hole in the log, and the evidence
  * this produces is its own output, which goes into doc/experiments/.
  *
  * Lives under `apps/cli` rather than at the root because that is where the
- * workspace links to `@escapement/*` resolve — a script at the top level is not
+ * workspace links to `@lingtai/*` resolve — a script at the top level is not
  * a package and cannot import them.
  *
  *   node --experimental-strip-types apps/cli/scripts/rung-1.ts <owner>/<repo>
  */
-import { resolveRecipe } from "@escapement/config";
-import type { Envelope, ToAppend } from "@escapement/core";
-import { prepareWorktree, provisionWorktree, removeWorktree, filterEnv, runnableEnv, DEFAULT_PRODUCTION_PATTERNS } from "@escapement/conductor";
-import { githubApp, hasGitHubApp } from "@escapement/env";
-import { createGitHubClient } from "@escapement/github";
-import type { EventStore } from "@escapement/store";
+import { resolveRecipe } from "@lingtai/config";
+import type { Envelope, ToAppend } from "@lingtai/core";
+import { prepareWorktree, provisionWorktree, removeWorktree, filterEnv, runnableEnv, DEFAULT_PRODUCTION_PATTERNS } from "@lingtai/conductor";
+import { githubApp, hasGitHubApp } from "@lingtai/env";
+import { createGitHubClient } from "@lingtai/github";
+import type { EventStore } from "@lingtai/store";
 
 const memory = (): EventStore & { events: Envelope[] } => {
   const events: Envelope[] = [];

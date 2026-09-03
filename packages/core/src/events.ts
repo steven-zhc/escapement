@@ -49,7 +49,7 @@ export type GatePoint = z.infer<typeof GatePoint>;
  * The five, in the order the loop reaches them.
  *
  * Exported as a tuple because "every point, in order" is a thing several places
- * need to iterate — `GatesResolved`, the board, `esc add` — and each writing its
+ * need to iterate — `GatesResolved`, the board, `lingtai add` — and each writing its
  * own list is how one of them ends up missing a point and nobody notices.
  */
 export const GATE_POINTS = GatePoint.options;
@@ -90,7 +90,7 @@ export const WorkItemClaimed = z.object({
   /** Absence of a heartbeat past this is the expiry. Nothing to clean up. */
   leaseUntilMs: z.number().int(),
   /**
-   * What the task is, recorded at the moment Escapement takes responsibility
+   * What the task is, recorded at the moment Lingtai takes responsibility
    * for it.
    *
    * Here because the queue left the log (0012). `WorkItemDiscovered` used to be
@@ -214,7 +214,7 @@ const gateBase = { gate: GatePoint, action: z.string(), runId: z.string(), onSha
  *
  * That distinction is what the whole model rests on ([ADR 0016](../../../doc/decisions/0016-the-settled-model.md)
  * §4). A gate nobody configured is skipped, and that is the user's decision; a
- * gate that *was* configured and did not run is Escapement's bug. Comparing this
+ * gate that *was* configured and did not run is Lingtai's bug. Comparing this
  * to the verdicts that follow is how the second is detectable, and rendering it
  * is how the board shows an empty point as `skipped` rather than omitting it.
  */
@@ -396,7 +396,7 @@ export const RunRequested = z.object({
  * recorded turned out not to be enough to find the recipe again.
  *
  * `owner` is **schemaVer 2**. Version 1 recorded only the repository name, so
- * `esc status` could not reach GitHub for a project it had itself registered.
+ * `lingtai status` could not reach GitHub for a project it had itself registered.
  *
  * `base` is **schemaVer 3**. Without it a run had to fall back to the
  * repository's *default* branch to find the recipe — which is only the same

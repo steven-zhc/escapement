@@ -25,13 +25,13 @@
  * comes. See doc/decisions/0009-two-connections.md — that is the failure this
  * whole file is shaped around.
  */
-import type { Envelope } from "@escapement/core";
+import type { Envelope } from "@lingtai/core";
 import pg from "pg";
 import { directDatabaseUrl } from "./env.ts";
 import { type EventStore, eventStore } from "./event-store.ts";
 
 /** The channel `sql/notify.sql`'s trigger writes to. */
-export const CHANNEL = "escapement";
+export const CHANNEL = "lingtai";
 
 interface SubscribeBase {
   /**
@@ -163,7 +163,7 @@ export function subscribe(options: SubscribeOptions): Subscription {
   const batchSize = options.batchSize ?? 500;
   const baseMs = options.backoff?.baseMs ?? 100;
   const capMs = options.backoff?.capMs ?? 10_000;
-  const applicationName = options.name ?? "escapement-subscriber";
+  const applicationName = options.name ?? "lingtai-subscriber";
 
   let lastSeq = options.fromSeq;
   let closed = false;

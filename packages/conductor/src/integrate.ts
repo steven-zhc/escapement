@@ -25,9 +25,9 @@
  * against one base serialise in Postgres, and a process that dies holding the
  * lock drops it when its connection closes — there is nothing to unwind.
  */
-import { type RefusalReason, parsePayload, reduceIntegration } from "@escapement/core";
-import { directDatabaseUrl } from "@escapement/env";
-import { ConcurrencyError, type EventStore, eventStore } from "@escapement/store";
+import { type RefusalReason, parsePayload, reduceIntegration } from "@lingtai/core";
+import { directDatabaseUrl } from "@lingtai/env";
+import { ConcurrencyError, type EventStore, eventStore } from "@lingtai/store";
 import pg from "pg";
 import { type TokenSource, git, stateDir, worktreePath } from "./worktree.ts";
 
@@ -127,7 +127,7 @@ export async function integrate(options: IntegrateOptions): Promise<IntegrateRes
   // else between statements and the lock goes with it — silently (0009).
   const lock = new pg.Client({
     connectionString: options.url ?? directDatabaseUrl(),
-    application_name: `escapement-merge-${options.project}`,
+    application_name: `lingtai-merge-${options.project}`,
   });
   await lock.connect();
 
@@ -181,7 +181,7 @@ export async function integrate(options: IntegrateOptions): Promise<IntegrateRes
     try {
       const dirty = await git(["status", "--porcelain"], { ...run, cwd });
       if (dirty.trim()) {
-        // Cannot happen with a worktree Escapement just cut, which is the point
+        // Cannot happen with a worktree Lingtai just cut, which is the point
         // — the check is here so that if it ever does, it is an event and not a
         // mystery. The old loop merged in a checkout it did not own and this was
         // the failure it could not report.
@@ -244,7 +244,7 @@ export async function integrate(options: IntegrateOptions): Promise<IntegrateRes
 
       const mergeCommit = await git(["rev-parse", "HEAD"], { ...run, cwd });
       await git(["push", "origin", `HEAD:refs/heads/${options.base}`], { ...run, cwd });
-      // The mirror is Escapement's own copy of the truth; leaving it stale would
+      // The mirror is Lingtai's own copy of the truth; leaving it stale would
       // make the next integration compute against a base that has moved.
       await git(["fetch", "origin", `+refs/heads/${options.base}:refs/heads/${options.base}`], {
         ...run,

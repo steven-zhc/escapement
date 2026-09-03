@@ -73,7 +73,7 @@ Every other type is still at version 1.
 ## projection — 2
 
 A regular Postgres table built by replaying the log. Holds no truth of its own.
-Source: `PROJECTIONS` in `apps/cli/src/esc.ts`.
+Source: `PROJECTIONS` in `apps/cli/src/lingtai.ts`.
 
 | Name | Answers | Owns its table? |
 |---|---|---|
@@ -95,11 +95,11 @@ The state survives because it is a real distinction *in the log*; only the
 column is merged.
 
 `queued` is the only one not driven by an event — it comes from GitHub, because
-Escapement never decided which issues exist ([ADR 0012](decisions/0012-one-task-view.md)).
+Lingtai never decided which issues exist ([ADR 0012](decisions/0012-one-task-view.md)).
 
 ## tool restriction — none
 
-Escapement restricts no tool call. There were eight rules; they are gone (ADR
+Lingtai restricts no tool call. There were eight rules; they are gone (ADR
 0016 §6), and so is the `PreToolUse` wiring that evaluated them.
 
 Tool limits belong to the agent runtime's own configuration — `permissions.deny`
@@ -116,7 +116,7 @@ ever the guard's.
 What the runtime calls, and the only channel between a run and the log.
 Source: `INTERSECTION_HOOKS` and `CLAUDE_ONLY_HOOKS` in `packages/conductor/src/hook-config.ts`.
 
-| Hook | What Escapement does with it |
+| Hook | What Lingtai does with it |
 |---|---|
 | `SessionStart` | lifecycle; the event is `RunStarted`, written by the conductor |
 | `UserPromptSubmit` | `RunPrompted`, with the prompt version |
@@ -194,7 +194,7 @@ Without it the log could not distinguish "nothing was configured here" from
 "this point does not exist", because `ProjectConfigured` carries a config *hash*
 and not the configuration. That distinction is what [ADR 0016](decisions/0016-the-settled-model.md)
 §4 rests on: an unconfigured gate is skipped and that is the user's call; a gate
-that *was* configured and did not run is Escapement's bug, and comparing this
+that *was* configured and did not run is Lingtai's bug, and comparing this
 event to the verdicts that follow is how the second becomes detectable.
 
 ## tier — 3
@@ -258,7 +258,7 @@ by folding `GatesResolved` against the verdicts that followed. A point with more
 planned actions than verdicts shows a `pending` count, which is where
 "configured but did not run" becomes visible.
 
-`esc add` prints the same five at onboarding. Neither surface omits a point.
+`lingtai add` prints the same five at onboarding. Neither surface omits a point.
 
 ## outbox, continued
 
@@ -281,16 +281,16 @@ moves until a person acts. Source: `DEFAULT_SUBSCRIPTIONS` in
 
 A landed task is good news that needed nobody, and is deliberately not here.
 
-## esc subcommand — 11
+## lingtai subcommand — 11
 
-Source: the switch in `apps/cli/src/esc.ts`.
+Source: the switch in `apps/cli/src/lingtai.ts`.
 
 `add` · `run` · `approve` · `status` · `doctor` · `daemon` · `pause` ·
 `resume` · `now` · `projection` · `version`
 
 ## doctor check — 16 live, 5 deferred
 
-Source: `apps/cli/src/doctor.ts`. This list is `pnpm esc doctor`'s own output,
+Source: `apps/cli/src/doctor.ts`. This list is `pnpm lingtai doctor`'s own output,
 not a reading of the file — grepping the constructors missed six of them.
 
 | Group | Checks |

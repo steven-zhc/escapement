@@ -5,7 +5,7 @@
  * measurable.
  *
  * **The integrator never uses your checkout.** A worktree cut from a clone
- * Escapement owns is the blast radius; the operator's own working copy is not
+ * Lingtai owns is the blast radius; the operator's own working copy is not
  * touched, read or written. Uncommitted work in it is what made a merge fail
  * with no log, no comment and no label — five re-runs and about $29 on #58/#59.
  *
@@ -28,7 +28,7 @@ const exec = promisify(execFile);
 
 /** Where the conductor keeps the clones and worktrees it owns. */
 export function stateDir(): string {
-  return process.env["ESCAPEMENT_HOME"] ?? join(homedir(), ".escapement");
+  return process.env["LINGTAI_HOME"] ?? join(homedir(), ".lingtai");
 }
 
 /**
@@ -227,7 +227,7 @@ function hostOf(value: string): string | null {
 /** `.env`-file text. Values are quoted so a `#` or a space cannot truncate one. */
 export function renderEnvFile(values: Record<string, string>): string {
   const lines = [
-    "# Written by Escapement for one run. Not committed, not inherited —",
+    "# Written by Lingtai for one run. Not committed, not inherited —",
     "# only the names the recipe's env.allow lists.",
   ];
   for (const [name, value] of Object.entries(values).sort(([a], [b]) => (a < b ? -1 : 1))) {
@@ -285,7 +285,7 @@ export function worktreePath(home: string, project: string, runId: string): stri
 /**
  * A bare mirror of the repository, cloned once and fetched thereafter.
  *
- * Bare and owned by Escapement: there is no working copy here to be dirty, which
+ * Bare and owned by Lingtai: there is no working copy here to be dirty, which
  * removes the failure mode entirely rather than checking for it.
  */
 export async function ensureMirror(options: {

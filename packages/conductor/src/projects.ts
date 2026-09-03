@@ -5,11 +5,11 @@
  * events, is a stream to fold rather than a projection to maintain. If that ever
  * stops being true it becomes one, which costs a truncate and a replay.
  */
-import { type ResolvedRecipe, resolveRecipe } from "@escapement/config";
-import { type ProjectState, isRegistered, reduceProject } from "@escapement/core";
-import { databaseUrl } from "@escapement/env";
-import type { GitHubClient } from "@escapement/github";
-import { type EventStore, eventStore } from "@escapement/store";
+import { type ResolvedRecipe, resolveRecipe } from "@lingtai/config";
+import { type ProjectState, isRegistered, reduceProject } from "@lingtai/core";
+import { databaseUrl } from "@lingtai/env";
+import type { GitHubClient } from "@lingtai/github";
+import { type EventStore, eventStore } from "@lingtai/store";
 import pg from "pg";
 
 export const PROJECT_STREAM_PREFIX = "prj-";
@@ -54,7 +54,7 @@ export async function loadProjects(store: EventStore = eventStore): Promise<Proj
  * The recipe governing this project's next run.
  *
  * Read from `origin/<base>` every time rather than from anything stored: a
- * snapshot in Escapement's database would be a second source of truth, and the
+ * snapshot in Lingtai's database would be a second source of truth, and the
  * repository's copy is the one its own commits change.
  */
 export async function currentRecipe(

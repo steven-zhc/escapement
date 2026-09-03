@@ -2,7 +2,7 @@
  * The worker that actually sends what the outbox queued.
  *
  * Kept apart from the projection for the same reason the conductor is kept out
- * of `@escapement/daemon`: deciding *what* to send is a fold over the log, and
+ * of `@lingtai/daemon`: deciding *what* to send is a fold over the log, and
  * sending it is I/O that can fail in ways a fold never can. The projection is
  * pure and replayable; this is neither, and the seam between them is where
  * "survives a crash" comes from.
@@ -22,12 +22,12 @@
  * anything: the depth grows, everyone learns to ignore the number, and the one
  * genuine failure in there is invisible. Those are marked and stop.
  */
-import { parsePayload } from "@escapement/core";
+import { parsePayload } from "@lingtai/core";
 // The subpath, not the barrel. The board imports this package for one
 // constant, and the barrel would drag the gate pipeline into its compilation —
 // where `spawn`'s overloads resolve differently under the DOM lib.
-import { type OutboxItem, pendingOutbox } from "@escapement/conductor/outbox";
-import { type EventStore, eventStore } from "@escapement/store";
+import { type OutboxItem, pendingOutbox } from "@lingtai/conductor/outbox";
+import { type EventStore, eventStore } from "@lingtai/store";
 
 /** What the worker needs from GitHub. Narrow, so a test can supply it. */
 export interface Deliverer {

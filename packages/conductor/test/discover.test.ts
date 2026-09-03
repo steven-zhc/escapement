@@ -5,11 +5,11 @@
  * or a network. `refreshQueue` gets the real store anyway, because "it appends
  * nothing" is a claim about the log rather than about a return value.
  */
-import type { Recipe } from "@escapement/config";
-import type { GitHubClient, Issue } from "@escapement/github";
-import { createDb, createEventStore, type Db, type EventStore } from "@escapement/store";
+import type { Recipe } from "@lingtai/config";
+import type { GitHubClient, Issue } from "@lingtai/github";
+import { createDb, createEventStore, type Db, type EventStore } from "@lingtai/store";
 import pg from "pg";
-import { directDatabaseUrl } from "@escapement/env";
+import { directDatabaseUrl } from "@lingtai/env";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { considerIssue, kindOf, refreshQueue, workItemStream } from "../src/index.ts";
 
@@ -139,10 +139,10 @@ afterAll(async () => {
   const c = new pg.Client({ connectionString: directDatabaseUrl() });
   await c.connect();
   try {
-    await c.query("alter table events disable rule escapement_events_no_delete");
+    await c.query("alter table events disable rule lingtai_events_no_delete");
     await c.query("delete from events where stream_id = any($1::text[])", [[...created]]);
   } finally {
-    await c.query("alter table events enable rule escapement_events_no_delete");
+    await c.query("alter table events enable rule lingtai_events_no_delete");
     await c.query("delete from queue where project = any($1::text[])", [[...projects]]);
     await c.query("delete from checkpoints where name = 'queue'");
     await c.end();

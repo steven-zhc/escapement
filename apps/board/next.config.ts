@@ -6,12 +6,12 @@ const config: NextConfig = {
   // Every workspace package the board reaches. They ship as TypeScript source
   // with no build step (doc/decisions/0010), so Turbopack compiles them here.
   transpilePackages: [
-    "@escapement/conductor",
-    "@escapement/config",
-    "@escapement/core",
-    "@escapement/env",
-    "@escapement/github",
-    "@escapement/store",
+    "@lingtai/conductor",
+    "@lingtai/config",
+    "@lingtai/core",
+    "@lingtai/env",
+    "@lingtai/github",
+    "@lingtai/store",
   ],
 };
 

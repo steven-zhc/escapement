@@ -35,7 +35,7 @@ config({
  * suite by another name.
  */
 function inTest(): boolean {
-  return Boolean(process.env["VITEST"] || process.env["ESCAPEMENT_TEST"]);
+  return Boolean(process.env["VITEST"] || process.env["LINGTAI_TEST"]);
 }
 
 /**
@@ -65,7 +65,7 @@ function inTest(): boolean {
  * the variable rather than demanding it. They still have to obey the same rule
  * about which variable, and this is that rule, written once.
  *
- *   ESCAPEMENT_TEST=1 pnpm --filter @escapement/store db:bootstrap
+ *   LINGTAI_TEST=1 pnpm --filter @lingtai/store db:bootstrap
  *
  * is how the test database gets its schema.
  */
@@ -165,7 +165,7 @@ export function resolvePath(path: string): string {
 
 /**
  * `from` exists so that a caller which was *handed* an environment reports on
- * that one. `esc doctor` takes an environment as an argument and is supposed to
+ * that one. `lingtai doctor` takes an environment as an argument and is supposed to
  * be a function of it; reading past it to `process.env` made its report partly
  * about the argument and partly about the machine, which showed up the moment
  * the operator configured a real App and a test asserting "not configured"

@@ -30,18 +30,18 @@ stub with its capability flags declared. Writing the second adapter before the
 first interface has survived real use would be guessing at the wrong
 abstractions.
 
-## Containment is Escapement's responsibility, not the runtime's
+## Containment is Lingtai's responsibility, not the runtime's
 
 The table above shows Codex with a sandbox and Claude Code without. That must
 not make a project's safety level depend on which agent happens to be running
-today. A runtime may *provide* a sandbox; Escapement can always *impose* one
+today. A runtime may *provide* a sandbox; Lingtai can always *impose* one
 (a container, or macOS `sandbox-exec`).
 
 | Tier | Requires | Satisfied by |
 |---|---|---|
 | `open` | worktree isolation | default |
 | `guarded` | + filtered env + `PreToolUse` interception | either runtime. **The first project runs here** — it is what carried the old loop's 73 runs |
-| `sandboxed` | + a hard filesystem boundary | Codex's `workspace-write`, or Escapement containerising the agent |
+| `sandboxed` | + a hard filesystem boundary | Codex's `workspace-write`, or Lingtai containerising the agent |
 
 The scheduler matches capabilities before dispatching. If a project requires
 `sandboxed` and the current combination cannot provide it, it **does not

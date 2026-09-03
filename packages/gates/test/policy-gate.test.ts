@@ -5,7 +5,7 @@
  * `failed`. A migration in the diff is not a broken build, and a card that says
  * so sends a person looking for a problem that does not exist.
  */
-import { BadWatchPatternError, MIGRATION_WATCH, TAMPER_WATCH } from "@escapement/config";
+import { BadWatchPatternError, MIGRATION_WATCH, TAMPER_WATCH } from "@lingtai/config";
 import { describe, expect, it } from "vitest";
 import type { GateEvent } from "../src/gate.ts";
 import { runGatePipeline } from "../src/gate.ts";
@@ -44,10 +44,10 @@ describe("the policy gate", () => {
   });
 
   it("watches dotfiles, which is most of what is worth watching", async () => {
-    // `.github/workflows/**` and `.escapement/**` are both dotted, and a
+    // `.github/workflows/**` and `.lingtai/**` are both dotted, and a
     // matcher that skips them by default watches nothing while looking correct.
     const workflows = await policy(TAMPER_WATCH, [".github/workflows/ci.yml"]).run(context);
-    const recipe = await policy(TAMPER_WATCH, [".escapement/config.yaml"]).run(context);
+    const recipe = await policy(TAMPER_WATCH, [".lingtai/config.yaml"]).run(context);
 
     expect(workflows.verdict).toBe("needs-approval");
     expect(recipe.verdict).toBe("needs-approval");
@@ -70,7 +70,7 @@ describe("the policy gate", () => {
   });
 
   it("refuses a broken pattern when the gate is built, not when it runs", () => {
-    // Built at `esc doctor` time. A watch that matches nothing looks exactly
+    // Built at `lingtai doctor` time. A watch that matches nothing looks exactly
     // like a watch with nothing to report, and `tamper` is supposed to fire
     // rarely — so the two must never be confusable.
     expect(() => policy(["  "], [])).toThrow(BadWatchPatternError);

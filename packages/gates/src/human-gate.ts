@@ -16,7 +16,7 @@
  * own approval.
  *
  * `approvers` is not here either, and that is deliberate: it comes from policy,
- * in Escapement's own log, and never from the managed repository. A recipe that
+ * in Lingtai's own log, and never from the managed repository. A recipe that
  * could name its own approvers could approve itself.
  */
 import type { Gate, GateContext, GateResult } from "./gate.ts";

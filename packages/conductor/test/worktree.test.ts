@@ -42,7 +42,7 @@ let submodulePath: string;
 let home: string;
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "esc-worktree-"));
+  root = await mkdtemp(join(tmpdir(), "lingtai-worktree-"));
   home = join(root, "home");
 
   // A tiny repository to be used as a submodule.

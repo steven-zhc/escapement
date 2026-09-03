@@ -7,17 +7,17 @@ Two sequencing constraints drive the whole shape:
 
 1. **`agent-loop.sh` keeps working tickets until Phase 2 cuts over.** Phase 1
    proves the machinery on one ticket under supervision; it does not replace
-   anything. The old loop is retired only when Escapement has done its job
+   anything. The old loop is retired only when Lingtai has done its job
    unattended for a week.
-2. **Escapement manages itself from Phase 3, not before.** Self-hosting is a
+2. **Lingtai manages itself from Phase 3, not before.** Self-hosting is a
    test of the system, so it needs a system that has already passed a real one.
 
 | | Phase | Exit criterion |
 |---|---|---|
 | 0 | System scaffold | An event round-trips through Postgres and a projection rebuilds from the log · **done** |
-| 1 | Minimum runnable unit | One real admin ticket goes discovery → merge with `esc run --once`, supervised · **done 2026-09-01** |
-| 2 | Take over admin | Escapement works admin unattended for a week; `agent-loop.sh` is retired |
-| 3 | Self-hosting | Escapement lands a change to its own repository, through its own gates |
+| 1 | Minimum runnable unit | One real admin ticket goes discovery → merge with `lingtai run --once`, supervised · **done 2026-09-01** |
+| 2 | Take over admin | Lingtai works admin unattended for a week; `agent-loop.sh` is retired |
+| 3 | Self-hosting | Lingtai lands a change to its own repository, through its own gates |
 | 4 | Multi-project | A second repository runs with no code change, only a descriptor |
 | 5 | Feedback loop | A gate change is evaluated by replay against history before it ships |
 
@@ -28,8 +28,8 @@ Two sequencing constraints drive the whole shape:
 **Goal.** The parts that need no agent, no GitHub and no judgement: the log, the
 projections, and a command that tells you what is broken.
 
-Already done and committed: repository, `@escapement/core` event catalogue,
-`@escapement/config` recipe schema, the Postgres contract under Prisma 8 with
+Already done and committed: repository, `@lingtai/core` event catalogue,
+`@lingtai/config` recipe schema, the Postgres contract under Prisma 8 with
 its migration applied, the Next.js board shell, the decision records, and the
 log's write side — `append` / `read` / `readAll` with optimistic concurrency
 (#1) — and the subscriber, which reconnects and resumes without gap or duplicate
@@ -44,20 +44,20 @@ the projection's own writes, `rebuild` proven to produce the same table as the
 incremental path, and `guard_trips` as the first real projection — the 132
 invisible guard blocks, finally countable.
 
-And `esc doctor` (#5), which is the old `preflight()` generalised: it reads and
+And `lingtai doctor` (#5), which is the old `preflight()` generalised: it reads and
 never writes, it proves the direct connection is genuinely session mode rather
 than merely reachable ([experiment 003](experiments/003-doctor-catches-a-pooler.md)),
 and it prints the six checks it cannot run yet as skips naming the issue that
 will fill them in.
 
-**Phase 0 is done.** `esc doctor` is green — 10 ok, 6 deferred, 0 failed.
+**Phase 0 is done.** `lingtai doctor` is green — 10 ok, 6 deferred, 0 failed.
 
-**Exit criterion.** `esc doctor` is green, an event round-trips, and a projection
+**Exit criterion.** `lingtai doctor` is green, an event round-trips, and a projection
 can be dropped and rebuilt from the log with an identical result.
 
 ## Phase 1 — Minimum runnable unit
 
-**Goal.** One ticket, end to end, with a person watching. `esc run --once` picks
+**Goal.** One ticket, end to end, with a person watching. `lingtai run --once` picks
 a real admin issue, provisions a worktree, runs Claude Code under the guard hook,
 runs the build gate, and merges — or refuses with a typed reason.
 
@@ -69,11 +69,11 @@ board's write actions, and unattended operation are all Phase 2.
 the two must not both hold `agent:wip` on the same issue — Phase 1 runs against
 `agent:hold`-free tickets you nominate by number, not against the queue.
 
-**Exit criterion.** A real admin issue is merged into `develop` by Escapement,
+**Exit criterion.** A real admin issue is merged into `develop` by Lingtai,
 and the board shows it in Landed with its receipt.
 
 **Status: met, 2026-09-01.** `nextloom-ai-admin` [#155][a155] was taken from a
-GitHub issue to `be25a20` on `develop` by Escapement — recipe from `origin`,
+GitHub issue to `be25a20` on `develop` by Lingtai — recipe from `origin`,
 claim, worktree from the mirror, `pnpm install`, Claude Code, the build gate
 (`pnpm typecheck && pnpm lint && pnpm test`, green in 22.3s), a hold at the
 merge gate, an approval clicked on the board, and the merge lane under its
@@ -139,9 +139,9 @@ belongs before it.
 
 **Status, 2026-09-02.** 2a, 2b, 2c and 2d are built, and **2a is verified**:
 admin #156 went queue → landed at `06e8bbe` (15 turns, $0.83) from one
-`esc now`, with no command issued after it, and the completion event drove the
+`lingtai now`, with no command issued after it, and the completion event drove the
 next pass by itself. See `doc/experiments/006-the-loop-closes-unattended.md`,
-including the two defects the run found that no unit test had — `esc now` not
+including the two defects the run found that no unit test had — `lingtai now` not
 running the issue it named, and the outbox deleting every label it did not put
 there.
 
@@ -153,7 +153,7 @@ projection. Structured logging was not done and is not tracked; nothing has
 needed it yet.
 
 What was cut from #25 is worth naming: labels are written when a task changes
-state, but not *reconciled*. Deleting every `escapement:*` label by hand and
+state, but not *reconciled*. Deleting every `lingtai:*` label by hand and
 restarting would not restore them, which the issue asked for. That needs a
 periodic sweep comparing GitHub against `task_view`. What has *not*
 happened is one uninterrupted queue-to-landed run with nobody typing a command —
@@ -164,13 +164,13 @@ The cutover is also outstanding and is deliberately not a code task. 35 of
 `nextloom-ai-admin`'s 37 open issues still carry `agent:*` labels, and that
 exclusion is the only thing keeping the daemon off them — removing it hands a
 35-item backlog to something that spends money per item, on the strength of two
-successful runs. Watch it work first ([#29](https://github.com/steven-zhc/escapement/issues/29)).
+successful runs. Watch it work first ([#29](https://github.com/steven-zhc/lingtai/issues/29)).
 
 **Cutover.** `agent-loop.sh` is retired at the end, not the start. Both systems
-run in parallel first, with Escapement on a subset of labels, so a failure has
+run in parallel first, with Lingtai on a subset of labels, so a failure has
 somewhere to fall back to.
 
-**Exit criterion.** Escapement takes **two consecutive issues** from the queue
+**Exit criterion.** Lingtai takes **two consecutive issues** from the queue
 through to merged, with no manual intervention beyond approving on the board.
 
 *Tightened from "seven consecutive days" on 2026-09-01.* Seven days is a
@@ -203,8 +203,8 @@ data backfill for any of it. That licence is not available again.
 
 | Step | What changes | Done when |
 |---|---|---|
-| **3a** ✓ | **Delete the guard** — `guard.ts`, the eight rules, `GuardTripped`, `guard_trips`, `smokeTestFailClosed`, `--no-guard`, the `PreToolUse` wiring. Add the `doctor` check that reports live settings sources | Escapement restricts no tool call, seven hooks still work, and `esc doctor` says which settings sources are in scope for a run |
-| **3b** ✓ | Delete `policy.ts`, `policyConflicts`, `ProjectPolicySet`, `requiredGates`, `approvers`, `concurrent`; `tier` moves to `runtime.tier` | `esc status` no longer has a policy line, and nothing refuses a recipe for being too permissive |
+| **3a** ✓ | **Delete the guard** — `guard.ts`, the eight rules, `GuardTripped`, `guard_trips`, `smokeTestFailClosed`, `--no-guard`, the `PreToolUse` wiring. Add the `doctor` check that reports live settings sources | Lingtai restricts no tool call, seven hooks still work, and `lingtai doctor` says which settings sources are in scope for a run |
+| **3b** ✓ | Delete `policy.ts`, `policyConflicts`, `ProjectPolicySet`, `requiredGates`, `approvers`, `concurrent`; `tier` moves to `runtime.tier` | `lingtai status` no longer has a policy line, and nothing refuses a recipe for being too permissive |
 | **3c** ✓ | Five gate points; `GatesResolved`; the four kinds become actions · **done** `d50a7d9` | A run appends one `GatesResolved` naming all five points, with `[]` where nothing is configured |
 | **3c′** ✓ | Fold `prepare` into the `prepared` point — split out of 3c, because it deletes three events and reroutes the board | `PreparationStarted/Passed/Failed` are gone and the install step is declared at `gates.prepared` |
 | **3d** ✓ | The `end` gate; closing the issue as an action; `labelsFor` out of the outbox | A landed issue is closed, and what closed it is named in the recipe |
@@ -217,23 +217,23 @@ the whole design degrades into the plugin free-for-all
 
 ## Phase 4 — Self-hosting
 
-**Goal.** Escapement manages its own repository.
+**Goal.** Lingtai manages its own repository.
 
 This is not a victory lap, it is the hardest correctness problem in the project:
 **an agent editing the conductor that is running it.** Three rules follow.
 
-- **Escapement's own policy is the strictest one.** Every gate required, human
+- **Lingtai's own policy is the strictest one.** Every gate required, human
   approval on everything, no waivers configured. It gets no benefit of the doubt
   it would extend to a business repository.
 - **The conductor never restarts itself.** A merge to `main` lands; the running
-  daemon keeps executing the old code until a person runs `esc restart`. That is
-  the escapement principle applied to the escapement: energy released one tooth
+  daemon keeps executing the old code until a person runs `lingtai restart`. That is
+  the lingtai principle applied to the lingtai: energy released one tooth
   at a time, deliberately.
-- **`esc doctor` runs against the new code before the restart, not after.** A
+- **`lingtai doctor` runs against the new code before the restart, not after.** A
   merge that breaks the scheduler must not be discovered by the scheduler failing
   to start.
 
-**Exit criterion.** A change to Escapement's own code is implemented by an agent,
+**Exit criterion.** A change to Lingtai's own code is implemented by an agent,
 passes its own gates, is approved on the board, merges, and is running after a
 deliberate restart.
 
@@ -278,66 +278,66 @@ Milestones on GitHub match the phases here.
 
 | | |
 |---|---|
-| [#1](https://github.com/steven-zhc/escapement/issues/1) | Store: append and read, with optimistic concurrency |
-| [#2](https://github.com/steven-zhc/escapement/issues/2) | Store: subscribe over LISTEN/NOTIFY, with reconnect |
-| [#3](https://github.com/steven-zhc/escapement/issues/3) | Core: aggregate reducers for WorkItem, Run and Integration |
-| [#4](https://github.com/steven-zhc/escapement/issues/4) | Store: projection runner with checkpoints and rebuild |
-| [#5](https://github.com/steven-zhc/escapement/issues/5) | CLI: the `esc` skeleton and `esc doctor` |
-| [#6](https://github.com/steven-zhc/escapement/issues/6) | Bring the database up: initial migration and notify.sql |
+| [#1](https://github.com/steven-zhc/lingtai/issues/1) | Store: append and read, with optimistic concurrency |
+| [#2](https://github.com/steven-zhc/lingtai/issues/2) | Store: subscribe over LISTEN/NOTIFY, with reconnect |
+| [#3](https://github.com/steven-zhc/lingtai/issues/3) | Core: aggregate reducers for WorkItem, Run and Integration |
+| [#4](https://github.com/steven-zhc/lingtai/issues/4) | Store: projection runner with checkpoints and rebuild |
+| [#5](https://github.com/steven-zhc/lingtai/issues/5) | CLI: the `lingtai` skeleton and `lingtai doctor` |
+| [#6](https://github.com/steven-zhc/lingtai/issues/6) | Bring the database up: initial migration and notify.sql |
 
 **Phase 1 — Minimum runnable unit**
 
 | | |
 |---|---|
-| [#7](https://github.com/steven-zhc/escapement/issues/7) | GitHub: the App client and `esc add` |
-| [#8](https://github.com/steven-zhc/escapement/issues/8) | Config: resolve the recipe from `origin/<base>` and hash it |
-| [#9](https://github.com/steven-zhc/escapement/issues/9) | Conductor: discover work items and build the queue |
-| [#10](https://github.com/steven-zhc/escapement/issues/10) | Conductor: claim with a lease, and provision the worktree |
-| [#11](https://github.com/steven-zhc/escapement/issues/11) | Hook: the `esc-hook` binary and the conductor socket |
-| [#12](https://github.com/steven-zhc/escapement/issues/12) | Hook: guard policy and `GuardTripped` |
-| [#13](https://github.com/steven-zhc/escapement/issues/13) | Runtime: the Claude Code adapter |
-| [#14](https://github.com/steven-zhc/escapement/issues/14) | Gates: the process gate |
-| [#15](https://github.com/steven-zhc/escapement/issues/15) | Conductor: the integrator |
-| [#16](https://github.com/steven-zhc/escapement/issues/16) | Board: the board projection and real cards |
-| [#17](https://github.com/steven-zhc/escapement/issues/17) | CLI: `esc run --once`, end to end |
+| [#7](https://github.com/steven-zhc/lingtai/issues/7) | GitHub: the App client and `lingtai add` |
+| [#8](https://github.com/steven-zhc/lingtai/issues/8) | Config: resolve the recipe from `origin/<base>` and hash it |
+| [#9](https://github.com/steven-zhc/lingtai/issues/9) | Conductor: discover work items and build the queue |
+| [#10](https://github.com/steven-zhc/lingtai/issues/10) | Conductor: claim with a lease, and provision the worktree |
+| [#11](https://github.com/steven-zhc/lingtai/issues/11) | Hook: the `lingtai-hook` binary and the conductor socket |
+| [#12](https://github.com/steven-zhc/lingtai/issues/12) | Hook: guard policy and `GuardTripped` |
+| [#13](https://github.com/steven-zhc/lingtai/issues/13) | Runtime: the Claude Code adapter |
+| [#14](https://github.com/steven-zhc/lingtai/issues/14) | Gates: the process gate |
+| [#15](https://github.com/steven-zhc/lingtai/issues/15) | Conductor: the integrator |
+| [#16](https://github.com/steven-zhc/lingtai/issues/16) | Board: the board projection and real cards |
+| [#17](https://github.com/steven-zhc/lingtai/issues/17) | CLI: `lingtai run --once`, end to end |
 
 **Phase 2 — Take over admin**
 
 | | |
 |---|---|
-| [#18](https://github.com/steven-zhc/escapement/issues/18) | Gates: the agent gate — cold review |
-| [#19](https://github.com/steven-zhc/escapement/issues/19) | Gates: the policy gate — tamper and migration holds |
-| [#20](https://github.com/steven-zhc/escapement/issues/20) | Gates: the human gate and the approval lifecycle |
-| [#21](https://github.com/steven-zhc/escapement/issues/21) | Board: approve, reject and waive |
-| [#22](https://github.com/steven-zhc/escapement/issues/22) | Board: render the diff and the gate evidence on the card |
-| [#23](https://github.com/steven-zhc/escapement/issues/23) | Board: live updates over SSE |
-| [#24](https://github.com/steven-zhc/escapement/issues/24) | Conductor: the outbox and its delivery worker |
-| [#25](https://github.com/steven-zhc/escapement/issues/25) | Conductor: the `github_mirror` projection and label reconciliation |
-| [#26](https://github.com/steven-zhc/escapement/issues/26) | Conductor: macOS notifications |
-| [#27](https://github.com/steven-zhc/escapement/issues/27) | Conductor: run as a daemon, and recover from a crash |
-| [#28](https://github.com/steven-zhc/escapement/issues/28) | GitHub: webhook receiver for issues and push |
-| [#29](https://github.com/steven-zhc/escapement/issues/29) | Retire `agent-loop.sh` |
+| [#18](https://github.com/steven-zhc/lingtai/issues/18) | Gates: the agent gate — cold review |
+| [#19](https://github.com/steven-zhc/lingtai/issues/19) | Gates: the policy gate — tamper and migration holds |
+| [#20](https://github.com/steven-zhc/lingtai/issues/20) | Gates: the human gate and the approval lifecycle |
+| [#21](https://github.com/steven-zhc/lingtai/issues/21) | Board: approve, reject and waive |
+| [#22](https://github.com/steven-zhc/lingtai/issues/22) | Board: render the diff and the gate evidence on the card |
+| [#23](https://github.com/steven-zhc/lingtai/issues/23) | Board: live updates over SSE |
+| [#24](https://github.com/steven-zhc/lingtai/issues/24) | Conductor: the outbox and its delivery worker |
+| [#25](https://github.com/steven-zhc/lingtai/issues/25) | Conductor: the `github_mirror` projection and label reconciliation |
+| [#26](https://github.com/steven-zhc/lingtai/issues/26) | Conductor: macOS notifications |
+| [#27](https://github.com/steven-zhc/lingtai/issues/27) | Conductor: run as a daemon, and recover from a crash |
+| [#28](https://github.com/steven-zhc/lingtai/issues/28) | GitHub: webhook receiver for issues and push |
+| [#29](https://github.com/steven-zhc/lingtai/issues/29) | Retire `agent-loop.sh` |
 
 **Phase 3 — Self-hosting**
 
 | | |
 |---|---|
-| [#30](https://github.com/steven-zhc/escapement/issues/30) | Self-hosting: Escapement's own recipe and its strictest policy |
-| [#31](https://github.com/steven-zhc/escapement/issues/31) | Self-hosting: tamper must cover Escapement's own source |
-| [#32](https://github.com/steven-zhc/escapement/issues/32) | Self-hosting: never restart into unverified code |
-| [#33](https://github.com/steven-zhc/escapement/issues/33) | Self-hosting: the first self-hosted change, supervised |
+| [#30](https://github.com/steven-zhc/lingtai/issues/30) | Self-hosting: Lingtai's own recipe and its strictest policy |
+| [#31](https://github.com/steven-zhc/lingtai/issues/31) | Self-hosting: tamper must cover Lingtai's own source |
+| [#32](https://github.com/steven-zhc/lingtai/issues/32) | Self-hosting: never restart into unverified code |
+| [#33](https://github.com/steven-zhc/lingtai/issues/33) | Self-hosting: the first self-hosted change, supervised |
 
 **Phase 4 — Multi-project**
 
 | | |
 |---|---|
-| [#34](https://github.com/steven-zhc/escapement/issues/34) | Phase 4 — multi-project, Codex, concurrency, sandboxed tier |
+| [#34](https://github.com/steven-zhc/lingtai/issues/34) | Phase 4 — multi-project, Codex, concurrency, sandboxed tier |
 
 **Phase 5 — Feedback loop**
 
 | | |
 |---|---|
-| [#35](https://github.com/steven-zhc/escapement/issues/35) | Phase 5 — replay, regression feedback, receipts and guard tuning |
+| [#35](https://github.com/steven-zhc/lingtai/issues/35) | Phase 5 — replay, regression feedback, receipts and guard tuning |
 
 ---
 

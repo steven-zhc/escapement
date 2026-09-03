@@ -1,5 +1,5 @@
 /**
- * `esc doctor` — the old `preflight()`, generalised.
+ * `lingtai doctor` — the old `preflight()`, generalised.
  *
  * The old loop refused to start when its guard hook failed a smoke test. That
  * instinct was right and this applies it to everything: a doctor that is green
@@ -21,12 +21,12 @@
  * that will fill them in, rather than omitted — a check you cannot see is a
  * check you will forget you never had.
  */
-import { deadOutbox, pendingOutbox, runnableEnv } from "@escapement/conductor";
-import { STALE_AFTER_MS, findOrphans, readControl, readStatus } from "@escapement/daemon";
-import { githubApp, hasGitHubApp } from "@escapement/env";
-import { REQUIRED_PERMISSIONS } from "@escapement/github";
-import { createClaudeCodeRuntime } from "@escapement/runtime";
-import { projectionLag } from "@escapement/store";
+import { deadOutbox, pendingOutbox, runnableEnv } from "@lingtai/conductor";
+import { STALE_AFTER_MS, findOrphans, readControl, readStatus } from "@lingtai/daemon";
+import { githubApp, hasGitHubApp } from "@lingtai/env";
+import { REQUIRED_PERMISSIONS } from "@lingtai/github";
+import { createClaudeCodeRuntime } from "@lingtai/runtime";
+import { projectionLag } from "@lingtai/store";
 import { createPublicKey } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -75,7 +75,7 @@ function describeUrl(raw: string): { port: string; database: string; pgbouncer: 
 }
 
 async function withClient<T>(url: string, fn: (c: pg.Client) => Promise<T>): Promise<T> {
-  const c = new pg.Client({ connectionString: url, application_name: "escapement-doctor" });
+  const c = new pg.Client({ connectionString: url, application_name: "lingtai-doctor" });
   await c.connect();
   try {
     return await fn(c);
@@ -149,21 +149,21 @@ async function pooledConnection(url: string): Promise<CheckResult> {
  */
 async function directIsSessionMode(url: string): Promise<CheckResult> {
   const name = "postgres: direct connection is session mode";
-  const listener = new pg.Client({ connectionString: url, application_name: "escapement-doctor" });
-  const notifier = new pg.Client({ connectionString: url, application_name: "escapement-doctor" });
+  const listener = new pg.Client({ connectionString: url, application_name: "lingtai-doctor" });
+  const notifier = new pg.Client({ connectionString: url, application_name: "lingtai-doctor" });
 
   try {
     await listener.connect();
     const heard: string[] = [];
     listener.on("notification", (m) => void heard.push(m.payload ?? ""));
-    await listener.query("LISTEN escapement_doctor");
+    await listener.query("LISTEN lingtai_doctor");
 
     // Long enough that a transaction pooler would have handed the listener's
     // backend to someone else, taking the LISTEN registration with it.
     await new Promise((r) => setTimeout(r, 1_500));
 
     await notifier.connect();
-    await notifier.query("NOTIFY escapement_doctor, 'esc doctor'");
+    await notifier.query("NOTIFY lingtai_doctor, 'lingtai doctor'");
 
     const deadline = Date.now() + 5_000;
     while (heard.length === 0 && Date.now() < deadline) {
@@ -180,7 +180,7 @@ async function directIsSessionMode(url: string): Promise<CheckResult> {
     }
 
     // Advisory lock, held across two statements rather than within one.
-    const key = "hashtext('escapement:doctor')::bigint";
+    const key = "hashtext('lingtai:doctor')::bigint";
     await notifier.query(`select pg_advisory_lock(${key})`);
     const held = await notifier.query<{ n: string }>(
       `select count(*)::text as n from pg_locks
@@ -249,7 +249,7 @@ async function schema(url: string): Promise<CheckResult[]> {
 
       const rules = await c.query<{ rulename: string }>(
         `select rulename from pg_rules where tablename = 'events'
-         and rulename in ('escapement_events_no_update','escapement_events_no_delete')`,
+         and rulename in ('lingtai_events_no_update','lingtai_events_no_delete')`,
       );
       const ruleNames = rules.rows.map((r) => r.rulename).sort();
       out.push({
@@ -258,20 +258,20 @@ async function schema(url: string): Promise<CheckResult[]> {
         detail:
           ruleNames.length === 2
             ? "UPDATE and DELETE on events do nothing"
-            : `only ${ruleNames.join(", ") || "no"} rule(s) present — run pnpm --filter @escapement/store db:bootstrap`,
+            : `only ${ruleNames.join(", ") || "no"} rule(s) present — run pnpm --filter @lingtai/store db:bootstrap`,
       });
 
       const trig = await c.query(
         `select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid
-         where c.relname = 'events' and t.tgname = 'escapement_events_notify' and not t.tgisinternal`,
+         where c.relname = 'events' and t.tgname = 'lingtai_events_notify' and not t.tgisinternal`,
       );
       out.push({
         name: "schema: notify trigger",
         status: trig.rowCount === 1 ? "ok" : "fail",
         detail:
           trig.rowCount === 1
-            ? "every append announces itself on the escapement channel"
-            : "escapement_events_notify is MISSING; nothing would wake on an append — run db:bootstrap",
+            ? "every append announces itself on the lingtai channel"
+            : "lingtai_events_notify is MISSING; nothing would wake on an append — run db:bootstrap",
       });
 
       const jsonb = await c.query<{ table_name: string; column_name: string; data_type: string }>(
@@ -330,7 +330,7 @@ async function projections(url: string): Promise<CheckResult> {
  * The App's credentials, without contacting GitHub.
  *
  * Whether an installation actually grants the four permissions is a per-repository
- * question, and `esc add` answers it before it writes anything. What can be
+ * question, and `lingtai add` answers it before it writes anything. What can be
  * answered here is the one that costs an hour to diagnose otherwise: is a key
  * configured at all, and is it a key.
  */
@@ -351,11 +351,11 @@ async function projections(url: string): Promise<CheckResult> {
 /**
  * What else is configuring the agent, besides the recipe.
  *
- * Reports rather than enforces, and that is the whole point. Escapement does not
+ * Reports rather than enforces, and that is the whole point. Lingtai does not
  * set `HOME` — it cannot, because the runtime's credentials live under it — so
  * the operator's own `~/.claude/settings.json` is in scope for every run, along
  * with any `.claude/settings.json` the managed repository has committed. Both
- * merge with the settings Escapement writes; hooks from every source run, and
+ * merge with the settings Lingtai writes; hooks from every source run, and
  * `permissions.deny` from any of them holds.
  *
  * That means **the recipe is not a complete description of a run**, and since
@@ -401,7 +401,7 @@ async function settingsSources(): Promise<CheckResult> {
     status: "warn",
     detail:
       `~/.claude/settings.json carries ${carries.join(", ")}, and every run sees it. ` +
-      "Escapement cannot set HOME (the runtime's credentials live there), so this is " +
+      "Lingtai cannot set HOME (the runtime's credentials live there), so this is " +
       "reported rather than removed — the recipe alone does not describe a run on this machine.",
   };
 }
@@ -453,7 +453,7 @@ function githubCredentials(env: NodeJS.ProcessEnv): CheckResult {
       detail:
         `app ${app.appId}, key from ${app.keySource} · ` +
         `requires ${REQUIRED_PERMISSIONS.map((p) => `${p.name}:${p.level}`).join(", ")} ` +
-        "(verified per repository by esc add)",
+        "(verified per repository by lingtai add)",
     };
   } catch (err) {
     return { name, status: "fail", detail: (err as Error).message };
@@ -461,7 +461,7 @@ function githubCredentials(env: NodeJS.ProcessEnv): CheckResult {
 }
 
 const DEFERRED: { name: string; detail: string }[] = [
-  { name: "recipe: schema", detail: "no project is onboarded yet — run esc add <owner>/<repo> (#9)" },
+  { name: "recipe: schema", detail: "no project is onboarded yet — run lingtai add <owner>/<repo> (#9)" },
   { name: "repository, base branch, submodules", detail: "needs a registered project and its worktree (#10)" },
   { name: "environment allowlist and production tripwire", detail: "needs the recipe's env block (#8)" },
   {
@@ -470,7 +470,7 @@ const DEFERRED: { name: string; detail: string }[] = [
       "every run proves it immediately before dispatching, which is the check that matters; " +
       "proving it once at daemon startup as well would only surface a missing binary earlier (#48)",
   },
-  { name: "github: installation and labels", detail: "per repository, and no project is registered yet — esc add checks it (#9)" },
+  { name: "github: installation and labels", detail: "per repository, and no project is registered yet — lingtai add checks it (#9)" },
 ];
 
 export interface DoctorReport {
@@ -491,7 +491,7 @@ export interface DoctorReport {
  * said so — from outside, a button that did nothing.
  *
  * A daemon that is down is **not a failure here**. Not running one is a
- * legitimate state, and `esc run` still works by hand. What would be a failure
+ * legitimate state, and `lingtai run` still works by hand. What would be a failure
  * is not being able to tell.
  */
 async function daemonLiveness(): Promise<CheckResult> {
@@ -507,7 +507,7 @@ async function daemonLiveness(): Promise<CheckResult> {
     return {
       name: "daemon: liveness",
       status: "ok",
-      detail: `no daemon has run — esc run works by hand; esc daemon takes the queue${paused}`,
+      detail: `no daemon has run — lingtai run works by hand; lingtai daemon takes the queue${paused}`,
     };
   }
 
@@ -550,7 +550,7 @@ async function orphans(): Promise<CheckResult> {
     // Reported, not failed. Leftovers are a normal consequence of a kill, and
     // starting the daemon clears them — a red doctor here would train people
     // to ignore a red doctor.
-    detail: `${found.length} left over; esc daemon removes them on startup: ${found
+    detail: `${found.length} left over; lingtai daemon removes them on startup: ${found
       .map((f) => f.stream)
       .join(", ")}`,
   };
@@ -595,7 +595,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
   results.push({
     name: "packages load under Node",
     status: "ok",
-    // Not a freebie: this process imported @escapement/core, /config and /store
+    // Not a freebie: this process imported @lingtai/core, /config and /store
     // through Node's type stripping to get here. A `.js` specifier in a barrel or
     // a constructor parameter property would have stopped it, and neither `tsc`
     // nor a board build notices either. See doc/decisions/0010.

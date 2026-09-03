@@ -6,7 +6,7 @@ alternative was guessing.
 ## The question
 
 [ADR 0016](../decisions/0016-the-settled-model.md) was about to rename the guard
-to `tools` and keep Escapement's own tool-rule engine. The proposal on the table
+to `tools` and keep Lingtai's own tool-rule engine. The proposal on the table
 was to delete it instead and let the agent runtime's own configuration do the
 job — Claude Code and Codex already have a user level and a project level, and a
 third place to configure the same thing is a third place to be confused by.
@@ -15,7 +15,7 @@ The objection was concrete. `claude-code.ts:184` passes
 `--permission-mode bypassPermissions` **deliberately**, after a run that spent
 45 turns and $3.35 reading a repository, designing a change, and then reporting
 it could not write a single file — every call refused by Claude Code's own
-permission layer before `esc-hook` ever saw it. Delegating tool rules to a layer
+permission layer before `lingtai-hook` ever saw it. Delegating tool rules to a layer
 we explicitly turn off would delegate to nothing.
 
 Unless `bypassPermissions` and `deny` are orthogonal. Nobody knew.
@@ -24,7 +24,7 @@ Unless `bypassPermissions` and `deny` are orthogonal. Nobody knew.
 
     { "permissions": { "deny": ["Bash"] } }
 
-    claude -p "Use the Bash tool to run: echo ESCAPEMENT_TEST_OK.
+    claude -p "Use the Bash tool to run: echo LINGTAI_TEST_OK.
                Report exactly what happened."
       --permission-mode bypassPermissions
       --settings ./deny-test.json
@@ -69,7 +69,7 @@ which is a smaller and safer change.
 - **Codex parity.** One recipe can no longer describe tool limits for both
   runtimes, because each has its own configuration. Weak in practice: Codex has
   an implementation here and has never been run against a real repository.
-- **Any Escapement-side record** of what an agent was not allowed to do. Small,
+- **Any Lingtai-side record** of what an agent was not allowed to do. Small,
   per the argument above, but not zero — a project-level `.claude/settings.json`
   can change without anything in the log noticing.
 

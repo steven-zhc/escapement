@@ -11,10 +11,10 @@ one that made the cost of having three of them obvious.
 
 Two of the three were not paying for themselves.
 
-`queue` answers "which issues could be worked next". That is not Escapement's
+`queue` answers "which issues could be worked next". That is not Lingtai's
 state. It is GitHub's, mirrored — one `WorkItemDiscovered` per issue per
 discovery pass, appended forever, to reproduce a fact that GitHub will answer
-correctly on request and that Escapement never decided.
+correctly on request and that Lingtai never decided.
 
 `guard_trips` answers "what was the agent stopped from doing". That is real, and
 it is *detail*: nobody reads it while scanning a list of cards, and everybody
@@ -26,7 +26,7 @@ itself, because the card was where the projection put them.
 
 ## Decision
 
-**One projection: `TaskView`. One row per task Escapement has touched, holding
+**One projection: `TaskView`. One row per task Lingtai has touched, holding
 the latest state and the metadata a card shows.** The board's list view is a
 `select` against this table and nothing else.
 
@@ -44,7 +44,7 @@ projection itself keeps everything.
 ## Why
 
 **The queue was duplicating somebody else's truth.** The line worth drawing is
-not "GitHub is external so mirror it" but *did Escapement decide this?* It did
+not "GitHub is external so mirror it" but *did Lingtai decide this?* It did
 not decide which issues exist. It did decide which one it claimed — and that
 stays in the log, because the claim is the entire mechanism preventing two
 conductors from taking the same ticket. `WorkItemClaimed` and its lease are

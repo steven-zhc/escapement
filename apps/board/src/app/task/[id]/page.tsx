@@ -26,7 +26,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
     <main className="detail">
       <div className="bar">
         <Link className="brand" href="/">
-          ← Escapement
+          ← Lingtai
         </Link>
         <span className="sep" />
         <span className="mono">{task.taskId}</span>

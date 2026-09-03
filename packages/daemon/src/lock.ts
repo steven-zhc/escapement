@@ -2,7 +2,7 @@
  * Exactly one daemon, decided by Postgres rather than by a pid file.
  *
  * A second daemon is not a hypothetical: launchd keeps one alive, and the
- * obvious way to debug it is to run `esc daemon` in a terminal while that one
+ * obvious way to debug it is to run `lingtai daemon` in a terminal while that one
  * is still up. Two conductors racing for the same ticket is the failure that
  * makes the whole claim mechanism pointless — and it would present as an
  * expensive mystery rather than an error.
@@ -13,14 +13,14 @@
  * lane already uses, for the same reason.
  *
  * Losing is not an error. The second process exits 0 saying who holds it —
- * `esc daemon` while launchd's copy is running is a reasonable thing to do,
+ * `lingtai daemon` while launchd's copy is running is a reasonable thing to do,
  * and greeting it with a stack trace would teach people to ignore stack traces.
  */
-import { directDatabaseUrl } from "@escapement/env";
+import { directDatabaseUrl } from "@lingtai/env";
 import pg from "pg";
 
 /** One lock for the whole daemon, per database. Hashed to the bigint the API takes. */
-export const DAEMON_LOCK_KEY = "escapement:daemon";
+export const DAEMON_LOCK_KEY = "lingtai:daemon";
 
 export interface DaemonLock {
   /** Releases the lock and closes the connection that held it. */

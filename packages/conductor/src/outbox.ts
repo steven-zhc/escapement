@@ -11,7 +11,7 @@
  * `outbox` is in the contract — it was designed there before any of this was
  * written, with `caused_by` naming the event that produced the row. So `create`
  * and `reset` here do **nothing**: a projection that dropped a schema-managed
- * table would take it out from under `db verify`, and `esc projection rebuild
+ * table would take it out from under `db verify`, and `lingtai projection rebuild
  * outbox` would quietly destroy the migration's work.
  *
  * That turns out to be better rather than a compromise. Because the table is
@@ -42,16 +42,16 @@
  * at once with nothing able to notice. A state that is computed and then
  * assigned cannot hold two contradictory values.
  *
- * `labelsFor` returns *only* Escapement's own labels, and the union with
+ * `labelsFor` returns *only* Lingtai's own labels, and the union with
  * whatever else is on the issue is taken in the deliverer (`apps/cli`), which
  * is the only layer that can see GitHub's current state. It has to be there:
  * a projection must be deterministic, and what else is on an issue is not in
  * the log. That was written as an assumption here before anything honoured it,
  * and the first outbox drain duly stripped `enhancement` off three issues.
  */
-import type { PayloadOf } from "@escapement/core";
-import { databaseUrl } from "@escapement/env";
-import type { Projection, ProjectionContext } from "@escapement/store";
+import type { PayloadOf } from "@lingtai/core";
+import { databaseUrl } from "@lingtai/env";
+import type { Projection, ProjectionContext } from "@lingtai/store";
 import pg from "pg";
 
 export const OUTBOX_TABLE = "outbox";
@@ -118,16 +118,16 @@ function splitTaskId(taskId: string): { project: string; issue: string } {
  * The label set a task's state implies.
  *
  * Computed, so it cannot contradict itself, and deliberately small: these say
- * what Escapement is doing, and every other label on the issue is somebody
+ * what Lingtai is doing, and every other label on the issue is somebody
  * else's and is left alone by the caller.
  */
 export function labelsFor(state: string): string[] {
   switch (state) {
     case "running":
     case "gates":
-      return ["escapement:working"];
+      return ["lingtai:working"];
     case "waiting":
-      return ["escapement:waiting"];
+      return ["lingtai:waiting"];
     default:
       return [];
   }
@@ -159,7 +159,7 @@ export const outboxProjection: Projection = {
           if (!issue) break;
           await enqueue(ctx, `${seq}:issue-comment`, {
             kind: "issue-comment",
-            payload: { project, target: issue, body: `**Escapement is waiting on you.**\n\n${d.question}` },
+            payload: { project, target: issue, body: `**Lingtai is waiting on you.**\n\n${d.question}` },
             at,
             seq,
           });
@@ -299,7 +299,7 @@ export async function pendingOutbox(options: PendingOptions = {}): Promise<Outbo
   }
 }
 
-/** Everything that will never be delivered, for `esc doctor` to shout about. */
+/** Everything that will never be delivered, for `lingtai doctor` to shout about. */
 export async function deadOutbox(url = databaseUrl()): Promise<OutboxItem[]> {
   const client = new pg.Client({ connectionString: url });
   await client.connect();

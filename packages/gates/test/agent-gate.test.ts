@@ -5,7 +5,7 @@
  * lives or dies by: the reviewer is cold, a finding without a failure scenario
  * is not a finding, and severity is not the reviewer's to soften.
  */
-import type { RunOutcome, RunRequest, Runtime } from "@escapement/runtime";
+import type { RunOutcome, RunRequest, Runtime } from "@lingtai/runtime";
 import { describe, expect, it } from "vitest";
 import {
   buildReviewPrompt,

@@ -28,7 +28,7 @@ model Event {
   /// heartbeat event *is* the expiry.
   version   Int
 
-  /// Event name from @escapement/core. Text rather than an enum so adding an
+  /// Event name from @lingtai/core. Text rather than an enum so adding an
   /// event type is not a migration.
   type      String
 

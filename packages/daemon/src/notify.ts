@@ -28,7 +28,7 @@
  * clickable would be a small lie repeated every time.
  */
 import { spawn } from "node:child_process";
-import type { Envelope } from "@escapement/core";
+import type { Envelope } from "@lingtai/core";
 
 /** What the operator is being told, and where to go about it. */
 export interface Notification {

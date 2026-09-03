@@ -81,7 +81,7 @@ export interface GitHubClient {
    * Closes an issue, as completed.
    *
    * The gap this fills: nothing closed a landed issue, and `labelsFor("landed")`
-   * removes Escapement's own label — so an issue Escapement had merged was
+   * removes Lingtai's own label — so an issue Lingtai had merged was
    * indistinguishable on GitHub from one it had never touched. The old loop's
    * failure was state living in labels; the failure after it was state living
    * nowhere.
@@ -124,7 +124,7 @@ export async function createGitHubClient(options: CreateClientOptions): Promise<
       headers: {
         accept: "application/vnd.github+json",
         "x-github-api-version": "2022-11-28",
-        "user-agent": "escapement",
+        "user-agent": "lingtai",
         authorization: `Bearer ${token}`,
         ...(body === undefined ? {} : { "content-type": "application/json" }),
       },

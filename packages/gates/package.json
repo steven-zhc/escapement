@@ -1,5 +1,5 @@
 {
-  "name": "@escapement/gates",
+  "name": "@lingtai/gates",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,9 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@escapement/config": "workspace:*",
-    "@escapement/core": "workspace:*",
-    "@escapement/runtime": "workspace:*"
+    "@lingtai/config": "workspace:*",
+    "@lingtai/core": "workspace:*",
+    "@lingtai/runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

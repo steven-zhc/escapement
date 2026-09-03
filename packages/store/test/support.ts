@@ -23,7 +23,7 @@ export const discovered = (title: string) => ({
   type: "WorkItemDiscovered",
   actor: "conductor",
   data: {
-    project: "escapement",
+    project: "lingtai",
     source: "manual" as const,
     externalRef: "test",
     title,
@@ -80,10 +80,10 @@ export async function cleanupStreams(): Promise<void> {
   if (created.size === 0) return;
   await direct(async (c) => {
     try {
-      await c.query("alter table events disable rule escapement_events_no_delete");
+      await c.query("alter table events disable rule lingtai_events_no_delete");
       await c.query("delete from events where stream_id = any($1::text[])", [[...created]]);
     } finally {
-      await c.query("alter table events enable rule escapement_events_no_delete");
+      await c.query("alter table events enable rule lingtai_events_no_delete");
     }
   });
   created.clear();

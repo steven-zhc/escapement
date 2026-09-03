@@ -10,8 +10,8 @@ actions are effects rather than verdicts.
 `description` of their own, instead of all fifteen sharing the root's. Eight
 files, one line each, so the result is trivial to check.
 
-    pnpm esc daemon
-    pnpm esc now nextloom-ai-admin --issue 157
+    pnpm lingtai daemon
+    pnpm lingtai now nextloom-ai-admin --issue 157
 
 ## What happened
 
@@ -43,7 +43,7 @@ The recipe said it, in the managed repository:
       close: true
 ```
 
-`esc add` had already shown the same shape at onboarding, with the empty points
+`lingtai add` had already shown the same shape at onboarding, with the empty points
 named rather than omitted:
 
     admit     (skipped)
@@ -65,7 +65,7 @@ the old shape is not verified.
 **2. A pause stopped delivery, not just work.** #157 landed, `EndActionsResolved`
 was appended, the `issue-close` row was enqueued — and it sat there, because the
 outbox drains inside the conductor pass and the pass is skipped while paused.
-The issue stayed open with `escapement:working` on it.
+The issue stayed open with `lingtai:working` on it.
 
 That is backwards. A pause stops the conductor **taking work**; it must not stop
 delivering what already happened. A "waiting on you" comment sits in that same
@@ -75,8 +75,8 @@ drains while paused (`drain` in `work-loop.ts`), using `conductorPass({ max: 0 }
 nominated.
 
 **3. The log reset made finished work look runnable.** After 3a wiped the log,
-`esc status` listed #120, #155 and #156 as runnable: they had landed, but
-Escapement no longer remembered it. The daemon would have re-run merged work and
+`lingtai status` listed #120, #155 and #156 as runnable: they had landed, but
+Lingtai no longer remembered it. The daemon would have re-run merged work and
 spent real money doing it. Paused before it could, with the reason on the record.
 
 This is the cost of §9's reset, and it was not written down there. A queue is

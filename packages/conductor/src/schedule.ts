@@ -30,10 +30,10 @@
  * it to an append-only log would make a restart inherit a grudge. A new pass
  * starts fresh, which is what you want after a fix.
  */
-import type { GitHubClient } from "@escapement/github";
-import type { Runtime } from "@escapement/runtime";
-import type { EventStore } from "@escapement/store";
-import type { ProjectState } from "@escapement/core";
+import type { GitHubClient } from "@lingtai/github";
+import type { Runtime } from "@lingtai/runtime";
+import type { EventStore } from "@lingtai/store";
+import type { ProjectState } from "@lingtai/core";
 import { readRunnable } from "./task-view.ts";
 import { type RunOnceResult, runOnce } from "./run-once.ts";
 import type { TokenSource } from "./worktree.ts";
@@ -103,7 +103,7 @@ export async function runQueue(options: ScheduleOptions): Promise<ScheduleResult
   // Null for a project registered before the name was recorded. Refusing here
   // is better than reading an empty queue and reporting "nothing to do".
   const name = options.project.project;
-  if (!name) throw new Error("this project has no name recorded — re-run esc add");
+  if (!name) throw new Error("this project has no name recorded — re-run lingtai add");
 
   for (;;) {
     if (options.signal?.aborted) return finish("aborted");

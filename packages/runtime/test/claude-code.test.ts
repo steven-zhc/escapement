@@ -48,7 +48,7 @@ const request = (over: Partial<Parameters<ReturnType<typeof createClaudeCodeRunt
 });
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "esc-runtime-"));
+  root = await mkdtemp(join(tmpdir(), "lingtai-runtime-"));
 });
 
 afterAll(async () => {

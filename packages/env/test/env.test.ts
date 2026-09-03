@@ -8,14 +8,14 @@ import { resolvePath } from "../src/index.ts";
 
 describe("resolvePath", () => {
   /**
-   * The README documented `~/.escapement-app.pem` before this existed. Nothing
+   * The README documented `~/.lingtai-app.pem` before this existed. Nothing
    * else expands `~` there — a shell does not read a `.env` file, dotenv takes
    * the value literally, and `path.resolve` would have produced a directory
    * *named* `~` inside the repository. The failure would have been a bare ENOENT
    * naming a path nobody wrote.
    */
   it("expands a leading tilde", () => {
-    expect(resolvePath("~/.escapement-app.pem")).toBe(resolve(homedir(), ".escapement-app.pem"));
+    expect(resolvePath("~/.lingtai-app.pem")).toBe(resolve(homedir(), ".lingtai-app.pem"));
     expect(resolvePath("~")).toBe(homedir());
   });
 
@@ -25,14 +25,14 @@ describe("resolvePath", () => {
   });
 
   it("leaves an absolute path alone", () => {
-    expect(resolvePath("/etc/escapement/key.pem")).toBe("/etc/escapement/key.pem");
+    expect(resolvePath("/etc/lingtai/key.pem")).toBe("/etc/lingtai/key.pem");
   });
 
   it("resolves a relative path against the repository root, not the cwd", () => {
     // The same rule the environment file itself follows: a command's directory
     // must not change what configuration means.
-    const fromRoot = resolvePath("../escapement-app.pem");
-    expect(fromRoot.endsWith("escapement-app.pem")).toBe(true);
+    const fromRoot = resolvePath("../lingtai-app.pem");
+    expect(fromRoot.endsWith("lingtai-app.pem")).toBe(true);
     expect(fromRoot.startsWith("/")).toBe(true);
     expect(fromRoot).not.toContain("packages/env");
   });

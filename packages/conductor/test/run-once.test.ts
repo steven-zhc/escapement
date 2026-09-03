@@ -1,8 +1,8 @@
 /**
- * `esc run --once`, end to end.
+ * `lingtai run --once`, end to end.
  *
  * Everything real except GitHub: a bare repository in a temp directory as the
- * remote, the compiled `esc-hook` on a real unix socket, real gates running real
+ * remote, the compiled `lingtai-hook` on a real unix socket, real gates running real
  * commands, the real integrator taking a real advisory lock, and the real board
  * projection at the end. The agent is a shell script that makes a commit,
  * because what is under test is the *wiring* — the order of the steps and what
@@ -15,10 +15,10 @@
  * claim, worktree, hook, run, diff, gates, merge and board, all genuinely
  * executed.
  */
-import { directDatabaseUrl } from "@escapement/env";
-import type { GitHubClient, Issue } from "@escapement/github";
-import { createClaudeCodeRuntime } from "@escapement/runtime";
-import { createDb, createEventStore, createProjectionRunner, type Db, type EventStore } from "@escapement/store";
+import { directDatabaseUrl } from "@lingtai/env";
+import type { GitHubClient, Issue } from "@lingtai/github";
+import { createClaudeCodeRuntime } from "@lingtai/runtime";
+import { createDb, createEventStore, createProjectionRunner, type Db, type EventStore } from "@lingtai/store";
 import { execFile } from "node:child_process";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -28,7 +28,7 @@ import { promisify } from "node:util";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { approve, integrationStream, readTasks, reject, renderPrompt, runOnce, runQueue, syncQueued, taskViewProjection, waive, workItemStream } from "../src/index.ts";
-import type { ProjectState } from "@escapement/core";
+import type { ProjectState } from "@lingtai/core";
 
 const exec = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
@@ -113,7 +113,7 @@ function fakeClient(over: Partial<GitHubClient> & { recipe?: string } = {}): Git
     // The governance rule: the recipe comes from the base branch, and this
     // client will not serve it for any other ref.
     fileAt: async (path, ref) =>
-      path === ".escapement/config.yaml" && ref === "develop" ? recipe : null,
+      path === ".lingtai/config.yaml" && ref === "develop" ? recipe : null,
     refSha: async () => "0".repeat(40),
     listOpenIssues: async () => [issue],
 comment: async () => { throw new Error("no writes in this test"); },
@@ -140,7 +140,7 @@ echo '{"is_error":false,"num_turns":7,"duration_ms":1234,"total_cost_usd":0.42}'
 }
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "esc-runonce-"));
+  root = await mkdtemp(join(tmpdir(), "lingtai-runonce-"));
   originPath = join(root, "origin.git");
   work = join(root, "work");
   home = join(root, "home");
@@ -151,8 +151,8 @@ beforeAll(async () => {
   await g(["commit", "-qm", "first"], work);
   await exec("git", ["clone", "-q", "--bare", work, originPath]);
 
-  hookBinary = join(root, "esc-hook");
-  await exec("bun", ["build", "--compile", "--outfile", hookBinary, resolve(here, "../../hook/src/esc-hook.ts")]);
+  hookBinary = join(root, "lingtai-hook");
+  await exec("bun", ["build", "--compile", "--outfile", hookBinary, resolve(here, "../../hook/src/lingtai-hook.ts")]);
 
   client = createDb();
   store = createEventStore(client);
@@ -166,11 +166,11 @@ afterAll(async () => {
   const c = new pg.Client({ connectionString: directDatabaseUrl() });
   await c.connect();
   try {
-    await c.query("alter table events disable rule escapement_events_no_delete");
+    await c.query("alter table events disable rule lingtai_events_no_delete");
     await c.query("delete from events where stream_id = any($1::text[])", [[...created]]);
     await c.query("delete from events where stream_id like $1", [`run-%`]);
   } finally {
-    await c.query("alter table events enable rule escapement_events_no_delete");
+    await c.query("alter table events enable rule lingtai_events_no_delete");
     await c.query("delete from board where project = $1", [PROJECT]);
     await c.query("delete from board_project where project = $1", [PROJECT]);
     await c.query("delete from checkpoints where name = 'board'");
@@ -313,7 +313,7 @@ git -c user.name=agent -c user.email=a@example.invalid commit -qm 'wrong change'
         defaultBranch: async () => "feature/062-user-suggested-skills",
         fileAt: async (path, ref) => {
           askedFor.push(ref);
-          return path === ".escapement/config.yaml" && ref === "develop" ? RECIPE : null;
+          return path === ".lingtai/config.yaml" && ref === "develop" ? RECIPE : null;
         },
       }),
     });
@@ -692,7 +692,7 @@ git add -A && git commit -q -m "fix"
    * The defect that made the first real run useless. The prompt said "read the
    * issue" and the agent was handed a number — no title, no body, and no `gh`
    * to fetch one with. Thirty turns and $1.11 later it had written to
-   * `.escapement/config.yaml`, the only thing in the worktree that looked like
+   * `.lingtai/config.yaml`, the only thing in the worktree that looked like
    * an instruction, and committed nothing.
    */
   it("gives the implementer the ticket, not just its number", () => {

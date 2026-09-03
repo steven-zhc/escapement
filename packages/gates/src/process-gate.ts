@@ -12,7 +12,7 @@
  * What is left here is exactly the translation from "a command ended" to "a
  * verdict about a commit", which is the part that is genuinely about gates.
  */
-import { parseDuration } from "@escapement/config";
+import { parseDuration } from "@lingtai/config";
 import { runCommand } from "./command.ts";
 import type { Gate, GateContext, GateResult } from "./gate.ts";
 

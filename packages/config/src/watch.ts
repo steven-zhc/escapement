@@ -1,7 +1,7 @@
 /**
  * The globs a policy gate watches, compiled early.
  *
- * Compiled at `esc doctor` time rather than mid-run, because a pattern with a
+ * Compiled at `lingtai doctor` time rather than mid-run, because a pattern with a
  * typo in it should be a refusal at configuration time, not a gate that quietly
  * matches nothing. A watch that matches nothing looks exactly like a watch with
  * nothing to report, and the two must not be confusable — the whole point of
@@ -33,7 +33,7 @@ export function compileWatch(gate: string, patterns: readonly string[]): Watcher
     }
     try {
       // `dot: true` because half of what is worth watching is a dotfile —
-      // `.github/workflows/**` and `.escapement/**` both are, and a matcher
+      // `.github/workflows/**` and `.lingtai/**` both are, and a matcher
       // that skips them by default would watch nothing while looking correct.
       return picomatch(pattern, { dot: true });
     } catch (err) {
@@ -56,7 +56,7 @@ export function compileWatch(gate: string, patterns: readonly string[]): Watcher
  * here at all: a change that edited `verify.sh` and then passed `verify.sh` was
  * indistinguishable from one that passed.
  *
- * `.escapement/**` is here for completeness rather than for safety. The recipe
+ * `.lingtai/**` is here for completeness rather than for safety. The recipe
  * that governs a run is read from `origin/<base>`, so editing it on a branch
  * changes nothing about the run in flight — but it changes the *next* one, and
  * a person should see that before it merges.
@@ -67,7 +67,7 @@ export function compileWatch(gate: string, patterns: readonly string[]): Watcher
  * plainly.
  */
 export const TAMPER_WATCH: readonly string[] = [
-  ".escapement/**",
+  ".lingtai/**",
   "package.json",
   "**/package.json",
   ".github/workflows/**",

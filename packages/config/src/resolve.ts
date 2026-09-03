@@ -3,7 +3,7 @@
  *
  * The governance rule, in one place. Borrowed wholesale from GitHub Actions:
  * **the workflow that judges a change is read from the base branch, not from the
- * branch being judged.** So an agent that edits `.escapement/config.yaml`
+ * branch being judged.** So an agent that edits `.lingtai/config.yaml`
  * changes nothing about the run in flight — the recipe was already snapshotted
  * and its hash recorded in `RunStarted` — the edit shows up in the diff where
  * the `tamper` gate catches it, and it takes effect from the next work item,
@@ -20,7 +20,7 @@ import { applyPreset } from "./presets.ts";
 import { Recipe } from "./recipe.ts";
 
 /** Where a project's recipe lives, by convention and without exception. */
-export const RECIPE_PATH = ".escapement/config.yaml";
+export const RECIPE_PATH = ".lingtai/config.yaml";
 
 /** Reads a path at a ref. Returns null when the file is not there. */
 export type ReadAtRef = (path: string, ref: string) => Promise<string | null>;

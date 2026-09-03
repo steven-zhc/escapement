@@ -5,7 +5,7 @@ no duplicate · four consecutive runs, no flake
 
 ## Question
 
-[#2](https://github.com/steven-zhc/escapement/issues/2) claims a subscriber
+[#2](https://github.com/steven-zhc/lingtai/issues/2) claims a subscriber
 "reconnects with backoff and resumes from the last seq" and that "nothing is
 missed across a reconnect". Both are easy to write and easy to be wrong about,
 because the failure is invisible: a listener that quietly stops hearing looks
@@ -74,5 +74,5 @@ work through it, which is the whole point. But two things follow:
   `capMs` actually matters.
 - Delivery is exactly-once only within a process. `lastSeq` lives in memory; a
   handler that succeeds and a process that dies before the checkpoint is written
-  will redeliver. That is [#4](https://github.com/steven-zhc/escapement/issues/4)'s
+  will redeliver. That is [#4](https://github.com/steven-zhc/lingtai/issues/4)'s
   problem, and its handlers have to be idempotent regardless.

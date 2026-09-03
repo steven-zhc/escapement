@@ -1,11 +1,11 @@
 {
-  "name": "@escapement/runtime",
+  "name": "@lingtai/runtime",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
-  "dependencies": { "@escapement/core": "workspace:*" },
+  "dependencies": { "@lingtai/core": "workspace:*" },
   "devDependencies": {
     "@types/node": "^26.4.0",
     "typescript": "^5.9.3",

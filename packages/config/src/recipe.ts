@@ -1,5 +1,5 @@
 /**
- * The recipe: `<repo>/.escapement/config.yaml`, committed to the managed
+ * The recipe: `<repo>/.lingtai/config.yaml`, committed to the managed
  * repository and owned by it.
  *
  * It is safe to keep this in the repo the agent is editing because of one rule,
@@ -10,7 +10,7 @@
  * human approves and merges it.
  *
  * There is no policy above it any more (ADR 0016 §7): the workflow is the
- * repository's to define, and Escapement does not second-guess it. What still
+ * repository's to define, and Lingtai does not second-guess it. What still
  * holds from [0005](../../../doc/decisions/0005-config-in-target-repo.md) is
  * where it is read from — `origin/<base>`, never the agent's branch, so a branch
  * cannot change the rules of the run it is part of. A recipe may add
@@ -19,7 +19,7 @@
  * See doc/decisions/0005-config-in-target-repo.md.
  */
 import { z } from "zod";
-import { Tier, WorkKind, RuntimeId } from "@escapement/core";
+import { Tier, WorkKind, RuntimeId } from "@lingtai/core";
 
 /**
  * One thing that runs at a gate.
@@ -71,7 +71,7 @@ export const GateAction = z.union([
     close: z.literal(true),
     when: z.enum(["landed", "blocked", "failed", "any"]).default("landed"),
   }),
-  /** Sets labels. Escapement's own are replaced; everybody else's are kept. */
+  /** Sets labels. Lingtai's own are replaced; everybody else's are kept. */
   z.object({
     name: z.string(),
     labels: z.array(z.string()),
@@ -115,7 +115,7 @@ export function kindOfAction(action: GateAction): ActionKind {
 
 export const Recipe = z.object({
   version: z.literal(1),
-  /** Pulls install/build/test defaults from a preset shipped with Escapement. */
+  /** Pulls install/build/test defaults from a preset shipped with Lingtai. */
   extends: z.string().optional(),
 
   repo: z.object({

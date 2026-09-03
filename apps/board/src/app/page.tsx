@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { loadBoard, type BoardCard } from "@/lib/board";
-import { loadProjects } from "@escapement/conductor/projects";
+import { loadProjects } from "@lingtai/conductor/projects";
 import { Decide } from "./decide.tsx";
 import { Live } from "./live.tsx";
 
@@ -97,7 +97,7 @@ export default async function Page() {
   return (
     <main>
       <div className="bar">
-        <span className="brand">Escapement</span>
+        <span className="brand">Lingtai</span>
         <span className="sep" />
         <span>
           {projects.length === 0

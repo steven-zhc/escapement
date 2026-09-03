@@ -171,7 +171,7 @@ export function applyWorkItem(state: WorkItemState, event: Envelope): WorkItemSt
       // than rejected: a projection compiled against an older catalogue has to
       // survive a newer conductor's events instead of wedging on the first one.
       //
-      // Note where the real forward-compatibility boundary sits. `@escapement/store`
+      // Note where the real forward-compatibility boundary sits. `@lingtai/store`
       // currently *throws* on an event type it does not recognise, so in practice
       // it refuses one before a reducer ever sees it. This tolerance is what
       // makes the reducer itself safe to reuse — over a replay, a fixture, or a

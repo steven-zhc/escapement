@@ -1,5 +1,5 @@
 {
-  "name": "@escapement/daemon",
+  "name": "@lingtai/daemon",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,10 +11,10 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@escapement/conductor": "workspace:*",
-    "@escapement/core": "workspace:*",
-    "@escapement/env": "workspace:*",
-    "@escapement/store": "workspace:*",
+    "@lingtai/conductor": "workspace:*",
+    "@lingtai/core": "workspace:*",
+    "@lingtai/env": "workspace:*",
+    "@lingtai/store": "workspace:*",
     "pg": "^8.16.3"
   },
   "devDependencies": {

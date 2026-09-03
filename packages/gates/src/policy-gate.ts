@@ -24,7 +24,7 @@
  * that says "held: policy" sends the reader somewhere else to find out why, and
  * that is the failure the board exists to remove.
  */
-import { compileWatch, type Watcher } from "@escapement/config";
+import { compileWatch, type Watcher } from "@lingtai/config";
 import type { Gate, GateContext, GateResult } from "./gate.ts";
 
 export interface PolicyGateSpec {
@@ -41,7 +41,7 @@ export interface PolicyGateDeps {
   advice?: string;
 }
 
-/** What to do about it, when the gate's name is one that ships with Escapement. */
+/** What to do about it, when the gate's name is one that ships with Lingtai. */
 const ADVICE: Record<string, string> = {
   tamper:
     "These decide what the other gates actually check, so a change to them is a " +
@@ -52,7 +52,7 @@ const ADVICE: Record<string, string> = {
 };
 
 export function createPolicyGate(spec: PolicyGateSpec, deps: PolicyGateDeps): Gate {
-  // Compiled once, when the gate is built — which is also `esc doctor` time, so
+  // Compiled once, when the gate is built — which is also `lingtai doctor` time, so
   // a bad pattern is a configuration error rather than a gate that silently
   // matches nothing.
   const watcher: Watcher = compileWatch(spec.name, spec.watch);

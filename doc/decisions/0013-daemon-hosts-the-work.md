@@ -7,8 +7,8 @@
 Three long-lived things need to exist: the board, something that keeps
 projections current, and the conductor. Only the first one had a home.
 
-The conductor was `esc run` — one shot, in a terminal, exits when done. Nothing
-advanced projections at all until `esc projection run` was written. So the
+The conductor was `lingtai run` — one shot, in a terminal, exits when done. Nothing
+advanced projections at all until `lingtai projection run` was written. So the
 question was where those two live, and whether the board could host them.
 
 Hosting both in the board was considered seriously, and it is where this
@@ -83,7 +83,7 @@ seen 3s ago" turns that from a mystery into a glance.
 ## Consequences
 
 The daemon takes a Postgres advisory lock, so a second one — a debugging
-`esc daemon` while launchd's copy is up — exits quietly instead of racing for
+`lingtai daemon` while launchd's copy is up — exits quietly instead of racing for
 the same ticket. Same mechanism as the merge lane already uses.
 
 The UI can be restarted, reloaded and closed freely. Runs do not notice.
@@ -95,5 +95,5 @@ tracked separately.
 
 `conductor`, `projection` and `ui` stay three separate modules. Two of them
 share a host. Sharing a host is not the same as being coupled, and each stays
-independently runnable from `esc` — which is what keeps them testable in
+independently runnable from `lingtai` — which is what keeps them testable in
 isolation.

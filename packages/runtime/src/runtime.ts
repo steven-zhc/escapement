@@ -10,14 +10,14 @@
  * writing the second adapter before the first interface has survived real use is
  * guessing at the wrong abstractions.
  *
- * **Containment is Escapement's responsibility, not the runtime's.** Codex ships
+ * **Containment is Lingtai's responsibility, not the runtime's.** Codex ships
  * a filesystem sandbox and Claude Code does not, and a project's safety level
  * must not depend on which agent happens to be running today. A runtime may
  * *provide* containment; the scheduler matches capabilities before dispatching
  * and records `DispatchRefused` when the combination cannot meet the tier — it
  * never silently downgrades. See doc/decisions/0007-dual-runtime.md.
  */
-import type { RuntimeId, Tier } from "@escapement/core";
+import type { RuntimeId, Tier } from "@lingtai/core";
 
 export interface RuntimeCapabilities {
   id: RuntimeId;
@@ -92,7 +92,7 @@ export interface Runtime {
   run(request: RunRequest): Promise<RunOutcome>;
   /**
    * Optional: a runtime that cannot be asked cheaply should not pretend.
-   * `esc doctor` reports an absent check as deferred rather than as passing.
+   * `lingtai doctor` reports an absent check as deferred rather than as passing.
    */
   checkAuth?(env: Record<string, string>): Promise<AuthStatus>;
 }
@@ -101,7 +101,7 @@ export interface Runtime {
  * Whether this runtime can carry a project at that containment tier.
  *
  * `guarded` is what the first project runs at and what carried the old loop's 73
- * runs; `sandboxed` needs a hard filesystem boundary that Escapement has not
+ * runs; `sandboxed` needs a hard filesystem boundary that Lingtai has not
  * built yet.
  */
 export function meetsTier(capabilities: RuntimeCapabilities, required: Tier): boolean {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `esc-hook` — the only hot path in the system.
+ * `lingtai-hook` — the only hot path in the system.
  *
  * `PreToolUse` sits in front of every tool call an agent makes: tens of
  * thousands across a run. So this is a **thin client** and nothing else. It
@@ -87,7 +87,7 @@ const runId = process.env["ESC_RUN_ID"];
 if (!socketPath || !runId) {
   // The conductor renders this configuration itself, outside the worktree, so
   // its absence means the wiring is wrong rather than that this run is exempt.
-  deny("esc-hook: ESC_HOOK_SOCKET and ESC_RUN_ID are not set — refusing to allow anything");
+  deny("lingtai-hook: ESC_HOOK_SOCKET and ESC_RUN_ID are not set — refusing to allow anything");
 }
 
 const raw = await readStdin();
@@ -95,15 +95,15 @@ let payload: unknown;
 try {
   payload = JSON.parse(raw || "{}");
 } catch {
-  deny("esc-hook: could not parse the hook payload");
+  deny("lingtai-hook: could not parse the hook payload");
 }
 
 let reply: Reply;
 try {
   reply = await ask(socketPath, JSON.stringify({ runId, payload }));
 } catch (err) {
-  deny(`esc-hook: ${(err as Error).message}`);
+  deny(`lingtai-hook: ${(err as Error).message}`);
 }
 
 if (reply.allow === true) process.exit(ALLOW);
-deny(reply.reason ?? "esc-hook: refused by policy");
+deny(reply.reason ?? "lingtai-hook: refused by policy");

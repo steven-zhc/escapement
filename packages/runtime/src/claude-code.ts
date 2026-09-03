@@ -55,7 +55,7 @@ export const CLAUDE_CODE_CAPABILITIES: RuntimeCapabilities = {
  * a v4 UUID because `--session-id` requires a valid one.
  */
 export function sessionIdFor(runId: string): string {
-  const h = createHash("sha256").update(`escapement:session:${runId}`).digest("hex");
+  const h = createHash("sha256").update(`lingtai:session:${runId}`).digest("hex");
   const bytes = h.slice(0, 32).split("");
   // Version and variant nibbles, so it parses as a UUID rather than 32 hex.
   bytes[12] = "4";
@@ -173,8 +173,8 @@ export function createClaudeCodeRuntime(options: ClaudeCodeOptions = {}): Runtim
         // Bash calls come back as "you haven't granted it yet" and there is no
         // prompt to grant anything. One real run spent 45 turns and $3.35
         // reading the repository, designing the change, and then reporting that
-        // it could not write a single file. esc-hook denied none of it — none
-        // of it ever reached esc-hook.
+        // it could not write a single file. lingtai-hook denied none of it — none
+        // of it ever reached lingtai-hook.
         //
         // Not a loosening. `guarded` has always meant the worktree plus the
         // hook (see `providesTier` below, and ADR 0007): containment is the

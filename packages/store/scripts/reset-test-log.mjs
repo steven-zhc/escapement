@@ -1,7 +1,7 @@
 /**
  * Empty the test database's log.
  *
- *   ESCAPEMENT_TEST=1 pnpm --filter @escapement/store db:reset-test
+ *   LINGTAI_TEST=1 pnpm --filter @lingtai/store db:reset-test
  *
  * The suite appends real events and cleans up its own streams, but the log as a
  * whole only grows: 945 events and a sequence past 11,000 after a few weeks of
@@ -24,16 +24,16 @@
  * database, the second check is what refuses.
  */
 import pg from "pg";
-import { directDatabaseUrl } from "@escapement/store";
+import { directDatabaseUrl } from "@lingtai/store";
 
-if (!process.env["ESCAPEMENT_TEST"] && !process.env["VITEST"]) {
-  console.error("refusing: set ESCAPEMENT_TEST=1 to say which database you mean");
+if (!process.env["LINGTAI_TEST"] && !process.env["VITEST"]) {
+  console.error("refusing: set LINGTAI_TEST=1 to say which database you mean");
   process.exit(2);
 }
 
 const testUrl = directDatabaseUrl();
 
-delete process.env["ESCAPEMENT_TEST"];
+delete process.env["LINGTAI_TEST"];
 delete process.env["VITEST"];
 let mainUrl = null;
 try {
@@ -54,7 +54,7 @@ try {
 
   // The table carries a rule that turns deletes into no-ops — the log is
   // append-only and means it. Cleaning up is an explicit, temporary exception.
-  await client.query("alter table events disable rule escapement_events_no_delete");
+  await client.query("alter table events disable rule lingtai_events_no_delete");
   try {
     await client.query("truncate table events restart identity");
     // Checkpoints name a sequence that no longer exists; a projection resuming
@@ -62,11 +62,11 @@ try {
     await client.query("truncate table checkpoints");
     // The outbox outlives a log reset because the contract owns the table and
     // no projection drops it. Left behind, a dead letter from a suite that
-    // exercised a permanent failure makes `esc doctor` red forever — the check
+    // exercised a permanent failure makes `lingtai doctor` red forever — the check
     // being right about data that no longer means anything.
     await client.query("truncate table outbox");
   } finally {
-    await client.query("alter table events enable rule escapement_events_no_delete");
+    await client.query("alter table events enable rule lingtai_events_no_delete");
   }
 
   console.log(`test log reset — ${before.rows[0].n} events removed, sequence restarted`);

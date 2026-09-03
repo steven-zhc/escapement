@@ -6,7 +6,7 @@
 
 [0002](0002-typescript.md) listed "hook answering in under 20 ms" as one of the
 five requirements bash could not meet, and made the hook a Bun-compiled single
-file to meet it. [#11](https://github.com/steven-zhc/escapement/issues/11) asked
+file to meet it. [#11](https://github.com/steven-zhc/lingtai/issues/11) asked
 for that to be measured rather than assumed.
 
 It was, twice, and the two runs disagreed: 19.0ms p95, then 23.8ms p95 on the
@@ -31,7 +31,7 @@ Accept ~16ms p50 and a p95 that crosses 20ms under load, and stop treating 20ms
 as a gate.
 
 The test asserts one thing: the **marginal** cost of the round trip over a
-fail-fast spawn of the same binary. That is what Escapement owns and what would
+fail-fast spawn of the same binary. That is what Lingtai owns and what would
 move if the conductor started doing work on the hot path.
 
 It asserts nothing about the absolute number, not even a loose ceiling. 19.0,
@@ -46,7 +46,7 @@ so the choice 0002 made was right even though the number it promised is not.
 ## Consequences
 
 - **The hot path has no room in it, and now that is a measured fact rather than
-  a caution.** Anything added to `esc-hook` is pure addition to a budget already
+  a caution.** Anything added to `lingtai-hook` is pure addition to a budget already
   over. This is why policy lives in the conductor, and the reason is now
   quantitative.
 - **The rewrite target is startup time, not the protocol.** 0002 already noted

@@ -1,7 +1,7 @@
-You are continuing work on **Escapement**, at `~/workspace/nextloom-ai/escapement`
-(GitHub: `steven-zhc/escapement`, private). Work from that directory.
+You are continuing work on **Lingtai**, at `~/workspace/nextloom-ai/lingtai`
+(GitHub: `steven-zhc/lingtai`, private). Work from that directory.
 
-Escapement is an event-sourced scheduler for autonomous code agents. It replaces
+Lingtai is an event-sourced scheduler for autonomous code agents. It replaces
 `agent-loop.sh`, a bash harness that worked 73 tickets over four days and could
 not answer *what state is this ticket in*, *why did this not merge*, or *what is
 waiting on me* — because state lived in GitHub labels, history in issue comments,
@@ -24,7 +24,7 @@ Phase 0, in progress. The database is live and issue #6 is closed.
 | | |
 |---|---|
 | `packages/core` | Event catalogue and envelope. 32 events, zod schemas. Zero I/O. |
-| `packages/config` | Recipe schema for a managed repo's `.escapement/config.yaml`. |
+| `packages/config` | Recipe schema for a managed repo's `.lingtai/config.yaml`. |
 | `packages/store` | Prisma 8 contract, initial migration applied, `notify.sql` applied. **No read/write API yet — that is #1.** |
 | `apps/board` | Next.js 16 shell. Five columns, real palette, SSE endpoint stubbed. `loadBoard()` returns empty columns. |
 
@@ -69,7 +69,7 @@ Prisma's CLI engine needs.
 A real environment variable beats both. Use `databaseUrl()` and
 `directDatabaseUrl()` — never read `process.env` directly.
 
-**5. `esc` does not exist yet.** Scripts are `pnpm contract:emit`, `pnpm db:init`,
+**5. `lingtai` does not exist yet.** Scripts are `pnpm contract:emit`, `pnpm db:init`,
 `pnpm db:bootstrap`, `pnpm typecheck`. The CLI is #5.
 
 ## Verify before every commit
@@ -78,7 +78,7 @@ A real environment variable beats both. Use `databaseUrl()` and
 pnpm install
 pnpm contract:emit                              # offline
 pnpm typecheck                                  # all four packages
-pnpm --filter @escapement/store db:bootstrap    # 10 assertions against the live database
+pnpm --filter @lingtai/store db:bootstrap    # 10 assertions against the live database
 ```
 
 `db:bootstrap` is the one that catches real breakage — it asserts the append-only
@@ -87,7 +87,7 @@ rules, the unique constraint and the cross-connection NOTIFY.
 ## Hard constraints
 
 - **`agent-loop.sh` is still running** against `nextloom-ai-admin`, on an hourly
-  cycle, and will be until Escapement's Phase 2. Do not stop it, do not modify it,
+  cycle, and will be until Lingtai's Phase 2. Do not stop it, do not modify it,
   and **do not touch the `~/workspace/nextloom-ai/nextloom-ai-admin` working
   checkout** — the old loop merges inside it, and uncommitted changes there make
   its merges fail silently. See `loop/README.md` § Known hazards.

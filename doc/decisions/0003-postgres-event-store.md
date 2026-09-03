@@ -27,7 +27,7 @@ from the configuration entirely.
 ## Consequences
 
 - The event store is **its own database**, never one belonging to a managed
-  project. Escapement has to keep running while a managed project is being
+  project. Lingtai has to keep running while a managed project is being
   changed.
 - The `NOTIFY` payload is the `seq` only; `NOTIFY` caps at 8000 bytes and an
   event body can exceed it, so listeners read the row they are told about.

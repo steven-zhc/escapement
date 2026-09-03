@@ -48,7 +48,7 @@ all three packages typecheck.
   after the first migration.
 - **This is a prerelease under the foundation.** The RC could change shape before
   8.0.0 ships. Mitigated by exact pins and by the fact that everything in
-  `@escapement/core` — the part worth protecting — has no Prisma dependency at
+  `@lingtai/core` — the part worth protecting — has no Prisma dependency at
   all and would survive swapping the ORM entirely.
 - `pnpm` must allow build scripts for `esbuild`, `workerd` and
   `msgpackr-extract`, which the CLI engine bundles. Declared in

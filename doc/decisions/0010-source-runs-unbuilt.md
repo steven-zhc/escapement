@@ -25,7 +25,7 @@ ERR_MODULE_NOT_FOUND Cannot find module …/packages/store/src/db.js
 
 `tsc` never saw this, because `moduleResolution: bundler` maps `.js` back to
 `.ts` for type-checking, and Turbopack does the same for the board. Both were
-green. `import("@escapement/store")` from Node was not. The three barrels were
+green. `import("@lingtai/store")` from Node was not. The three barrels were
 the only files affected — every other import in the tree already used `.ts`.
 
 **Parameter properties did not load.** `constructor(readonly streamId: string)`
@@ -52,9 +52,9 @@ Concretely:
 
 - `tsc --noEmit` and a board build are **not sufficient** to prove a package
   loads. Both resolve `.js` → `.ts` themselves. The cheap check that does prove
-  it is `node -e "import('@escapement/<pkg>')"`, run from inside that package
+  it is `node -e "import('@lingtai/<pkg>')"`, run from inside that package
   or one that depends on it — worth having in
-  `esc doctor` ([#5](https://github.com/steven-zhc/escapement/issues/5)), since
+  `lingtai doctor` ([#5](https://github.com/steven-zhc/lingtai/issues/5)), since
   the conductor, the CLI and the hook all load this source through Node and the
   board does not.
 - `enum` is barred, which costs nothing: the event catalogue is zod enums
@@ -67,7 +67,7 @@ Concretely:
 
 ## Note on method
 
-The failing check was `import("@escapement/store")` — a line written to confirm
+The failing check was `import("@lingtai/store")` — a line written to confirm
 something already believed true. Two commands, four packages green, and the
 package could not be loaded. Worth repeating whenever a project's checks all run
 through the same resolver.

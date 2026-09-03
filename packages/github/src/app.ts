@@ -2,7 +2,7 @@
  * GitHub App authentication.
  *
  * An App, not a personal access token. A fine-grained PAT can do everything
- * Escapement needs and can also be wrong in a way nothing reports: on
+ * Lingtai needs and can also be wrong in a way nothing reports: on
  * 2026-08-30 one covered the admin repository's *submodule* but not the
  * repository itself, and every CI run failed with a 403 that said nothing about
  * scope. Which repositories an App can reach is explicit in its installation,
@@ -64,7 +64,7 @@ export class NotInstalledError extends Error {
     super(
       `the GitHub App is not installed on ${owner}/${repo}. ` +
         "Install it on that repository (Settings → GitHub Apps → Configure), " +
-        "then run esc add again.",
+        "then run lingtai add again.",
     );
     this.owner = owner;
     this.repo = repo;
@@ -102,7 +102,7 @@ async function githubJson<T>(
       "x-github-api-version": "2022-11-28",
       // GitHub rejects a request with no User-Agent, with a message that does
       // not say so.
-      "user-agent": "escapement",
+      "user-agent": "lingtai",
       authorization: `Bearer ${init.token}`,
       ...(init.body ? { "content-type": "application/json" } : {}),
       ...init.headers,

@@ -14,8 +14,8 @@ not — a sibling `layout.tsx` is a server component and its `metadata` applies 
 the page it wraps. Six new files, no existing file touched, which makes the
 result trivial to check.
 
-    pnpm esc daemon --no-guard          # one process, left alone
-    pnpm esc now nextloom-ai-admin --issue 156
+    pnpm lingtai daemon --no-guard          # one process, left alone
+    pnpm lingtai now nextloom-ai-admin --issue 156
 
 Then nothing. No further command was issued.
 
@@ -44,7 +44,7 @@ queue empty and stopped. The loop advances on events and comes to rest. That is
 
 ## Two things the run found that no test had
 
-**1. `esc now` did not run the issue you named.** It appended `RunRequested`
+**1. `lingtai now` did not run the issue you named.** It appended `RunRequested`
 and only *woke* the loop; the pass then took whatever was at the top of the
 queue. With one item queued the difference is invisible, which is why it
 survived. Fixed before the run: a request whose task is still `queued` in
@@ -54,11 +54,11 @@ stops it being queued, which satisfies the filter.
 **2. The outbox deleted every label it did not put there.** `setLabels` on the
 client is a whole-set replace, deliberately — `--add-label` is set union rather
 than a transition, which is how #35 came to carry `agent:blocked` and
-`agent:review` at once. But `labelsFor` returns *only* Escapement's own labels,
+`agent:review` at once. But `labelsFor` returns *only* Lingtai's own labels,
 and `labelsFor("landed")` returns `[]`. So the first outbox drain stripped
 `enhancement` from #120, #155 and #156.
 
-That label is what the recipe selects on. Escapement deleted its own queue's
+That label is what the recipe selects on. Lingtai deleted its own queue's
 selection criteria, and the three issues silently became unrunnable — a failure
 that reports nothing, because an empty queue looks exactly like no work.
 
@@ -74,7 +74,7 @@ of them. Three tests in `apps/cli/test/deliverer.test.ts` pin it, including the
 landed case with the empty computed set.
 
 The `unlabeled` events on #120 and #155 confirm only `enhancement` (foreign,
-wrongly deleted) and `escapement:working` (Escapement's own, correctly deleted)
+wrongly deleted) and `lingtai:working` (Lingtai's own, correctly deleted)
 were ever removed. All three labels were restored by hand.
 
 ## Limits

@@ -1,11 +1,11 @@
 # 005 — Rung 1 reaches a real repository
 
-**2026-08-31.** `nextloom-ai-admin`, `develop` at `ed87fb3`. Escapement at
+**2026-08-31.** `nextloom-ai-admin`, `develop` at `ed87fb3`. Lingtai at
 `d0c4020` plus the fixes this experiment forced.
 
 ## What this was for
 
-Seven seams had never touched reality, and a full `esc run --once` would light
+Seven seams had never touched reality, and a full `lingtai run --once` would light
 all seven at once. If it failed, nobody would know which one, and every retry
 would cost agent money. So: rungs, each isolating a group (#39).
 
@@ -38,7 +38,7 @@ events: PreparationStarted, PreparationPassed
 ```
 
 The two failures before it are the point of the exercise, and both were real
-defects in Escapement rather than in the harness.
+defects in Lingtai rather than in the harness.
 
 ## Failure 1 — no token ever reached git
 
@@ -71,7 +71,7 @@ process*, so three call sites had answered it three separate ways:
 | prepare | neither |
 
 Only one was right, and the one that was right was right by accident. This would
-not have shown up as "Escapement is broken"; the gate variant would have shown up
+not have shown up as "Lingtai is broken"; the gate variant would have shown up
 on the board as *the agent broke the build*, which is the failure mode this whole
 system exists to remove.
 

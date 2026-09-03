@@ -7,20 +7,20 @@
  * itself, and an operator's pause (#45) can take effect between items instead
  * of only after a whole queue has been worked.
  *
- * This lives in the CLI and not in `@escapement/daemon` on purpose. The daemon
+ * This lives in the CLI and not in `@lingtai/daemon` on purpose. The daemon
  * hosts a loop and knows nothing about GitHub clients, runtimes or prompts;
- * assembling those is what this application already does for `esc run`, and
+ * assembling those is what this application already does for `lingtai run`, and
  * giving the daemon package those dependencies would make it the thing it is
  * supposed to be hosting.
  */
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { currentRecipe, loadProjects, readRunnable, refreshQueue, runOnce, runQueue } from "@escapement/conductor";
-import { readControl } from "@escapement/daemon";
-import { createGitHubClient, type GitHubClient } from "@escapement/github";
-import { githubApp, hasGitHubApp } from "@escapement/env";
-import { createClaudeCodeRuntime } from "@escapement/runtime";
+import { currentRecipe, loadProjects, readRunnable, refreshQueue, runOnce, runQueue } from "@lingtai/conductor";
+import { readControl } from "@lingtai/daemon";
+import { createGitHubClient, type GitHubClient } from "@lingtai/github";
+import { githubApp, hasGitHubApp } from "@lingtai/env";
+import { createClaudeCodeRuntime } from "@lingtai/runtime";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -42,8 +42,8 @@ export interface ConductOptions {
  * cache is not an optimisation: minting a token per delivery would turn a
  * hundred queued labels into a hundred installation lookups.
  */
-/** Every label Escapement owns starts with this. Everything else is somebody else's. */
-export const ESCAPEMENT_LABEL_PREFIX = "escapement:";
+/** Every label Lingtai owns starts with this. Everything else is somebody else's. */
+export const LINGTAI_LABEL_PREFIX = "lingtai:";
 
 export function deliverer(clients: Map<string, GitHubClient>) {
   const need = (project: string): GitHubClient => {
@@ -57,14 +57,14 @@ export function deliverer(clients: Map<string, GitHubClient>) {
       return String(id);
     },
     /**
-     * Sets Escapement's labels and leaves everybody else's alone.
+     * Sets Lingtai's labels and leaves everybody else's alone.
      *
      * `setLabels` on the client is a whole-set replace, which is deliberate:
      * `--add-label` is set union rather than a transition, and that is how #35
      * came to carry `agent:blocked` and `agent:review` at once. But a replace
      * given only the computed labels deletes every *foreign* label too, and it
      * did: the first outbox drain stripped `enhancement` from admin #120, #155
-     * and #156 — the very label the recipe selects on, so Escapement deleted
+     * and #156 — the very label the recipe selects on, so Lingtai deleted
      * its own queue's selection criteria and the three issues went unrunnable.
      *
      * The union is taken here rather than in the projection because a
@@ -80,7 +80,7 @@ export function deliverer(clients: Map<string, GitHubClient>) {
     async setLabels(project: string, issue: number, labels: readonly string[]): Promise<void> {
       const client = need(project);
       const current = await client.getIssue(issue);
-      const foreign = current.labels.filter((l) => !l.startsWith(ESCAPEMENT_LABEL_PREFIX));
+      const foreign = current.labels.filter((l) => !l.startsWith(LINGTAI_LABEL_PREFIX));
       await client.setLabels(issue, [...new Set([...foreign, ...labels])]);
     },
   };
@@ -106,14 +106,14 @@ export async function conductorPass(options: ConductOptions = {}): Promise<PassO
     return outcome;
   }
 
-  const hookBinary = options.hookBinary ?? resolve(root, "packages/hook/bin/esc-hook");
+  const hookBinary = options.hookBinary ?? resolve(root, "packages/hook/bin/lingtai-hook");
   try {
     await readFile(hookBinary);
   } catch {
     // A run that records nothing must not start. Refusing the pass rather than
     // the daemon: the projections stay current, which is what makes the reason
     // visible on the board.
-    outcome.refused.push({ project: "*", detail: `no esc-hook binary at ${hookBinary}` });
+    outcome.refused.push({ project: "*", detail: `no lingtai-hook binary at ${hookBinary}` });
     return outcome;
   }
 
@@ -165,7 +165,7 @@ export async function conductorPass(options: ConductOptions = {}): Promise<PassO
 
       // A hand-picked issue jumps the queue.
       //
-      // `esc now` used to append `RunRequested` and only *wake* the loop, which
+      // `lingtai now` used to append `RunRequested` and only *wake* the loop, which
       // then took whatever was at the top — so the command's name promised
       // something it did not do, and would have been wrong the moment the queue
       // held more than one item.

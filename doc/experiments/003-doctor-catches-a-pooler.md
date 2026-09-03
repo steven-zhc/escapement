@@ -1,4 +1,4 @@
-# 003 — Does `esc doctor` actually catch a transaction pooler?
+# 003 — Does `lingtai doctor` actually catch a transaction pooler?
 
 **Run** 2026-08-31, against the live database · **Result** yes, including the
 case the cheap check cannot see
@@ -6,7 +6,7 @@ case the cheap check cannot see
 ## Question
 
 [0009](../decisions/0009-two-connections.md) closes with a requirement rather
-than a claim: *`esc doctor` must assert the direct connection is genuinely
+than a claim: *`lingtai doctor` must assert the direct connection is genuinely
 session mode, by holding a listener open and notifying from a second connection.
 A check that only opens a connection would pass against a transaction pooler and
 prove nothing.*
@@ -17,7 +17,7 @@ pooler on purpose, and the doctor run.
 
 ## Method
 
-Two runs, both spawning `esc doctor` with `DIRECT_DATABASE_URL` overridden in the
+Two runs, both spawning `lingtai doctor` with `DIRECT_DATABASE_URL` overridden in the
 child's environment. The pooled URL is never printed; it is read through
 `databaseUrl()` and passed straight into the child.
 
@@ -70,7 +70,7 @@ The correctly configured run is 10 ok, 6 not implemented yet, 0 failed.
   session-level locks would be caught by an untested branch.
 - One pooler (Supavisor). PgBouncer, RDS Proxy and Neon's pooled endpoint are
   claimed to behave the same way by 0009 and are still not measured here.
-- The probe costs a fixed 1.5s pause on every `esc doctor` run. That is the pause
+- The probe costs a fixed 1.5s pause on every `lingtai doctor` run. That is the pause
   that makes it meaningful — a shorter one can be answered by the same backend
   that registered the `LISTEN` — but it is a real cost on a command intended to
   gate a restart.

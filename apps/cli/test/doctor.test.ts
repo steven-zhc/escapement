@@ -5,7 +5,7 @@
  * The last one does need it, and it is the one that matters — it is Phase 0's
  * exit criterion written as an assertion.
  */
-import { databaseUrl, directDatabaseUrl } from "@escapement/store";
+import { databaseUrl, directDatabaseUrl } from "@lingtai/store";
 import { describe, expect, it } from "vitest";
 import { formatReport, runDoctor } from "../src/doctor.ts";
 
@@ -22,7 +22,7 @@ function find(results: { name: string }[], name: string) {
   return r!;
 }
 
-describe("esc doctor — environment", () => {
+describe("lingtai doctor — environment", () => {
   it("fails, and names which variable, when one is missing", async () => {
     const report = await runDoctor(env({ DATABASE_URL: POOLED }));
     const e = find(report.results, "environment");
@@ -53,7 +53,7 @@ describe("esc doctor — environment", () => {
   /**
    * The cheap half of the 0009 check. The expensive half — holding a listener
    * open and notifying from a second connection — cannot run without a database,
-   * and is exercised in `esc doctor` itself against the real one.
+   * and is exercised in `lingtai doctor` itself against the real one.
    */
   it("fails when the direct URL still carries pgbouncer=true", async () => {
     const report = await runDoctor(
@@ -79,7 +79,7 @@ describe("esc doctor — environment", () => {
   });
 });
 
-describe("esc doctor — the runtime's own login", () => {
+describe("lingtai doctor — the runtime's own login", () => {
   /**
    * The check exists because the operator being signed in says nothing about
    * whether a *run* can sign in. A run's environment is filtered, and the first
@@ -107,7 +107,7 @@ describe("esc doctor — the runtime's own login", () => {
   }, 60_000);
 });
 
-describe("esc doctor — reporting", () => {
+describe("lingtai doctor — reporting", () => {
   it("lists the checks that cannot run yet, rather than omitting them", async () => {
     // With no GITHUB_APP_ID in this environment, the credentials check is itself
     // a skip rather than a failure — not being onboarded is a legitimate state.
@@ -137,9 +137,9 @@ describe("esc doctor — reporting", () => {
   });
 });
 
-describe("esc doctor — against the real database", () => {
+describe("lingtai doctor — against the real database", () => {
   /**
-   * Phase 0's exit criterion, as an assertion: *`esc doctor` is green*.
+   * Phase 0's exit criterion, as an assertion: *`lingtai doctor` is green*.
    *
    * "Green" means nothing failed. The six deferred checks are skips, and they
    * stay visible in the output.

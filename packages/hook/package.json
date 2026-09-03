@@ -1,13 +1,13 @@
 {
-  "name": "@escapement/hook",
+  "name": "@lingtai/hook",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/esc-hook.ts"
+    ".": "./src/lingtai-hook.ts"
   },
   "scripts": {
-    "build": "bun build --compile --minify --outfile bin/esc-hook src/esc-hook.ts",
+    "build": "bun build --compile --minify --outfile bin/lingtai-hook src/lingtai-hook.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },

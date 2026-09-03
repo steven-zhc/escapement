@@ -4,7 +4,7 @@
  * That location is the point. `settings.json` inside the repository would be a
  * file the agent can edit, and an agent that can edit its own hook configuration
  * has no hook configuration. Claude Code takes `--settings <path>`, so the file
- * lives beside the socket in Escapement's own state directory, and the worktree
+ * lives beside the socket in Lingtai's own state directory, and the worktree
  * never contains it.
  *
  * What is rendered is the five hooks both runtimes have plus Claude Code's extra
@@ -21,7 +21,7 @@ import { stateDir } from "./worktree.ts";
 /**
  * The four both runtimes have, then Claude Code's extras.
  *
- * `PreToolUse` was here and is not any more. Escapement refuses no tool call
+ * `PreToolUse` was here and is not any more. Lingtai refuses no tool call
  * (ADR 0016 §6), so it had no job left — and it was the only hook on the hot
  * path, one round trip per tool call against a 20ms budget of which process
  * startup alone was 17ms ([ADR 0011](../../../doc/decisions/0011-hook-latency-is-runtime-startup.md)).
@@ -62,7 +62,7 @@ export const SUN_PATH_MAX = 104;
  */
 export function socketPathFor(runId: string, home = stateDir()): string {
   const short = createHash("sha256").update(`${home}\u0000${runId}`).digest("hex").slice(0, 12);
-  const path = join(tmpdir(), "escapement", `${short}.sock`);
+  const path = join(tmpdir(), "lingtai", `${short}.sock`);
 
   if (Buffer.byteLength(path) >= SUN_PATH_MAX) {
     // Say which limit and how far over. `EINVAL` on its own costs an hour.
@@ -80,7 +80,7 @@ export function settingsPathFor(runId: string, home = stateDir()): string {
 
 export interface RenderOptions {
   runId: string;
-  /** Absolute path to the compiled `esc-hook`. */
+  /** Absolute path to the compiled `lingtai-hook`. */
   hookBinary: string;
   home?: string;
   /** Claude Code's extras. Off for a runtime that does not have them. */
@@ -104,7 +104,7 @@ export function renderSettings(options: RenderOptions): unknown {
   // here costs nothing and removes the whole class.
   const command = options.hookBinary;
   if (!isAbsolute(command)) {
-    throw new Error(`esc-hook path must be absolute, got: ${command}`);
+    throw new Error(`lingtai-hook path must be absolute, got: ${command}`);
   }
   const entry = () => [{ matcher: "*", hooks: [{ type: "command", command }] }];
 
@@ -173,7 +173,7 @@ export async function smokeTestFailClosed(
   return {
     ok: false,
     detail:
-      `esc-hook exited ${code} with no conductor listening — it must exit 2. ` +
+      `lingtai-hook exited ${code} with no conductor listening — it must exit 2. ` +
       "A recorder that fails open silently is worse than one that stops: the run " +
       "continues and produces no events, and in a system whose whole claim is that " +
       "the log is the answer, that is the failure with no symptom.",

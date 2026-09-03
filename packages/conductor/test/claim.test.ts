@@ -5,8 +5,8 @@
  * worth proving are the ones a lock file could not give: **two claimants racing
  * produce exactly one winner**, and **an expired lease needs no cleanup**.
  */
-import { directDatabaseUrl } from "@escapement/env";
-import { createDb, createEventStore, type Db, type EventStore } from "@escapement/store";
+import { directDatabaseUrl } from "@lingtai/env";
+import { createDb, createEventStore, type Db, type EventStore } from "@lingtai/store";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { claimWorkItem, releaseWorkItem } from "../src/index.ts";
@@ -53,10 +53,10 @@ afterAll(async () => {
   const c = new pg.Client({ connectionString: directDatabaseUrl() });
   await c.connect();
   try {
-    await c.query("alter table events disable rule escapement_events_no_delete");
+    await c.query("alter table events disable rule lingtai_events_no_delete");
     await c.query("delete from events where stream_id = any($1::text[])", [[...created]]);
   } finally {
-    await c.query("alter table events enable rule escapement_events_no_delete");
+    await c.query("alter table events enable rule lingtai_events_no_delete");
     await c.end();
   }
 });
