@@ -6,15 +6,39 @@
  * repository on an hourly cycle, and the two must never both claim a ticket.
  * Nominating by number is the safety rule, not a limitation of the plumbing.
  */
-import { currentRecipe, loadProject, runOnce, runQueue } from "@lingtai/conductor";
+import { currentRecipe, loadProject, runOnce, runQueue, tallyPass } from "@lingtai/conductor";
 import { githubApp, hasGitHubApp } from "@lingtai/env";
 import { createGitHubClient } from "@lingtai/github";
 import { createClaudeCodeRuntime } from "@lingtai/runtime";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { catchUpProjections } from "./projections.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+/**
+ * Leaves the board current on the way out.
+ *
+ * A run appends and returns; the follower lives in the daemon. Without this the
+ * command writes a correct log and leaves `task_view` — the only thing the
+ * board reads — exactly where it was, which is how nine runs went past with
+ * nothing moving on screen and `lingtai projection lag` answering *no
+ * projection has a checkpoint yet*.
+ *
+ * Reported and never fatal. The log is what is authoritative, and a board that
+ * could not be advanced is a thing to say out loud rather than a reason to lose
+ * the run's own answer. The next daemon catches up from the checkpoint anyway.
+ */
+async function advanceBoard(log: (line: string) => void): Promise<void> {
+  try {
+    const lags = await catchUpProjections();
+    log(`board current — ${lags.map((l) => `${l.name} ${l.lastSeq}/${l.headSeq}`).join(", ")}`);
+  } catch (err) {
+    log(`could not advance the projections: ${(err as Error).message}`);
+    log("the log is intact; the board is behind until a daemon runs — lingtai daemon --no-conduct");
+  }
+}
 
 export interface RunOptions {
   project: string;
@@ -110,12 +134,17 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
       ...(options.max === undefined ? {} : { max: options.max }),
     });
 
-    const landed = outcome.ran.filter((r) => r.ok === true).length;
-    const held = outcome.ran.filter((r) => r.ok === "held").length;
-    const stopped = outcome.ran.length - landed - held;
+    await advanceBoard(log);
+
+    // Read back, not counted up. An item this pass held and somebody approved
+    // while the pass carried on has landed, and the log says so — see
+    // `tallyPass`. Counting the merges this process performed printed
+    // `0 landed` over a merge that had happened, and exited 1 on the count.
+    const { landed, held, stopped } = await tallyPass(outcome.ran);
     log(`${outcome.ran.length} run(s): ${landed} landed, ${held} held, ${stopped} stopped (${outcome.stopped})`);
     // Exit 0 unless something actually went wrong. An empty queue is not a
-    // failure, and neither is a bounded run reaching its bound.
+    // failure, neither is a bounded run reaching its bound, and neither is an
+    // item waiting on a person.
     return stopped > 0 ? 1 : 0;
   }
 
@@ -127,6 +156,9 @@ export async function run(options: RunOptions, log = console.log): Promise<numbe
     // the only place that has the title and the body.
     prompt,
   });
+
+  // One issue leaves the board just as blind as a queue does.
+  await advanceBoard(log);
 
   if (result.ok === true) {
     log(`landed ${result.mergeCommit.slice(0, 7)} — ${result.workItemId}`);

@@ -85,6 +85,8 @@ export {
 export { renderPrompt, runOnce, type RunOnceOptions, type RunOnceResult } from "./run-once.ts";
 export {
   runQueue,
+  tallyPass,
+  type PassTally,
   type ScheduleOptions,
   type ScheduleResult,
   type StoppedBecause,

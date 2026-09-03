@@ -15,10 +15,8 @@ import {
   databaseUrl,
   directDatabaseUrl,
   projectionLag,
-  type Projection,
 } from "@lingtai/store";
 import type { Tier } from "@lingtai/core";
-import { outboxProjection, taskViewProjection } from "@lingtai/conductor";
 import {
   HEARTBEAT_MS,
   beat,
@@ -38,14 +36,9 @@ import { conductorPass, deliverer } from "./conduct.ts";
 import { add } from "./add.ts";
 import { approveCommand } from "./approve.ts";
 import { formatReport, runDoctor } from "./doctor.ts";
+import { PROJECTIONS } from "./projections.ts";
 import { run as runOnceCommand } from "./run.ts";
 import { status } from "./status.ts";
-
-/** Every projection the runner knows how to advance, by `checkpoints.name`. */
-const PROJECTIONS: Record<string, Projection> = {
-  [taskViewProjection.name]: taskViewProjection,
-  [outboxProjection.name]: outboxProjection,
-};
 
 const USAGE = `lingtai — event-sourced scheduler for autonomous code agents
 

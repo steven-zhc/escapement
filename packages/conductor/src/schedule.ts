@@ -32,8 +32,8 @@
  */
 import type { GitHubClient } from "@lingtai/github";
 import type { Runtime } from "@lingtai/runtime";
-import type { EventStore } from "@lingtai/store";
-import type { ProjectState } from "@lingtai/core";
+import { type EventStore, eventStore } from "@lingtai/store";
+import { type ProjectState, reduceWorkItem } from "@lingtai/core";
 import { readRunnable } from "./task-view.ts";
 import { type RunOnceResult, runOnce } from "./run-once.ts";
 import type { TokenSource } from "./worktree.ts";
@@ -162,4 +162,62 @@ export async function runQueue(options: ScheduleOptions): Promise<ScheduleResult
     else if (result.ok === "held") log(`held at ${result.gate}`);
     else log(`stopped at ${result.stage}: ${result.detail}`);
   }
+}
+
+/**
+ * What the items a pass touched are now, rather than what the process did to
+ * them.
+ *
+ * The difference is not pedantry. On 2026-09-03 a whole-queue pass printed
+ * `9 run(s): 0 landed, 8 held, 1 stopped` and exited 1, while #154 — held at
+ * the merge gate, approved on the board *during* the pass, and merged by the
+ * integrate lane a few seconds later — had landed. Nothing was wrong with the
+ * log: `IntegrationSucceeded` and `WorkItemLanded` are both in it. The summary
+ * counted merges this process performed, and that is a smaller thing than the
+ * state of the work.
+ *
+ * So the counts are read back from the work item's own stream, where the
+ * lifecycle already is:
+ *
+ *   landed   `WorkItemLanded` — by this run or by anyone else, since
+ *   held     `WorkItemBlocked` — a question a person now holds
+ *   stopped  neither: released back into the queue, or never claimed at all
+ *
+ * A run that held at a gate and a run that a merge conflict blocked both end
+ * `blocked` and both count as held, which is what the board says about them
+ * too. "Stopped" is left meaning what it should: it ended, nothing landed, and
+ * nobody was asked anything.
+ */
+export interface PassTally {
+  landed: number;
+  held: number;
+  stopped: number;
+}
+
+export async function tallyPass(
+  ran: readonly RunOnceResult[],
+  store: EventStore = eventStore,
+): Promise<PassTally> {
+  const tally: PassTally = { landed: 0, held: 0, stopped: 0 };
+
+  for (const result of ran) {
+    // A refusal before anything was claimed — an unreadable recipe — has no
+    // stream to read. It stopped, and there is nowhere else to check.
+    const events = result.workItemId ? await store.read(result.workItemId).catch(() => null) : null;
+    if (events === null) {
+      // Either no work item, or the log could not be read. Fall back to what
+      // this process saw rather than lose the summary to a failing read.
+      if (result.ok === true) tally.landed += 1;
+      else if (result.ok === "held") tally.held += 1;
+      else tally.stopped += 1;
+      continue;
+    }
+
+    const status = reduceWorkItem(events).lifecycle.status;
+    if (status === "landed") tally.landed += 1;
+    else if (status === "blocked") tally.held += 1;
+    else tally.stopped += 1;
+  }
+
+  return tally;
 }

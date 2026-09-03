@@ -101,6 +101,13 @@ and possible only because no projection reads the clock.
 **The daemon advances them.** `lingtai daemon` holds one advisory lock and follows
 the log; there is no timer, because Postgres notifies on every append.
 
+**`lingtai run` catches them up on its way out.** A command that appends and
+returns would otherwise leave the board exactly where it was — a correct log
+and a screen showing nothing moving, which is what nine runs by hand looked
+like. It is not a second follower: it advances each projection to the head and
+stops. The board is therefore right the moment the command returns, and stale
+only *during* the run. Being current *throughout* is what the daemon is for.
+
 ### Lingtai's own words
 
 | Term | What it is |
@@ -851,6 +858,19 @@ A pass will not attempt the same work item twice, even though a failed run
 releases it back into the queue — that is what stops a broken ticket from
 costing an agent call per lap. It stops with `exhausted` rather than `empty`
 when work remains that it has already tried, because those are different facts.
+
+The line it prints at the end is read back from the log, not counted up from
+what the process did:
+
+```
+9 run(s): 1 landed, 7 held, 1 stopped (empty)
+```
+
+**landed** the work item's stream says `WorkItemLanded` — by this run, or by
+the merge lane after somebody approved it on the board while the pass carried
+on. **held** it is blocked on a question a person now holds. **stopped** it
+ended, nothing landed, and nobody was asked anything. The exit code is non-zero
+only for that last count.
 
 ### When something refuses
 
