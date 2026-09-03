@@ -1,6 +1,6 @@
 # Roadmap
 
-Six phases. Each has an **exit criterion** that is a fact, not a feeling — if it
+Seven phases. Each has an **exit criterion** that is a fact, not a feeling — if it
 cannot be demonstrated, the phase is not done.
 
 Two sequencing constraints drive the whole shape:
@@ -9,7 +9,7 @@ Two sequencing constraints drive the whole shape:
    proves the machinery on one ticket under supervision; it does not replace
    anything. The old loop is retired only when Lingtai has done its job
    unattended for a week.
-2. **Lingtai manages itself from Phase 3, not before.** Self-hosting is a
+2. **Lingtai manages itself from Phase 4, not before.** Self-hosting is a
    test of the system, so it needs a system that has already passed a real one.
 
 | | Phase | Exit criterion |
@@ -17,9 +17,10 @@ Two sequencing constraints drive the whole shape:
 | 0 | System scaffold | An event round-trips through Postgres and a projection rebuilds from the log · **done** |
 | 1 | Minimum runnable unit | One real admin ticket goes discovery → merge with `lingtai run --once`, supervised · **done 2026-09-01** |
 | 2 | Take over admin | Lingtai works admin unattended for a week; `agent-loop.sh` is retired |
-| 3 | Self-hosting | Lingtai lands a change to its own repository, through its own gates |
-| 4 | Multi-project | A second repository runs with no code change, only a descriptor |
-| 5 | Feedback loop | A gate change is evaluated by replay against history before it ships |
+| 3 | The settled model | Five gate points, no policy, no guard; the loop still closes unattended · **done 2026-09-02** |
+| 4 | Self-hosting | Lingtai lands a change to its own repository, through its own gates |
+| 5 | Multi-project | A second repository runs with no code change, only a descriptor |
+| 6 | Feedback loop | A gate change is evaluated by replay against history before it ships |
 
 ---
 
@@ -267,9 +268,13 @@ runs, and the comparison is what decides whether it ships.
 ## Backlog
 
 Thirty-five issues, created in dependency order so each one references the
-real number of what it needs. Phases 4 and 5 are single epics on purpose —
-their shape depends on what Phases 1–3 teach, and pre-writing tickets that
+real number of what it needs. Phases 5 and 6 are single epics on purpose —
+their shape depends on what Phases 1–4 teach, and pre-writing tickets that
 will be rewritten is exactly the noise this system exists to remove.
+
+**Phase 3 has no tickets.** The settled model was worked as 3a–3f against
+[0016](decisions/0016-the-settled-model.md) directly, in this repository, without
+issues — which is why the numbering below skips from Phase 2 to Phase 4.
 
 Milestones on GitHub match the phases here.
 
@@ -318,26 +323,26 @@ Milestones on GitHub match the phases here.
 | [#28](https://github.com/steven-zhc/lingtai/issues/28) | GitHub: webhook receiver for issues and push |
 | [#29](https://github.com/steven-zhc/lingtai/issues/29) | Retire `agent-loop.sh` |
 
-**Phase 3 — Self-hosting**
+**Phase 4 — Self-hosting**
 
 | | |
 |---|---|
-| [#30](https://github.com/steven-zhc/lingtai/issues/30) | Self-hosting: Lingtai's own recipe and its strictest policy |
+| [#30](https://github.com/steven-zhc/lingtai/issues/30) | Self-hosting: Lingtai's own recipe, and the strictest one in the system |
 | [#31](https://github.com/steven-zhc/lingtai/issues/31) | Self-hosting: tamper must cover Lingtai's own source |
 | [#32](https://github.com/steven-zhc/lingtai/issues/32) | Self-hosting: never restart into unverified code |
 | [#33](https://github.com/steven-zhc/lingtai/issues/33) | Self-hosting: the first self-hosted change, supervised |
 
-**Phase 4 — Multi-project**
+**Phase 5 — Multi-project**
 
 | | |
 |---|---|
-| [#34](https://github.com/steven-zhc/lingtai/issues/34) | Phase 4 — multi-project, Codex, concurrency, sandboxed tier |
+| [#34](https://github.com/steven-zhc/lingtai/issues/34) | Phase 5 — multi-project, Codex, concurrency, sandboxed tier |
 
-**Phase 5 — Feedback loop**
+**Phase 6 — Feedback loop**
 
 | | |
 |---|---|
-| [#35](https://github.com/steven-zhc/lingtai/issues/35) | Phase 5 — replay, regression feedback, receipts and guard tuning |
+| [#35](https://github.com/steven-zhc/lingtai/issues/35) | Phase 6 — replay, regression feedback and receipts |
 
 ---
 
