@@ -32,6 +32,7 @@ Three kinds of thing live here, and the distinction matters.
 | [0017](decisions/0017-the-project-is-called-lingtai.md) | The project is called Lingtai | accepted |
 | [0018](decisions/0018-the-proposed-point.md) | The gate point called `diff` is called `proposed` | accepted |
 | [0019](decisions/0019-a-second-reset.md) | The log is reset a second time, and what makes it the last | accepted |
+| [0020](decisions/0020-the-agent-environment-in-layers.md) | The agent's environment comes from three named layers | accepted |
 
 ## Experiments
 
