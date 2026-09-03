@@ -847,7 +847,7 @@ Every refusal names itself. The common ones:
 | `no lingtai-hook binary at …` | `pnpm --filter @lingtai/hook build`. A run without the guard must not start. |
 | `ENOENT … lingtai-app.pem` | The key path is wrong. `~` and relative paths both work; relative is from this repository's root. |
 | `stopped at recipe: …` | The recipe did not parse, or names an action this build does not have. The message is the validation failure. |
-| `stopped at discover: owned-by-another-agent` | That issue carries an `agent:*` label. Pick one the old loop has not touched. |
+| `stopped at discover: excluded-label` | That issue carries a label the recipe's `source.exclude` names. Every reason an issue is passed over is the recipe's — there is no built-in list. |
 | `stopped at prepare: the install action refused` | An action at the `prepared` point refused — usually dependencies that did not install in a fresh worktree. Nothing expensive ran; that is the point of failing here. |
 | `did not merge (stale): the card showed …` | The branch moved between reading and deciding. Reload and read it again. |
 | `a waiver needs a reason` | A waiver records who and why. Both, always. |

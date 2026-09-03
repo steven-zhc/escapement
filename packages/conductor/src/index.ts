@@ -9,7 +9,6 @@ export {
 } from "./claim.ts";
 export {
   considerIssue,
-  FOREIGN_LABEL_PREFIX,
   kindOf,
   refreshQueue,
   workItemStream,

@@ -149,7 +149,21 @@ export const Recipe = z.object({
   source: z.object({
     /** Also the priority order: earlier wins. */
     kinds: z.array(WorkKind).min(1),
-    /** Labels of yours that must keep the agent off a ticket. */
+    /**
+     * Labels of yours that must keep the agent off a ticket, matched
+     * case-insensitively by whole name.
+     *
+     * **This is the only reason an issue is passed over for its labels.** There
+     * was a rule in `discover.ts` too, skipping anything labelled `agent:*` as
+     * belonging to another system; it is gone. A namespace is not a meaning —
+     * `agent:hold` and `agent:followup` share a prefix and mean opposite
+     * things — and which of a repository's labels are holds is a fact that
+     * repository has and this schema does not.
+     *
+     * Whole names rather than patterns, deliberately: `agent:*` would have to
+     * be spelled with an exception for the one label in it that means "ready",
+     * and an exclude list with negation in it is a small language. List them.
+     */
     exclude: z.array(z.string()).default([]),
   }),
 

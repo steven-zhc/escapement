@@ -29,12 +29,6 @@ export function workItemStream(project: string, externalRef: string | number): s
   return `wi-${project}-${externalRef}`;
 }
 
-/**
- * The namespace the old loop writes its state into. Any label in it means that
- * issue is already owned by something else.
- */
-export const FOREIGN_LABEL_PREFIX = "agent:";
-
 const KINDS = new Set<string>(WorkKindSchema.options);
 
 /**
@@ -57,7 +51,6 @@ export type SkipReason =
   | "no-kind"
   | "kind-not-wanted"
   | "excluded-label"
-  | "owned-by-another-agent"
   | "already-discovered";
 
 export interface Considered {
@@ -77,9 +70,17 @@ export function considerIssue(issue: Issue, recipe: Recipe): Considered {
 
   const labels = issue.labels.map((l) => l.toLowerCase());
 
-  if (labels.some((l) => l.startsWith(FOREIGN_LABEL_PREFIX))) {
-    return { issue, skip: "owned-by-another-agent" };
-  }
+  // Every reason an issue is not this agent's comes from the recipe. There used
+  // to be one more, hardcoded here: any label starting `agent:` meant the issue
+  // was owned by the old shell loop, and Lingtai skipped it. That was a guess
+  // about a namespace, made in the core, about a repository it cannot see —
+  // exactly the shape of thing 0016 §7 removed everywhere else.
+  //
+  // It was also wrong in the direction that costs the most. `agent:followup`
+  // means "an agent opened this as out-of-scope work" — ready work, 24 issues
+  // of it in `nextloom-ai-admin` — and it was skipped alongside `agent:hold`,
+  // which means the opposite. A repository knows which of its labels are holds;
+  // this file cannot.
   const excluded = new Set(recipe.source.exclude.map((l) => l.toLowerCase()));
   if (labels.some((l) => excluded.has(l))) return { issue, skip: "excluded-label" };
 

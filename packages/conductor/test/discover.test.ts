@@ -16,7 +16,7 @@ import { considerIssue, kindOf, refreshQueue, workItemStream } from "../src/inde
 const recipe = {
   version: 1,
   repo: { base: "develop", submodules: false },
-  source: { kinds: ["bug", "feature"], exclude: ["blocked", "needs-design"] },
+  source: { kinds: ["bug", "feature"], exclude: ["blocked", "needs-design", "agent:wip", "agent:review"] },
   env: { allow: [], plantAt: ".env.local" },
   gates: { admit: [], prepared: [], proposed: [{ name: "build", run: "pnpm verify", timeout: "15m" }], merge: [], end: [] },
   runtime: { agent: "claude-code", limits: { turns: 300, wall: "2h" } },
@@ -51,17 +51,24 @@ describe("considerIssue", () => {
   });
 
   /**
-   * The Phase 1 safety rule. `agent-loop.sh` is still working this repository on
-   * an hourly cycle and writes its state into the `agent:*` namespace; the two
-   * systems must never both claim a ticket.
+   * Another system's labels are refused *because the recipe says so*, not
+   * because this file knows what `agent:` means. There used to be a hardcoded
+   * rule here skipping the whole namespace, and it took `agent:followup` —
+   * ready work an agent had filed — down with `agent:wip`.
    */
-  it("refuses anything the old loop has touched", () => {
+  it("refuses another system's labels when the recipe names them", () => {
     expect(considerIssue(issue({ number: 2, labels: ["bug", "agent:wip"] }), recipe).skip).toBe(
-      "owned-by-another-agent",
+      "excluded-label",
     );
     expect(considerIssue(issue({ number: 3, labels: ["bug", "agent:review"] }), recipe).skip).toBe(
-      "owned-by-another-agent",
+      "excluded-label",
     );
+  });
+
+  it("takes a label in that namespace the recipe did not name", () => {
+    // `agent:followup` is not in the exclude list, so it is ordinary work. The
+    // old rule would have skipped it for its prefix alone.
+    expect(considerIssue(issue({ number: 5, labels: ["bug", "agent:followup"] }), recipe).skip).toBeNull();
   });
 
   it("honours the recipe's own exclude list", () => {
@@ -182,7 +189,7 @@ describe("refreshQueue", () => {
     expect(result.runnable.map((r) => r.ref)).toEqual(["101", "102"]);
     expect(result.runnable[0]).toEqual({ ref: "101", title: "a race in the importer", kind: "bug" });
     expect(result.skipped).toEqual([
-      { ref: 103, reason: "owned-by-another-agent" },
+      { ref: 103, reason: "excluded-label" },
       { ref: 104, reason: "no-kind" },
     ]);
     expect(synced).toHaveLength(1);
