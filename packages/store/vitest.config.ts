@@ -10,5 +10,10 @@ export default defineConfig({
     // One file at a time: they share one `events` table, and the cleanup hook
     // toggles a table-level rule.
     fileParallelism: false,
+    // Removes this run's throwaway `esctest*` projects from the test log. Without
+    // it the residue outlives the run, and `lingtai doctor`'s own test — which
+    // asserts the whole database is green — fails on rows an earlier package's
+    // tests left behind. See the file for what that looked like.
+    globalSetup: ["./test-support/teardown.ts"],
   },
 });

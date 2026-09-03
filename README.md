@@ -339,6 +339,7 @@ never reported by anything at all.
 | | |
 |---|---|
 | `packages/core` | Event catalogue, upcasters and aggregate reducers. Zero I/O, so it tests without a database. |
+| `packages/env` | Where configuration values come from, for everything else. |
 | `packages/store` | The Postgres event store: append, read, subscribe, and the projection runner. Prisma 8 for reads and writes, `pg` for `LISTEN/NOTIFY`. |
 | `packages/config` | The recipe schema, the presets, and the watch globs a recipe compiles to. |
 | `packages/github` | The App: JWT, installation tokens, and a **read-only** client. Writes go through git. |
