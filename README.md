@@ -677,8 +677,26 @@ slug and a branch and nothing more.
 ### 3. Check it
 
 ```bash
-pnpm lingtai status nextloom-ai-admin   # what is runnable, and what is holding the rest
+pnpm lingtai status nextloom-ai-admin              # what is runnable, and what is holding the rest
+pnpm lingtai status nextloom-ai-admin --refresh    # ask GitHub first
 ```
+
+Without `--refresh` this answers from the queue projection, which nothing writes
+to until a run or the daemon has taken a pass — so on a freshly registered
+project it says `queue: empty` however much work GitHub is offering. `--refresh`
+asks GitHub, writes the queue, and reports **what it passed over and why**:
+
+```
+nextloom-ai-admin  base=develop
+  from GitHub: 9 runnable, 29 passed over — excluded-label 29
+  queue: 9 runnable
+    #154   bug         [Bug] The resolve-aliases destination search has no request sequencing…
+    #110   enhancement [Enhancement] /users still prints async job ids to copy…
+```
+
+It takes nothing, claims nothing and appends no event — the whole of what it
+does is make the answer current. The absences are the half worth having: an
+issue nobody is working on has a reason, and that reason is the recipe's.
 
 Onboarding is done. How you actually run work is next.
 
