@@ -68,7 +68,6 @@ const USAGE = `lingtai — event-sourced scheduler for autonomous code agents
   lingtai pause <why>               stop taking new work; a run in flight finishes
   lingtai resume                    take work again
   lingtai now <project> --issue <n> ask for one ahead of the queue
-  lingtai projection run            the same thing, kept as an alias
   lingtai projection lag            how far each projection is behind the log
   lingtai projection rebuild <name> drop the table, reset the checkpoint, replay
   lingtai help
@@ -178,9 +177,18 @@ async function projectionCommand(args: string[]): Promise<number> {
     }
   }
 
-  // Kept as an alias: following projections is what the daemon does, and two
-  // ways to say it is one more than the number of things it is.
-  if (sub === "run") return daemonCommand();
+  // Gone, and answered by name rather than by falling through to the usage.
+  //
+  // It was an alias for `lingtai daemon`, and that is exactly what made it
+  // confusing: it read as a third way to advance projections, next to the
+  // one-shot `catchUpProjections` a command does on its way out and the
+  // daemon's long-lived follower, when it was only ever the second one wearing
+  // another name. Two names for one process is how "why is the board stale"
+  // gets a different answer depending on which name you happened to learn.
+  if (sub === "run") {
+    console.error("lingtai projection run is gone — it was another name for lingtai daemon, which is the process that follows the projections. Use that.");
+    return 2;
+  }
 
   console.error(USAGE);
   return 2;
