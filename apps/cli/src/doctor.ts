@@ -16,10 +16,11 @@
  * transient signal and touches no table.
  *
  * **A check that cannot run yet says so.** The checks for the recipe, the
- * repository, the environment allowlist, the hook and GitHub all depend on
- * Phase 1 code that does not exist. They are listed as `skip` with the issue
- * that will fill them in, rather than omitted — a check you cannot see is a
- * check you will forget you never had.
+ * repository, the environment allowlist, the hook and GitHub are listed as
+ * `skip` rather than omitted — a check you cannot see is a check you will
+ * forget you never had. Each carries the reason it is not a startup check,
+ * which is a fact about the design and not about what happened to be installed
+ * the day it was written: see `DEFERRED`.
  */
 import { deadOutbox, pendingOutbox, runnableEnv } from "@lingtai/conductor";
 import { isEventType } from "@lingtai/core";
@@ -50,9 +51,10 @@ export interface CheckResult {
   /** What it found — never just a tick. */
   detail: string;
   /**
-   * True for a check that is *not implemented yet*, as opposed to one skipped
-   * because something earlier failed. Every one of these names the issue that
-   * will fill it in; a skip with no forward pointer is a skip nobody chases.
+   * True for a check that is *not implemented here*, as opposed to one skipped
+   * because something earlier failed. Its detail says why — in terms of the
+   * design, naming where the property is proved instead, so that the reason
+   * cannot go stale. See `DEFERRED`.
    */
   deferred?: boolean;
 }
@@ -461,17 +463,56 @@ function githubCredentials(env: NodeJS.ProcessEnv): CheckResult {
   }
 }
 
+/**
+ * The checks that are listed but not run, each with the reason it is not one.
+ *
+ * These details are literals, and a literal cannot re-read the world: whatever
+ * one asserts about this installation goes on being asserted long after it
+ * stops being true. Two of them said no project was onboarded while two were,
+ * and a reader who took that at face value went and re-ran `lingtai add`.
+ *
+ * So the rule, enforced by a test rather than remembered: **a deferred detail
+ * says why the check is not a startup check — of the design, and where the
+ * property is proved instead — and claims nothing about the state of this
+ * machine.** State worth reporting is a check that reads it, next to the ones
+ * above. Issue numbers are the same trap one step removed, because an issue
+ * closes; a reason that stands on its own does not carry one.
+ */
 const DEFERRED: { name: string; detail: string }[] = [
-  { name: "recipe: schema", detail: "no project is onboarded yet — run lingtai add <owner>/<repo> (#9)" },
-  { name: "repository, base branch, submodules", detail: "needs a registered project and its worktree (#10)" },
-  { name: "environment allowlist and production tripwire", detail: "needs the recipe's env block (#8)" },
+  {
+    name: "recipe: schema",
+    detail:
+      "a recipe governs one project and is read from origin/<base> through the API as a run starts; " +
+      "resolveRecipe validates it there and refuses the run when it does not parse, so a copy read " +
+      "here would be a different commit's (doc/decisions/0005-config-in-target-repo.md)",
+  },
+  {
+    name: "repository, base branch, submodules",
+    detail:
+      "only a clone settles these: every run cuts its branch from origin/<base> in the mirror and " +
+      "initialises submodules from it, and stops there when it cannot. Doctor reads — it does not " +
+      "fetch, clone or check out",
+  },
+  {
+    name: "environment allowlist and production tripwire",
+    detail:
+      "the allowlist is the recipe's, and filterEnv applies it as a run's env file is planted — a " +
+      "value whose host looks like production raises ProductionValueError at that moment, before an " +
+      "agent could hold it. Startup holds no recipe and plants no file",
+  },
   {
     name: "hook: fail closed",
     detail:
       "every run proves it immediately before dispatching, which is the check that matters; " +
       "proving it once at daemon startup as well would only surface a missing binary earlier (#48)",
   },
-  { name: "github: installation and labels", detail: "per repository, and no project is registered yet — lingtai add checks it (#9)" },
+  {
+    name: "github: installation and labels",
+    detail:
+      "per repository: lingtai add checks the App's permissions before it records anything, so the " +
+      "gap a startup check would look for stops the one command that can act on it. Labels are " +
+      "written out by the github_mirror projection and never read back, so there is no drift to find",
+  },
 ];
 
 export interface DoctorReport {

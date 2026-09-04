@@ -119,14 +119,31 @@ describe("lingtai doctor — reporting", () => {
     // A check you cannot see is a check you will forget you never had.
     expect(skipped).toContain("hook: fail closed");
     expect(skipped).toContain("github: installation and labels");
-    // Every check that is *not implemented yet* names the issue that will fill
-    // it in. A skip with no forward pointer is a skip nobody chases — and this
-    // is asserted on the deferred flag rather than on "skip", because a check
-    // skipped for a reason (the environment failed first) is a different thing.
+  });
+
+  /**
+   * The reason is the whole value of a skip, and a deferred reason is a literal
+   * — it cannot re-read the world. Two of them said no project was onboarded
+   * while two were, and sent a reader off to re-run `lingtai add`.
+   *
+   * So a deferred detail may say why the check is not a startup check, and may
+   * not describe the state of the installation it is running in. Asserted on
+   * the `deferred` flag rather than on "skip", because a check skipped for a
+   * reason (the environment failed first) is a different thing: that one is
+   * *about* the state of this run, and has to be.
+   */
+  it("gives deferred checks a reason that cannot go stale", async () => {
+    const report = await runDoctor(env({}));
     const deferred = report.results.filter((r) => r.deferred);
     expect(deferred.length).toBeGreaterThan(0);
+
+    // The vocabulary of "what is installed right now". A fixed sentence that
+    // reaches for one of these is claiming something it never looked at.
+    const stateOfTheMachine = /onboard|registered|not yet|no project|is empty/i;
     for (const r of deferred) {
-      expect(r.detail, `${r.name} does not name an issue`).toMatch(/#\d+/);
+      expect(r.detail, `${r.name} claims a fact about this installation`).not.toMatch(stateOfTheMachine);
+      // A reason, not a shrug.
+      expect(r.detail.length, `${r.name} gives no reason`).toBeGreaterThan(40);
     }
   });
 
