@@ -13,7 +13,8 @@
  *   prove the hook fails closed             before anything is dispatched
  *   RunStarted                              the conductor knows more than the hook
  *   run the agent                           on the socket, restricted by nothing
- *   the diff → `proposed` → integrate       each refusal typed and recorded
+ *   the diff → `proposed` → `merge`         each refusal typed and recorded
+ *   → integrate                             a point with actions always runs
  *
  * **Every exit appends.** A run that ends leaves either `RunFinished` or
  * `RunFailed`, and a work item that does not land is either released or blocked
@@ -22,7 +23,7 @@
  */
 import { type ResolvedRecipe, parseDuration } from "@lingtai/config";
 import { type Tier, parsePayload } from "@lingtai/core";
-import { gatesFromRecipe, runGatePipeline } from "@lingtai/gates";
+import { type PipelineResult, gatesFromRecipe, runGatePipeline } from "@lingtai/gates";
 import type { GitHubClient } from "@lingtai/github";
 import { type Runtime, missingForTier } from "@lingtai/runtime";
 import { type EventStore, eventStore } from "@lingtai/store";
@@ -60,8 +61,10 @@ export interface RunOnceOptions {
    * recorded, and asks a person for the merge.
    *
    * This is not a separate mechanism from the human gate (#20). It requests the
-   * same `ApprovalRequested` the recipe will request once that exists, which is
-   * what keeps it from becoming a second vocabulary for one idea. The hold is
+   * same `ApprovalRequested` a `human:` action at `merge` requests, which is
+   * what keeps it from becoming a second vocabulary for one idea. A recipe that
+   * declares nothing at `merge` still holds under the flag; one that declares a
+   * person there holds whether or not the flag was passed. The hold is
    * bound to `onSha` like any other verdict, so a force-push invalidates it by
    * arithmetic rather than by anyone remembering to.
    */
@@ -521,6 +524,44 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         cwd: worktree.path,
       });
 
+      // ---- 11. the `merge` point -------------------------------------------
+      // A pipeline like the two before it, at the point that decides whether
+      // this branch reaches the base branch at all.
+      //
+      // It was resolved into `GatesResolved`, printed by `lingtai add` and drawn
+      // on the board from the day a recipe could name it, and never built into a
+      // pipeline — so Lingtai's own `human:` action here watched two of its own
+      // changes merge with nobody's approval (#58). A control the log claims and
+      // the code does not have is worse than an unimplemented one, because every
+      // signal an operator has says it is there.
+      //
+      // In the worktree and before it is removed, since an action here runs
+      // commands like any other; after the push, so the branch it is judging
+      // exists on the remote.
+      //
+      // Only when `proposed` passed. A pipeline stops at the first refusal and
+      // so do the points: a change whose gates refused is not about to merge,
+      // and asking a person to approve one — or paying a reviewer to read it —
+      // is a question about a diff that is going nowhere. The refusal already
+      // on the log is the answer.
+      let atMerge: PipelineResult = { ok: true, failedAt: null, heldAt: null, results: [], skipped: [] };
+      if (pipeline.ok) {
+        atMerge = await runGatePipeline({
+          point: "merge",
+          gates: gatesFromRecipe(recipe.gates.merge, gateDeps),
+          context: { runId, onSha: headSha, cwd: worktree.path, env: runnableEnv(env.values) },
+          emit: async (event) => {
+            const at = (await store.read(runId)).length;
+            await store.append(runId, at, [
+              { type: event.type, actor: "conductor", data: event.data },
+            ]);
+          },
+        });
+        if (atMerge.results.length > 0) {
+          log(`merge: ${atMerge.results.map((r) => `${r.gate}=${r.verdict}`).join(" ")}`);
+        }
+      }
+
       // And then the worktree has done its job. It has to go *before* the
       // integrator runs: it holds `agent/<n>` checked out against the same
       // mirror, and git refuses to update a ref that some worktree has checked
@@ -528,29 +569,29 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       // end-to-end run fail.
       await removeWorktree({ project, runId, home }).catch(() => {});
 
-      // ---- 11. hold, if anything asked for a person -------------------------
-      // Two things can ask: a gate whose verdict is `needs-approval` — the
-      // human action, or a `watch` action that saw a migration — and the operator,
-      // with `--no-merge`.
+      // ---- 12. hold, if anything asked for a person -------------------------
+      // Three things can ask: a gate at `proposed` whose verdict is
+      // `needs-approval` — a `human` action, or a `watch` one that saw a
+      // migration — a gate at `merge`, and the operator, with `--no-merge`.
       //
       // **One path, deliberately.** #38 shipped `--no-merge` emitting
       // `ApprovalRequested` precisely so that when the human gate arrived they
-      // would not become two vocabularies for one idea. The gate has already
+      // would not become two vocabularies for one idea. A gate has already
       // emitted its own request through the pipeline; the flag emits one here.
-      // Everything after this point is identical either way.
+      // Everything after this point is identical whichever asked.
       //
       // The flag asks even when a gate refused. "The build is red, merge
       // anyway" is a decision a person is allowed to make — that is what a
       // waiver is for — and pre-empting it would make the flag mean something
       // different on a red run than on a green one.
-      if (pipeline.heldAt !== null || options.merge === false) {
-        // `heldAt` is an *action* name; the point it ran at is `proposed`. The
-        // operator's `--no-merge` is a hold at the `merge` point instead, and
-        // names itself as the action, so the two are told apart on the card.
-        const gate = pipeline.heldAt === null ? "merge" : "proposed";
-        const action = pipeline.heldAt ?? "no-merge";
+      if (pipeline.heldAt !== null || atMerge.heldAt !== null || options.merge === false) {
+        // `heldAt` is an *action* name; the point is the pipeline it came from.
+        // The operator's `--no-merge` is a hold at the `merge` point that names
+        // itself as the action, so a card tells it from a configured one.
+        const gate = pipeline.heldAt !== null ? "proposed" : "merge";
+        const action = pipeline.heldAt ?? atMerge.heldAt ?? "no-merge";
 
-        if (pipeline.heldAt === null) {
+        if (pipeline.heldAt === null && atMerge.heldAt === null) {
           const at = (await store.read(runId)).length;
           await store.append(runId, at, [
             {
@@ -561,9 +602,12 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
                 action,
                 runId,
                 onSha: headSha,
-                question: pipeline.ok
-                  ? `Merge ${branch} into ${base}? Every gate passed.`
-                  : `Merge ${branch} into ${base} anyway? The ${pipeline.failedAt} gate refused.`,
+                // Either point's refusal, since the flag asks on a red run
+                // too and the question has to say which colour it is.
+                question:
+                  pipeline.ok && atMerge.ok
+                    ? `Merge ${branch} into ${base}? Every gate passed.`
+                    : `Merge ${branch} into ${base} anyway? The ${pipeline.failedAt ?? atMerge.failedAt} gate refused.`,
                 artifacts: [`${branch}@${headSha}`],
               }),
             },
@@ -595,7 +639,10 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         return { ok: "held", workItemId, runId, headSha, gate };
       }
 
-      // ---- 12. the merge lane ---------------------------------------------
+      // ---- 13. the merge lane ---------------------------------------------
+      // Only one of the two can have refused — `merge` runs only when
+      // `proposed` passed — and the integrator records that one.
+      const refused = pipeline.failedAt !== null ? pipeline : atMerge;
       const merged = await integrate({
         project,
         owner: options.client.owner,
@@ -604,9 +651,9 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         branch,
         workItemId,
         headSha,
-        gatesPassed: pipeline.ok,
-        gateDetail: pipeline.failedAt
-          ? `${pipeline.failedAt}: ${pipeline.results.find((r) => r.gate === pipeline.failedAt)?.evidence ?? ""}`
+        gatesPassed: pipeline.ok && atMerge.ok,
+        gateDetail: refused.failedAt
+          ? `${refused.failedAt}: ${refused.results.find((r) => r.gate === refused.failedAt)?.evidence ?? ""}`
           : undefined,
         token: options.token,
         home,

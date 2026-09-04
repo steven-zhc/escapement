@@ -96,6 +96,18 @@ const CLOSING_RECIPE = RECIPE.replace(
 runtime: {`,
 );
 
+/**
+ * A person at `merge`, declared in the recipe and asked for by nothing else.
+ *
+ * Lingtai's own recipe has had exactly this since the day it was self-hosted.
+ */
+const HUMAN_MERGE_RECIPE = RECIPE.replace(
+  "runtime: {",
+  `  merge:
+    - { name: approval, human: "Merge this? It is Lingtai's own code." }
+runtime: {`,
+);
+
 /** A recipe whose only gate refuses, whatever the agent did. */
 const REFUSING_RECIPE = RECIPE.replace(
   'run: "test -f src/fix.ts"',
@@ -364,7 +376,7 @@ git add -A && git commit -q -m "fix the race"
       client: fakeClient({ recipe, getIssue: async () => ({ ...issue, number: 122 }) }),
     });
 
-    expect(result.ok).toBe(true);
+    expect(result.ok, JSON.stringify(result)).toBe(true);
 
     const events = await store.read(result.runId!);
     const types = events.map((e) => e.type);
@@ -409,9 +421,12 @@ git add -A && git commit -q -m "fix the race"
   }, 180_000);
 
   /**
-   * `--no-merge` is the only thing standing between a passing gate and a write
-   * to the base branch until the human gate exists (#20). It is also how rung 2
-   * of the ladder runs at all.
+   * The flag, on a recipe that declares nothing at `merge`.
+   *
+   * It is how rung 2 of the ladder runs at all, and it stays a hold of its own
+   * now that the point runs: a project with an empty `merge` still stops when
+   * an operator asks it to, and asks in the same vocabulary a configured action
+   * would.
    */
   it("holds after the gates instead of merging, and asks for approval", async () => {
     // Unique content. `develop` is shared across these tests and an earlier one
@@ -465,6 +480,79 @@ git add -A && git commit -q -m "fix the race"
 
     expect(approved.ok).toBe(true);
     if (!approved.ok) return;
+    expect((await g(["rev-parse", "develop"], originPath)).stdout).not.toBe(before.stdout);
+  }, 180_000);
+
+  /**
+   * #58, as an assertion. The recipe put a person at `merge`, `lingtai add`
+   * printed the point, `GatesResolved` recorded it and the board drew it — and
+   * the point had never been built into a pipeline, so two changes merged into
+   * `main` with nobody's approval.
+   *
+   * **Without `--no-merge`, deliberately.** That flag was the only thing that
+   * ever held a run, which is exactly how the gap stayed hidden: the first
+   * self-hosted run was held by hand, and the daemon does not pass it.
+   */
+  it("holds at a human action at the merge point, with no --no-merge anywhere", async () => {
+    created.add(workItemStream(PROJECT, 127));
+    const agent = await agentThat(`
+mkdir -p src && echo "export const held = 127;" > src/fix.ts
+git add -A && git commit -q -m "fix the race"
+`);
+    const before = await g(["rev-parse", "develop"], originPath);
+
+    const result = await runOnce({
+      ...options(agent),
+      issue: 127,
+      // No `merge: false`. The recipe is the only thing asking.
+      client: fakeClient({ recipe: HUMAN_MERGE_RECIPE, getIssue: async () => issue2(127) }),
+    });
+
+    expect(result.ok, JSON.stringify(result)).toBe("held");
+    if (result.ok !== "held") return;
+    created.add(result.runId);
+    expect(result.gate).toBe("merge");
+
+    // Nothing reached the base branch. That is the entire ticket.
+    expect((await g(["rev-parse", "develop"], originPath)).stdout).toBe(before.stdout);
+
+    // A real pipeline, not a special case: the same events `prepared` and
+    // `proposed` append, stamped with the point they ran at.
+    const events = await store.read(result.runId);
+    const atMerge = (type: string) =>
+      events.filter((e) => e.type === type && (e.data as { gate?: string }).gate === "merge");
+    expect(atMerge("GateRequested")).toHaveLength(1);
+    expect(atMerge("GateStarted")).toHaveLength(1);
+
+    // And it asks in the vocabulary `--no-merge` already used, naming the
+    // action the recipe named rather than inventing a second one.
+    const asked = atMerge("ApprovalRequested");
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.data).toMatchObject({
+      gate: "merge",
+      action: "approval",
+      onSha: result.headSha,
+    });
+
+    // "Waiting on you", not back in the queue where another run could claim it.
+    const item = (await store.read(result.workItemId)).map((e) => e.type);
+    expect(item).toContain("WorkItemBlocked");
+    expect(item).not.toContain("WorkItemReleased");
+
+    // One vocabulary means one way to answer: approving works without knowing
+    // which point asked.
+    const approved = await approve({
+      project: PROJECT,
+      issue: 127,
+      base: "develop",
+      client: fakeClient({ recipe: HUMAN_MERGE_RECIPE, refSha: async () => result.headSha }),
+      by: "human:test",
+      store,
+      home,
+      gitEnv: { ...process.env, ...authored },
+    });
+
+    expect(approved.ok, JSON.stringify(approved)).toBe(true);
     expect((await g(["rev-parse", "develop"], originPath)).stdout).not.toBe(before.stdout);
   }, 180_000);
 

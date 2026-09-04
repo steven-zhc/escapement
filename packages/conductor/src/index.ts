@@ -101,6 +101,7 @@ export {
   type StoppedBecause,
 } from "./schedule.ts";
 export { approve, reject, waive, type ApproveOptions, type ApproveResult } from "./approve.ts";
+export { landedWithoutGatePoints, type UnrunGatePoint } from "./gate-audit.ts";
 export {
   appendEndActions,
   landedWithoutEndActions,

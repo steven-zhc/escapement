@@ -26,6 +26,7 @@ import {
   currentRecipe,
   deadOutbox,
   landedWithoutEndActions,
+  landedWithoutGatePoints,
   loadProjects,
   pendingOutbox,
   resolveAgentEnv,
@@ -678,6 +679,46 @@ async function endPointRan(url: string): Promise<CheckResult> {
 }
 
 /**
+ * Items that landed past a gating point that was configured and did not run.
+ *
+ * The same comparison as the check above, for the four points that produce
+ * verdicts rather than effects. `GatesResolved` says the recipe asked for
+ * something at `merge`; a `GateRequested`, a verdict, an approval or a waiver
+ * on that run says the pipeline got there. An item that landed with the first
+ * and none of the second merged past a control the log claims it has.
+ *
+ * **This is the check that was missing rather than a check that was failing.**
+ * `merge` was resolved into every plan, printed at onboarding and drawn on the
+ * board without ever being built into a pipeline, so two of Lingtai's own
+ * changes merged with nobody's approval (#58) and nothing anywhere noticed.
+ * `end` had the same shape on the same day (#55). Two of five points were
+ * quietly not executing; comparing the plan to the log is the only thing that
+ * finds that, and the comparison is cheap.
+ *
+ * **A failure, not a note**, and one with no replay behind it: nothing can
+ * un-merge a change that landed unapproved. What closes it is a person
+ * deciding on the record — the board's waiver, which names who and why.
+ */
+async function gatePointsRan(url: string): Promise<CheckResult> {
+  const name = "gates: every point that was planned ran";
+  const found = await landedWithoutGatePoints(url).catch(() => null);
+  if (found === null) return { name, status: "ok", detail: "no log to read yet" };
+
+  if (found.length === 0) {
+    return { name, status: "ok", detail: "every landed item recorded the points its run planned" };
+  }
+  return {
+    name,
+    status: "fail",
+    detail:
+      `${found.length} item(s) landed past a point that was configured and did not run — ` +
+      `${found.map((f) => `${f.project}#${f.issue} (${f.points.join(", ")})`).join(", ")}. ` +
+      "The plan in GatesResolved names actions there and the run recorded no verdict, " +
+      "no request and no waiver: those changes merged past a control the log says exists.",
+  };
+}
+
+/**
  * How much is queued to go out, and how much never will.
  *
  * Depth is reported; **dead letters fail**. That asymmetry is the point. A
@@ -821,6 +862,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
     results.push(await orphans());
     results.push(await outbox());
     results.push(await endPointRan(direct));
+    results.push(await gatePointsRan(direct));
   } else {
     results.push({
       name: "postgres",

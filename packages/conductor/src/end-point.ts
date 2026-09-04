@@ -146,8 +146,12 @@ export interface UnresolvedEnd {
  *
  * The last hyphen, which is what keeps a project name containing one intact.
  * Safe because the same code writes the id — `workItemStream` in `discover.ts`.
+ *
+ * Exported for `gate-audit.ts`, which asks the same question about the gating
+ * points that this file asks about `end`, and not re-exported from the barrel:
+ * a caller outside the conductor has a `ProjectState` and does not need it.
  */
-function splitWorkItem(streamId: string): { project: string; issue: number } | null {
+export function splitWorkItem(streamId: string): { project: string; issue: number } | null {
   const body = streamId.startsWith("wi-") ? streamId.slice(3) : streamId;
   const cut = body.lastIndexOf("-");
   if (cut < 0) return null;

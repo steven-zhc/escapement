@@ -517,7 +517,7 @@
 
     <figure>
       <div class="canvas">
-        <svg viewBox="0 0 900 250" role="img" aria-label="A work item passes through admit, prepared, the agent, proposed, merge, integrate and end. Each step lists the events it appends. The merge point is marked as declared but never executed.">
+        <svg viewBox="0 0 900 250" role="img" aria-label="A work item passes through admit, prepared, the agent, proposed, merge, integrate and end. Each step lists the events it appends. The merge point runs its own gate pipeline, after proposed passes and before the merge lane.">
           <defs>
             <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
@@ -549,8 +549,9 @@
             <text x="560" y="52" text-anchor="middle">proposed</text>
             <text x="560" y="96" text-anchor="middle" font-size="10.5" opacity=".55">Gate*  ×3</text>
 
-            <circle cx="685" cy="70" r="5" fill="#9C3A31" style="fill:var(--gap)"/>
-            <text x="685" y="52" text-anchor="middle" fill="#9C3A31" style="fill:var(--gap)">merge</text>
+            <circle cx="685" cy="70" r="5" fill="#96701F" style="fill:var(--brass)"/>
+            <text x="685" y="52" text-anchor="middle">merge</text>
+            <text x="685" y="96" text-anchor="middle" font-size="10.5" opacity=".55">Gate*  ×3</text>
 
             <circle cx="810" cy="70" r="5" fill="currentColor"/>
             <text x="810" y="52" text-anchor="middle">integrate → end</text>
@@ -563,27 +564,27 @@
           <line x1="316" y1="70" x2="428" y2="70" stroke="currentColor" opacity=".5" marker-end="url(#a4)"/>
           <line x1="441" y1="70" x2="553" y2="70" stroke="currentColor" opacity=".5" marker-end="url(#a4)"/>
           <line x1="566" y1="70" x2="678" y2="70" stroke="currentColor" opacity=".5" marker-end="url(#a4)"/>
-          <line x1="691" y1="70" x2="803" y2="70" stroke="#9C3A31" style="stroke:var(--gap)" color="#9C3A31" stroke-width="2" marker-end="url(#a4)"/>
+          <line x1="691" y1="70" x2="803" y2="70" stroke="currentColor" opacity=".5" marker-end="url(#a4)"/>
 
-          <rect x="596" y="150" width="282" height="72" fill="none" stroke="#9C3A31" style="stroke:var(--gap)" stroke-width="1.5"/>
-          <line x1="685" y1="80" x2="685" y2="150" stroke="#9C3A31" style="stroke:var(--gap)" stroke-dasharray="5 4"/>
-          <text x="612" y="171" font-family="IBM Plex Mono, monospace" font-size="12" fill="#9C3A31" style="fill:var(--gap)">declared, never executed</text>
-          <text x="612" y="190" font-size="11.5" fill="currentColor" opacity=".75">the recipe's merge actions are read for their</text>
-          <text x="612" y="206" font-size="11.5" fill="currentColor" opacity=".75">names only — nothing runs them</text>
+          <rect x="596" y="150" width="282" height="72" fill="none" stroke="currentColor" opacity=".25" stroke-width="1.5"/>
+          <line x1="685" y1="80" x2="685" y2="150" stroke="currentColor" opacity=".25" stroke-dasharray="5 4"/>
+          <text x="612" y="171" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor" opacity=".75">runs only if proposed passed</text>
+          <text x="612" y="190" font-size="11.5" fill="currentColor" opacity=".75">a pipeline like the two before it, in the</text>
+          <text x="612" y="206" font-size="11.5" fill="currentColor" opacity=".75">worktree, before it is removed</text>
 
-          <text x="20" y="171" font-size="11.5" fill="currentColor" opacity=".6">A hold happens on exactly two paths today:</text>
-          <text x="20" y="190" font-size="11.5" fill="currentColor" opacity=".75">· an action at <tspan font-family="IBM Plex Mono, monospace">proposed</tspan> returning needs-approval</text>
+          <text x="20" y="171" font-size="11.5" fill="currentColor" opacity=".6">A hold happens on exactly three paths:</text>
+          <text x="20" y="190" font-size="11.5" fill="currentColor" opacity=".75">· an action at <tspan font-family="IBM Plex Mono, monospace">proposed</tspan> or <tspan font-family="IBM Plex Mono, monospace">merge</tspan> returning needs-approval</text>
           <text x="20" y="206" font-size="11.5" fill="currentColor" opacity=".75">· the <tspan font-family="IBM Plex Mono, monospace">--no-merge</tspan> flag</text>
         </svg>
       </div>
-      <figcaption><b>Two of the five points run their actions; one does not.</b> <code>prepared</code>
-        and <code>proposed</code> build a real gate pipeline, <code>end</code> resolves into the
-        outbox, and <code>merge</code> is read only for the names it contributes to
-        <code>GatesResolved</code>.</figcaption>
+      <figcaption><b>Four of the five points run their actions; <code>admit</code> does not.</b>
+        <code>prepared</code>, <code>proposed</code> and <code>merge</code> each build a real gate
+        pipeline and <code>end</code> resolves into the outbox. <code>admit</code> is still read
+        only for the names it contributes to <code>GatesResolved</code>.</figcaption>
     </figure>
 
     <div class="gap">
-      <h3>Found 2026-09-03 · not yet fixed</h3>
+      <h3>Found 2026-09-03 · fixed 2026-09-04 (#58)</h3>
       <p>Lingtai's own recipe puts a <code>human:</code> action at <code>merge</code> — every merge
         was supposed to wait for a person. It never ran. Two changes to <code>main</code> merged
         with no approval, five seconds after their build gate passed.</p>
@@ -591,6 +592,11 @@
         <code>GatesResolved</code> and rendered on the board. All of that reads as evidence that it
         works. <b>Configured and did not run</b> is the failure this system names as its own bug,
         and this is the most expensive instance of it so far.</p>
+      <p>The point now builds a pipeline like every other, and <code>lingtai doctor</code> makes the
+        same comparison for every gating point that <code>#55</code> asked for at <code>end</code>:
+        an item that landed, whose <code>GatesResolved</code> planned actions at a point, and whose
+        run recorded no verdict there. That check is the part that generalises — the fix closes one
+        instance, the comparison closes the class.</p>
     </div>
   </section>
 
