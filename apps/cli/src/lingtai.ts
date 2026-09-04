@@ -36,6 +36,7 @@ import { conductorPass, deliverer } from "./conduct.ts";
 import { add } from "./add.ts";
 import { approveCommand } from "./approve.ts";
 import { formatReport, runDoctor } from "./doctor.ts";
+import { endReplay } from "./end.ts";
 import { PROJECTIONS } from "./projections.ts";
 import { run as runOnceCommand } from "./run.ts";
 import { status } from "./status.ts";
@@ -59,6 +60,8 @@ const USAGE = `lingtai — event-sourced scheduler for autonomous code agents
     --refresh                   ask GitHub first, and say what it passed over
                                 and why. Takes nothing and claims nothing.
   lingtai doctor                    check everything that can be checked
+  lingtai end replay [project]      resolve the end point for items that landed
+    --issue <n>                 without it, and deliver what it resolves to
   lingtai daemon                    hold the projections current and take work
     --no-conduct                projections only, take nothing
     --no-merge                  as for lingtai run
@@ -410,6 +413,24 @@ async function main(argv: string[]): Promise<number> {
     }
     case "doctor":
       return doctor();
+    case "end": {
+      const { positional, flags } = parseFlags(rest);
+      // One subcommand, spelled out. `lingtai end` on its own would read like
+      // an instruction to end something.
+      if (positional[0] !== "replay") {
+        console.error("lingtai end replay [<project>] [--issue <n>]");
+        return 2;
+      }
+      const issue = "issue" in flags ? Number(flags["issue"]) : undefined;
+      if (issue !== undefined && !Number.isInteger(issue)) {
+        console.error("--issue takes a number");
+        return 2;
+      }
+      return endReplay({
+        ...(positional[1] === undefined ? {} : { project: positional[1] }),
+        ...(issue === undefined ? {} : { issue }),
+      });
+    }
     case "daemon":
       return daemonCommand(parseFlags(rest).flags);
     case "pause":

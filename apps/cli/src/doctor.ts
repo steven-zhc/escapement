@@ -22,7 +22,7 @@
  * which is a fact about the design and not about what happened to be installed
  * the day it was written: see `DEFERRED`.
  */
-import { deadOutbox, pendingOutbox, runnableEnv } from "@lingtai/conductor";
+import { deadOutbox, landedWithoutEndActions, pendingOutbox, runnableEnv } from "@lingtai/conductor";
 import { isEventType } from "@lingtai/core";
 import { STALE_AFTER_MS, findOrphans, readControl, readStatus } from "@lingtai/daemon";
 import { githubApp, hasGitHubApp } from "@lingtai/env";
@@ -637,6 +637,45 @@ async function readableTypes(url: string): Promise<CheckResult> {
 }
 
 /**
+ * Items that landed with an `end` point that was configured and did not run.
+ *
+ * The comparison [ADR 0015](../../../doc/decisions/0015-five-gates-and-two-extensions.md)
+ * promised, and the one that would have found #55 the day it happened.
+ * `GatesResolved` names all five points and the actions resolved for each, so
+ * "the recipe asked for something at `end`" is in the log; `EndActionsResolved`
+ * is the record that the point ran. An item that landed, whose run planned
+ * actions at `end`, and whose stream holds no resolution, is a gate that was
+ * configured and did not run — which [0016](../../../doc/decisions/0016-the-settled-model.md)
+ * §4 calls Lingtai's bug rather than the operator's.
+ *
+ * **A failure, not a note.** Nothing on the issue shows that Lingtai touched
+ * it, and the gap is invisible from GitHub: the ticket stays open and looks
+ * exactly like one nothing ever ran on. That invisibility is why two issues sat
+ * merged and open for a day with no signal anywhere.
+ *
+ * From the log alone, and from the *item's own stream* for the second half, so
+ * it says nothing about what the recipe happens to contain today.
+ */
+async function endPointRan(url: string): Promise<CheckResult> {
+  const name = "gates: end ran on what landed";
+  const found = await landedWithoutEndActions(url).catch(() => null);
+  if (found === null) return { name, status: "ok", detail: "no log to read yet" };
+
+  if (found.length === 0) {
+    return { name, status: "ok", detail: "every landed item with end actions resolved them" };
+  }
+  return {
+    name,
+    status: "fail",
+    detail:
+      `${found.length} item(s) landed with actions planned at end and none resolved — ` +
+      `${found.map((f) => `${f.project}#${f.issue}`).join(", ")}. ` +
+      "Their issues were never closed or labelled, and nothing on GitHub says Lingtai " +
+      "touched them: lingtai end replay resolves the point as it should have been.",
+  };
+}
+
+/**
  * How much is queued to go out, and how much never will.
  *
  * Depth is reported; **dead letters fail**. That asymmetry is the point. A
@@ -696,6 +735,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
     results.push(await readableTypes(direct));
     results.push(await orphans());
     results.push(await outbox());
+    results.push(await endPointRan(direct));
   } else {
     results.push({
       name: "postgres",

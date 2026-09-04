@@ -93,6 +93,13 @@ export {
 } from "./schedule.ts";
 export { approve, reject, waive, type ApproveOptions, type ApproveResult } from "./approve.ts";
 export {
+  appendEndActions,
+  landedWithoutEndActions,
+  resolveEndActions,
+  type TerminalOutcome,
+  type UnresolvedEnd,
+} from "./end-point.ts";
+export {
   BASE_BACKOFF_MS,
   MAX_ATTEMPTS,
   MAX_BACKOFF_MS,

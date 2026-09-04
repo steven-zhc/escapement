@@ -18,7 +18,7 @@
  * with a question. The old loop could end in silence in at least seven places;
  * that is the thing being replaced, so `finally` blocks here are not tidiness.
  */
-import { type GateAction, type ResolvedRecipe, parseDuration } from "@lingtai/config";
+import { type ResolvedRecipe, parseDuration } from "@lingtai/config";
 import { type Tier, parsePayload } from "@lingtai/core";
 import { gatesFromRecipe, runGatePipeline } from "@lingtai/gates";
 import type { GitHubClient } from "@lingtai/github";
@@ -26,6 +26,7 @@ import { type Runtime, missingForTier } from "@lingtai/runtime";
 import { type EventStore, eventStore } from "@lingtai/store";
 import { claimWorkItem, releaseWorkItem } from "./claim.ts";
 import { refreshQueue, workItemStream } from "./discover.ts";
+import { appendEndActions, resolveEndActions } from "./end-point.ts";
 import { smokeTestFailClosed, writeHookWiring } from "./hook-config.ts";
 import { createHookServer } from "./hook-socket.ts";
 import { integrate } from "./integrate.ts";
@@ -107,41 +108,6 @@ function runBinary(
     child.on("error", (err) => resolve({ code: null, stderr: err.message }));
     child.stdin.end(stdin);
   });
-}
-
-/**
- * What the `end` point resolved to, appended so the outbox can act on it.
- *
- * The conductor reads recipes; projections read the log. `end` actions are
- * declared in a recipe and carried out by the outbox, so the plan has to cross
- * that line as an event — see `EndActionsResolved`.
- *
- * Nothing is appended when nothing matches: an empty list would be a row saying
- * "no effects", which is the same as no row and costs a write.
- */
-async function appendEndActions(
-  store: EventStore,
-  workItemId: string,
-  actions: readonly GateAction[],
-  outcome: "landed" | "blocked" | "failed",
-): Promise<void> {
-  type Resolved = { name: string; close: true } | { name: string; labels: string[] };
-  const resolved: Resolved[] = [];
-  for (const a of actions) {
-    if (!("when" in a)) continue;
-    if (a.when !== outcome && a.when !== "any") continue;
-    resolved.push("close" in a ? { name: a.name, close: true } : { name: a.name, labels: a.labels });
-  }
-  if (resolved.length === 0) return;
-
-  const at = (await store.read(workItemId)).length;
-  await store.append(workItemId, at, [
-    {
-      type: "EndActionsResolved",
-      actor: "conductor",
-      data: parsePayload("EndActionsResolved", { outcome, actions: resolved }),
-    },
-  ]);
 }
 
 export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
@@ -244,6 +210,13 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     // A work item that does not land goes back to the queue rather than sitting
     // claimed by a run that is over.
     await releaseWorkItem(workItemId, runId, reason, store).catch(() => {});
+    // `end` fires on *any* terminal outcome, and a run that produced nothing
+    // mergeable is the `failed` one. On its own append because the release owns
+    // the one above; logged rather than thrown because this path is already
+    // carrying somebody else's failure and must not replace it with its own.
+    await appendEndActions(store, workItemId, recipe.gates.end, "failed").catch((err) =>
+      log(`end actions not resolved: ${(err as Error).message}`),
+    );
   };
 
   try {
@@ -576,8 +549,8 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         // a person belongs in "Waiting on you", not back in the queue where
         // another run could claim it and throw the question away. It also stops
         // the claim's lease from quietly expiring while someone thinks.
-        const blockedAt = (await store.read(workItemId)).length;
-        await store.append(workItemId, blockedAt, [
+        const blocked = await store.read(workItemId);
+        await store.append(workItemId, blocked.length, [
           {
             type: "WorkItemBlocked",
             actor: "conductor",
@@ -587,6 +560,10 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
               runId,
             }),
           },
+          // In the same append as the outcome it is about. A hold is a terminal
+          // outcome for this run, and a `when: blocked` action is as configured
+          // as any other.
+          ...resolveEndActions(blocked, recipe.gates.end, "blocked"),
         ]);
         released = true;
 
@@ -616,8 +593,8 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       if (!merged.ok) {
         // Blocked rather than released: a refusal is a question for a person,
         // and the board's "Waiting on you" column is where it goes.
-        const blockedAt = (await store.read(workItemId)).length;
-        await store.append(workItemId, blockedAt, [
+        const blocked = await store.read(workItemId);
+        await store.append(workItemId, blocked.length, [
           {
             type: "WorkItemBlocked",
             actor: "conductor",
@@ -627,20 +604,25 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
               runId,
             }),
           },
+          ...resolveEndActions(blocked, recipe.gates.end, "blocked"),
         ]);
         released = true;
         return { ok: false, workItemId, runId, stage: "integrate", detail: `${merged.reason}: ${merged.detail}` };
       }
 
-      const landedAt = (await store.read(workItemId)).length;
-      await store.append(workItemId, landedAt, [
+      const landed = await store.read(workItemId);
+      await store.append(workItemId, landed.length, [
         {
           type: "WorkItemLanded",
           actor: "conductor",
           data: parsePayload("WorkItemLanded", { mergeCommit: merged.mergeCommit, base }),
         },
+        // One transaction with the landing itself. This used to be a second
+        // append on this line only, which is how every item that landed by any
+        // other route — an approval, on the CLI or the board — never resolved
+        // the point at all.
+        ...resolveEndActions(landed, recipe.gates.end, "landed"),
       ]);
-      await appendEndActions(store, workItemId, recipe.gates.end, "landed");
       released = true;
       log(`landed ${merged.mergeCommit.slice(0, 7)} on ${base}`);
       return { ok: true, workItemId, runId, mergeCommit: merged.mergeCommit };

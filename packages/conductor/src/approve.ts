@@ -17,10 +17,12 @@
  * than two vocabularies for one idea. What is here is what makes `--no-merge`
  * mean something before then.
  */
+import { type GateAction, resolveRecipe } from "@lingtai/config";
 import { parsePayload, reduceRun, reduceWorkItem } from "@lingtai/core";
 import type { GitHubClient } from "@lingtai/github";
 import { type EventStore, eventStore } from "@lingtai/store";
 import { workItemStream } from "./discover.ts";
+import { resolveEndActions } from "./end-point.ts";
 import { integrate } from "./integrate.ts";
 import type { TokenSource } from "./worktree.ts";
 
@@ -125,6 +127,29 @@ export async function approve(options: ApproveOptions): Promise<ApproveResult> {
     };
   }
 
+  // The `end` point is a *point*, not a step of `runOnce`: it fires on every
+  // terminal outcome, and this is one of the paths that reaches one. Reading
+  // the recipe is what the conductor does and a projection may not, so the plan
+  // has to be resolved here and written down.
+  //
+  // From origin/<base>, the same rule every other read of a recipe follows
+  // (0005) — never from the agent's branch, which is the thing being judged.
+  // Before the approval is recorded, so an unreadable recipe refuses without
+  // merging rather than landing a change whose `end` point silently could not
+  // run. That silence is the defect this is fixing.
+  let end: readonly GateAction[];
+  try {
+    const recipe = await resolveRecipe((p, r) => options.client.fileAt(p, r), options.base);
+    end = recipe.recipe.gates.end;
+  } catch (err) {
+    return {
+      ok: false,
+      workItemId,
+      reason: "recipe",
+      detail: `${(err as Error).message}. Nothing was merged.`,
+    };
+  }
+
   await store.append(runId, run.version, [
     {
       type: "ApprovalGranted",
@@ -162,8 +187,8 @@ export async function approve(options: ApproveOptions): Promise<ApproveResult> {
   });
 
   if (!merged.ok) {
-    const at = (await store.read(workItemId)).length;
-    await store.append(workItemId, at, [
+    const blocked = await store.read(workItemId);
+    await store.append(workItemId, blocked.length, [
       {
         type: "WorkItemBlocked",
         actor: "conductor",
@@ -173,17 +198,21 @@ export async function approve(options: ApproveOptions): Promise<ApproveResult> {
           runId,
         }),
       },
+      ...resolveEndActions(blocked, end, "blocked"),
     ]);
     return { ok: false, workItemId, reason: merged.reason, detail: merged.detail };
   }
 
-  const at = (await store.read(workItemId)).length;
-  await store.append(workItemId, at, [
+  const landed = await store.read(workItemId);
+  await store.append(workItemId, landed.length, [
     {
       type: "WorkItemLanded",
       actor: "conductor",
       data: parsePayload("WorkItemLanded", { mergeCommit: merged.mergeCommit, base: options.base }),
     },
+    // The same append, so an item cannot land without its `end` point being
+    // resolved in the same transaction.
+    ...resolveEndActions(landed, end, "landed"),
   ]);
   log(`landed ${merged.mergeCommit.slice(0, 7)} on ${options.base}`);
   return { ok: true, workItemId, runId, mergeCommit: merged.mergeCommit };

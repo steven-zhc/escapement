@@ -266,6 +266,15 @@ it resolved; the projection only folds. **A projection may never read a
 recipe** — that division is why a rebuild produces the same rows years later
 even if the recipe has changed since.
 
+`end` fires on **any** terminal outcome — `landed`, `blocked`, `failed` — from
+whichever path reached it: an inline merge, `lingtai approve`, or the board's
+approve button. Once per outcome, and the item's own stream is where that is
+checked. A recipe that declares `end` actions gets the event even when none of
+them match the outcome, so that *configured and resolved to nothing* and
+*configured and never ran* are two different things in the log — which is what
+`gates: end ran on what landed` compares, and what `lingtai end replay`
+repairs.
+
 Nothing that changes *code* goes through here — that is git's job, under the
 merge lane's lock.
 
@@ -279,14 +288,14 @@ moves until a person acts. Source: `DEFAULT_SUBSCRIPTIONS` in
 
 A landed task is good news that needed nobody, and is deliberately not here.
 
-## lingtai subcommand — 11
+## lingtai subcommand — 12
 
 Source: the switch in `apps/cli/src/lingtai.ts`.
 
-`add` · `run` · `approve` · `status` · `doctor` · `daemon` · `pause` ·
+`add` · `run` · `approve` · `status` · `doctor` · `end` · `daemon` · `pause` ·
 `resume` · `now` · `projection` · `version`
 
-## doctor check — 16 live, 5 deferred
+## doctor check — 17 live, 5 deferred
 
 Source: `apps/cli/src/doctor.ts`. This list is `pnpm lingtai doctor`'s own output,
 not a reading of the file — grepping the constructors missed six of them.
@@ -297,7 +306,7 @@ not a reading of the file — grepping the constructors missed six of them.
 | environment (1) | `environment` |
 | connections (2) | `postgres: pooled connection` · `postgres: direct connection is session mode` |
 | schema (5) | `schema: tables` · `schema: optimistic concurrency` · `schema: append-only` · `schema: notify trigger` · `schema: payload columns` |
-| running system (4) | `projections: lag` · `daemon: liveness` · `worktrees: reconciliation` · `outbox: depth` |
+| running system (5) | `projections: lag` · `daemon: liveness` · `worktrees: reconciliation` · `outbox: depth` · `gates: end ran on what landed` |
 | credentials (2) | `github: app credentials` · `runtime: signed in` |
 | visibility (1) | `runtime: other settings in scope` — reports what configures a run besides the recipe |
 

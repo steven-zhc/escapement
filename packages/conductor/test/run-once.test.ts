@@ -27,7 +27,8 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { approve, integrationStream, readTasks, reject, renderPrompt, runOnce, runQueue, syncQueued, taskViewProjection, waive, workItemStream } from "../src/index.ts";
+import { appendEndActions, approve, integrationStream, readTasks, reject, renderPrompt, runOnce, runQueue, syncQueued, taskViewProjection, waive, workItemStream } from "../src/index.ts";
+import type { GateAction } from "@lingtai/config";
 import type { ProjectState } from "@lingtai/core";
 
 const exec = promisify(execFile);
@@ -86,6 +87,14 @@ const issue: Issue = {
   state: "open",
   url: "https://example.invalid/117",
 };
+
+/** The `end` point, configured: close the issue when the item lands. */
+const CLOSING_RECIPE = RECIPE.replace(
+  "runtime: {",
+  `  end:
+    - { name: "close the ticket", when: landed, close: true }
+runtime: {`,
+);
 
 /** A recipe whose only gate refuses, whatever the agent did. */
 const REFUSING_RECIPE = RECIPE.replace(
@@ -457,6 +466,79 @@ git add -A && git commit -q -m "fix the race"
     expect(approved.ok).toBe(true);
     if (!approved.ok) return;
     expect((await g(["rev-parse", "develop"], originPath)).stdout).not.toBe(before.stdout);
+  }, 180_000);
+
+  /**
+   * The `end` point is a *point*, not a step of `runOnce`.
+   *
+   * It fired only where that one function merged the branch itself, so
+   * everything that landed through an approval merged, appended
+   * `WorkItemLanded`, and stopped: the issue stayed open and nothing on GitHub
+   * showed that Lingtai had touched it. Two issues landed that way on the day
+   * this was found, and the gap was invisible because it had never been
+   * exercised — approving is the path an operator who reads diffs always takes.
+   */
+  it("resolves the end point when an approval is what lands it", async () => {
+    created.add(workItemStream(PROJECT, 126));
+    const agent = await agentThat(`
+mkdir -p src && echo "export const held = 126;" > src/fix.ts
+git add -A && git commit -q -m "fix the race"
+`);
+
+    const result = await runOnce({
+      ...options(agent),
+      issue: 126,
+      merge: false,
+      client: fakeClient({ recipe: CLOSING_RECIPE, getIssue: async () => issue2(126) }),
+    });
+    expect(result.ok).toBe("held");
+    if (result.ok !== "held") return;
+
+    const outcomes = (events: { type: string; data: unknown }[]) =>
+      events
+        .filter((e) => e.type === "EndActionsResolved")
+        .map((e) => (e.data as { outcome: string }).outcome);
+
+    // Held is a terminal outcome too, and the point ran against it: nothing in
+    // this recipe matches `blocked`, which is a different fact from the point
+    // never having run.
+    const whileHeld = await store.read(result.workItemId);
+    expect(outcomes(whileHeld)).toEqual(["blocked"]);
+
+    const approved = await approve({
+      project: PROJECT,
+      issue: 126,
+      base: "develop",
+      client: fakeClient({ recipe: CLOSING_RECIPE, refSha: async () => result.headSha }),
+      by: "human:test",
+      store,
+      home,
+      gitEnv: { ...process.env, ...authored },
+    });
+    expect(approved.ok, JSON.stringify(approved)).toBe(true);
+
+    const item = await store.read(result.workItemId);
+    expect(outcomes(item)).toEqual(["blocked", "landed"]);
+
+    const landed = item.filter(
+      (e) => e.type === "EndActionsResolved" && (e.data as { outcome: string }).outcome === "landed",
+    );
+    // What the outbox turns into a close. The plan crosses into the log here,
+    // because a projection may never read a recipe.
+    expect(landed[0]!.data).toEqual({
+      outcome: "landed",
+      actions: [{ name: "close the ticket", close: true }],
+    });
+
+    // In the same append as the landing itself, so the two cannot come apart.
+    const at = item.findIndex((e) => e.type === "WorkItemLanded");
+    expect(item[at + 1]?.type).toBe("EndActionsResolved");
+
+    // And it resolves *once*. Asking again — a second approval, a replay —
+    // appends nothing, and the item's own stream is where that is checked.
+    const close: GateAction = { name: "close the ticket", close: true, when: "landed" };
+    await appendEndActions(store, result.workItemId, [close], "landed");
+    expect(outcomes(await store.read(result.workItemId))).toEqual(["blocked", "landed"]);
   }, 180_000);
 
   /**
