@@ -59,6 +59,9 @@ and `lingtai pause` exists because that is the honest state to be in. The log is
 has been used twice for real, both times because the queue offered work that had
 already been merged.
 
+**New here?** [`doc/tutorial.md`](doc/tutorial.md) is the shortest path from
+nothing to an issue merged unattended.
+
 See [`doc/roadmap.md`](doc/roadmap.md) for the phases and
 [`doc/README.md`](doc/README.md) for what is settled and what is open.
 
