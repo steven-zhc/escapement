@@ -60,6 +60,12 @@ production credentials), an **isolated worktree** (that directory is the blast
 radius), and a **runtime sandbox** where one exists. The hook's job is policy
 enforcement and total observability — not a wall.
 
+The first of those was reshaped by
+[0020](0020-the-agent-environment-in-layers.md): the environment is merged from
+three named layers, "filtered" means *declared as required* rather than
+*allowed*, and a declared name with no value refuses the project before anything
+is claimed.
+
 ## Consequences
 
 - `tier: sandboxed` is roadmap, not v1. Containerising the toolchain — node,

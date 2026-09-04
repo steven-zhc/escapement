@@ -16,13 +16,22 @@
  * transient signal and touches no table.
  *
  * **A check that cannot run yet says so.** The checks for the recipe, the
- * repository, the environment allowlist, the hook and GitHub are listed as
- * `skip` rather than omitted — a check you cannot see is a check you will
- * forget you never had. Each carries the reason it is not a startup check,
- * which is a fact about the design and not about what happened to be installed
- * the day it was written: see `DEFERRED`.
+ * repository, the hook and GitHub are listed as `skip` rather than omitted — a
+ * check you cannot see is a check you will forget you never had. Each carries
+ * the reason it is not a startup check, which is a fact about the design and
+ * not about what happened to be installed the day it was written: see
+ * `DEFERRED`.
  */
-import { deadOutbox, landedWithoutEndActions, pendingOutbox, runnableEnv } from "@lingtai/conductor";
+import {
+  currentRecipe,
+  deadOutbox,
+  landedWithoutEndActions,
+  loadProjects,
+  pendingOutbox,
+  resolveAgentEnv,
+  runnableEnv,
+} from "@lingtai/conductor";
+import { createGitHubClient } from "@lingtai/github";
 import { isEventType } from "@lingtai/core";
 import { STALE_AFTER_MS, findOrphans, readControl, readStatus } from "@lingtai/daemon";
 import { githubApp, hasGitHubApp } from "@lingtai/env";
@@ -32,7 +41,7 @@ import { projectionLag } from "@lingtai/store";
 import { createPublicKey } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import pg from "pg";
 
 /**
@@ -494,13 +503,6 @@ const DEFERRED: { name: string; detail: string }[] = [
       "fetch, clone or check out",
   },
   {
-    name: "environment allowlist and production tripwire",
-    detail:
-      "the allowlist is the recipe's, and filterEnv applies it as a run's env file is planted — a " +
-      "value whose host looks like production raises ProductionValueError at that moment, before an " +
-      "agent could hold it. Startup holds no recipe and plants no file",
-  },
-  {
     name: "hook: fail closed",
     detail:
       "every run proves it immediately before dispatching, which is the check that matters; " +
@@ -708,6 +710,89 @@ async function outbox(): Promise<CheckResult> {
   };
 }
 
+/**
+ * Per project: every name its recipe requires, and **which layer answered**.
+ *
+ * The half of [ADR 0020](../../../doc/decisions/0020-the-agent-environment-in-layers.md)
+ * that costs nothing. The other half — refusing the project — happens in
+ * `runOnce`, after a pass has already been started and a recipe fetched; this
+ * answers the same question before anyone spends anything, which is what makes
+ * the difference between `lingtai run` in your shell and `lingtai daemon` under
+ * launchd visible rather than guessed at. Run doctor in the daemon's own
+ * environment and the discrepancy is in the output.
+ *
+ * **Names only, never values.** A `.env` file's whole point is that its contents
+ * do not appear in a terminal, a screenshot or a paste.
+ *
+ * A missing name is a `fail` here, because the run it describes cannot happen.
+ * That is the one place doctor is allowed to be red about a project rather than
+ * about the installation: a red that names the file to write is a red somebody
+ * can clear.
+ */
+async function declaredEnvironment(env: NodeJS.ProcessEnv): Promise<CheckResult[]> {
+  const name = "env: declared names, and which layer";
+  if (!hasGitHubApp(env)) {
+    return [
+      {
+        name,
+        status: "skip",
+        detail: "no App configured, so no recipe can be read — the required names are the recipe's",
+      },
+    ];
+  }
+
+  const projects = await loadProjects().catch(() => null);
+  if (projects === null) {
+    return [{ name, status: "skip", detail: "the project streams could not be read" }];
+  }
+  if (projects.length === 0) {
+    return [{ name, status: "ok", detail: "no project has a recipe to declare anything yet" }];
+  }
+
+  const results: CheckResult[] = [];
+  for (const project of projects) {
+    if (!project.project || !project.owner) continue;
+    const label = `env: ${project.project}`;
+    try {
+      const client = await createGitHubClient({
+        auth: githubApp(env),
+        owner: project.owner,
+        repo: project.project,
+      });
+      const resolved = await currentRecipe(project, client);
+      const agentEnv = await resolveAgentEnv({
+        project: project.project,
+        required: resolved.recipe.env.required,
+      });
+
+      if (agentEnv.names.length === 0) {
+        results.push({
+          name: label,
+          status: "ok",
+          detail: `nothing required · ${basename(agentEnv.file)} is where a value would go`,
+        });
+        continue;
+      }
+      const detail = agentEnv.names
+        .map(
+          (n) =>
+            `${n.name} ← ${n.layer === "project file" ? basename(agentEnv.file) : n.layer}`,
+        )
+        .join(" · ");
+      results.push({
+        name: label,
+        status: agentEnv.missing.length > 0 ? "fail" : "ok",
+        detail: agentEnv.refusal ? `${detail}\n${agentEnv.refusal}` : detail,
+      });
+    } catch (err) {
+      // Includes `ProductionValueError`, which names the variable and the
+      // pattern it matched and no part of the value.
+      results.push({ name: label, status: "fail", detail: (err as Error).message });
+    }
+  }
+  return results;
+}
+
 export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<DoctorReport> {
   const results: CheckResult[] = [];
 
@@ -745,6 +830,7 @@ export async function runDoctor(env: NodeJS.ProcessEnv = process.env): Promise<D
   }
 
   results.push(githubCredentials(env));
+  results.push(...(await declaredEnvironment(env)));
   results.push(await settingsSources());
   results.push(await runtimeAuth());
   for (const d of DEFERRED) results.push({ ...d, status: "skip", deferred: true });

@@ -6,6 +6,8 @@
  * is the part that has to be right:
  *
  *   resolve the recipe from origin/<base>   never from the agent's branch
+ *   resolve the environment                 a declared name with no value
+ *                                           refuses here, before the money
  *   discover, claim                         the constraint decides the race
  *   provision the worktree                  filtered env, submodules, 0600
  *   prove the hook fails closed             before anything is dispatched
@@ -31,7 +33,7 @@ import { smokeTestFailClosed, writeHookWiring } from "./hook-config.ts";
 import { createHookServer } from "./hook-socket.ts";
 import { integrate } from "./integrate.ts";
 import { GATE_POINTS, type ProjectState } from "@lingtai/core";
-import { DEFAULT_PRODUCTION_PATTERNS, type TokenSource, filterEnv, git, provisionWorktree, removeWorktree, runnableEnv, stateDir } from "./worktree.ts";
+import { type AgentEnv, type TokenSource, git, provisionWorktree, removeWorktree, resolveAgentEnv, runnableEnv, stateDir } from "./worktree.ts";
 import { spawn } from "node:child_process";
 
 export interface RunOnceOptions {
@@ -137,7 +139,32 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   const base = recipe.repo.base;
   log(`recipe ${resolved.configHash.slice(0, 12)} from ${resolved.ref}, tier ${resolved.tier}`);
 
-  // ---- 2. capability matching, before anything is claimed ------------------
+  // ---- 2. the environment, before anything is claimed ----------------------
+  // A declared name with no value refuses the whole project for this pass: no
+  // worktree, no agent, no money. It used to be a log line — `env: X not set,
+  // so not planted` — after which the run claimed the ticket and spent $0.97
+  // producing nothing against a database it could not reach (ADR 0020).
+  //
+  // Here rather than beside `provisionWorktree`, because everything between
+  // costs something: the claim is an event other schedulers respect, and the
+  // clone is a network round trip.
+  let env: AgentEnv;
+  try {
+    env = await resolveAgentEnv({ project, required: recipe.env.required, home });
+  } catch (err) {
+    // ProductionValueError. Refusing before the claim for the same reason.
+    return { ok: false, workItemId: null, runId: null, stage: "env", detail: (err as Error).message };
+  }
+  // Returned rather than logged: the refusal is a whole paragraph naming the
+  // file to write, and every caller already prints `stage: detail`.
+  if (env.refusal) {
+    return { ok: false, workItemId: null, runId: null, stage: "env", detail: env.refusal };
+  }
+  log(
+    `env: ${env.names.length === 0 ? "nothing declared" : env.names.map((n) => `${n.name} from ${n.layer}`).join(", ")}`,
+  );
+
+  // ---- 3. capability matching, before anything is claimed ------------------
   const tier: Tier = resolved.tier;
   const missing = missingForTier(options.runtime.capabilities, tier);
   const workItemId = workItemStream(project, options.issue);
@@ -169,7 +196,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     };
   }
 
-  // ---- 3. discover and claim ----------------------------------------------
+  // ---- 4. discover and claim ----------------------------------------------
   // Eligibility is asked, not looked up. Nothing was appended when this issue
   // was first seen (0012), so there is no "was it discovered" to read — the
   // recipe decides against the issue as GitHub reports it right now, which is
@@ -201,7 +228,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   }
   log(`claimed ${workItemId} as ${runId}`);
 
-  // ---- 4. the worktree, and the environment the agent may see --------------
+  // ---- 5. the worktree, planted with the environment resolved above --------
   const branch = `agent/${options.issue}`;
   let released = false;
   const release = async (reason: string) => {
@@ -220,9 +247,6 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   };
 
   try {
-    const env = filterEnv(recipe.env.allow, process.env, DEFAULT_PRODUCTION_PATTERNS);
-    if (env.missing.length > 0) log(`env: ${env.missing.join(", ")} not set, so not planted`);
-
     const worktree = await provisionWorktree({
       project,
       owner: options.client.owner,
@@ -240,7 +264,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     });
     log(`worktree ${worktree.path} at ${worktree.baseSha.slice(0, 7)}`);
 
-    // ---- 5. the hook, proven to fail closed before anything is dispatched ---
+    // ---- 6. the hook, proven to fail closed before anything is dispatched ---
     // It refuses nothing (ADR 0016 §6) and carries everything: the prompt, the
     // files touched, compaction, and the Stop that fires the gates. Proving it
     // fails closed is therefore about the *record*, not about mediation — a
@@ -253,7 +277,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       return { ok: false, workItemId, runId, stage: "hook", detail: smoke.detail };
     }
 
-    // ---- 6. the `prepared` point ------------------------------------------
+    // ---- 7. the `prepared` point ------------------------------------------
     // A gate like any other now, rather than its own stage with its own three
     // events. It runs after the hook smoke test, which costs milliseconds — a
     // broken hook should not take a ten-minute install to discover — and before
@@ -303,7 +327,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     await server.listen();
 
     try {
-      // ---- 7. RunStarted, then the agent --------------------------------
+      // ---- 8. RunStarted, then the agent --------------------------------
       // Not version 0 any more: prepare wrote first. Asserting 0 here would
       // have failed the moment a recipe declared a single prepare step.
       await store.append(runId, (await store.read(runId)).length, [
@@ -402,7 +426,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       ]);
       log(`run finished: ${outcome.turns} turns, ${outcome.costUsd ?? "unknown"} usd`);
 
-      // ---- 7. the diff the `proposed` gates will be about ----------------
+      // ---- 9. the diff the `proposed` gates will be about ----------------
       const headSha = await git(["rev-parse", "HEAD"], { ...{ token: options.token, env: options.gitEnv }, cwd: worktree.path });
       const stat = await git(["diff", "--numstat", `${worktree.baseSha}..HEAD`], {
         token: options.token,
@@ -440,7 +464,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       ]);
       void proposedSha;
 
-      // ---- 8. the gates ---------------------------------------------------
+      // ---- 10. the gates ---------------------------------------------------
       // The reviewer sees the ticket and the diff, and gets the diff from here
       // because the gates package does not know about git and should not learn.
       const gateDeps = {
@@ -504,7 +528,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       // end-to-end run fail.
       await removeWorktree({ project, runId, home }).catch(() => {});
 
-      // ---- 9. hold, if anything asked for a person -------------------------
+      // ---- 11. hold, if anything asked for a person -------------------------
       // Two things can ask: a gate whose verdict is `needs-approval` — the
       // human action, or a `watch` action that saw a migration — and the operator,
       // with `--no-merge`.
@@ -571,7 +595,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         return { ok: "held", workItemId, runId, headSha, gate };
       }
 
-      // ---- 10. the merge lane ---------------------------------------------
+      // ---- 12. the merge lane ---------------------------------------------
       const merged = await integrate({
         project,
         owner: options.client.owner,

@@ -107,6 +107,25 @@ describe("lingtai doctor — the runtime's own login", () => {
   }, 60_000);
 });
 
+describe("lingtai doctor — the declared environment", () => {
+  /**
+   * The half of [ADR 0020](../../../doc/decisions/0020-the-agent-environment-in-layers.md)
+   * that costs nothing: the same question a run asks, answered before any money
+   * is spent. Without an App there is no recipe to read, so it is a skip with a
+   * reason rather than an omission — and the reason is about *this* run, not a
+   * literal about the machine, which is why it is not in `DEFERRED`.
+   */
+  it("is listed, and says why when it cannot read a recipe", async () => {
+    const report = await runDoctor(env({}));
+    const check = find(report.results, "env: declared names, and which layer");
+
+    expect(check.status).toBe("skip");
+    expect(check.detail).toContain("recipe");
+    // Not deferred: it runs whenever a project and an App exist.
+    expect(check.deferred).toBeUndefined();
+  });
+});
+
 describe("lingtai doctor — reporting", () => {
   it("lists the checks that cannot run yet, rather than omitting them", async () => {
     // With no GITHUB_APP_ID in this environment, the credentials check is itself

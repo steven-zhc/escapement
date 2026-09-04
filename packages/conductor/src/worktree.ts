@@ -14,12 +14,14 @@
  * as *the agent broke the tests* rather than *the harness set it up wrong*.
  *
  * **The environment is filtered, not inherited.** The agent gets exactly the
- * variable names the recipe allows, with values resolved from the conductor's
- * own environment — somewhere the agent cannot see. This is one of the three
- * real boundaries (doc/decisions/0007-dual-runtime.md); the hook is not one.
+ * variable names the recipe *requires*, merged from three named layers with
+ * different owners, and a name with no value in any of them refuses the project
+ * rather than being logged. This is one of the three real boundaries
+ * (doc/decisions/0007-dual-runtime.md, reshaped by
+ * doc/decisions/0020-the-agent-environment-in-layers.md); the hook is not one.
  */
 import { execFile } from "node:child_process";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -128,18 +130,42 @@ export function hostLooksProduction(host: string, patterns: readonly string[]): 
   return null;
 }
 
+/**
+ * Lingtai's own credential names, which layer 2 never carries.
+ *
+ * A recipe is written by the *managed repository*. Without this, one line of
+ * YAML in a repository an agent is editing would reach `DATABASE_URL` — which
+ * is this system's own log, the thing it is keeping — or the App key that signs
+ * every token it pushes with.
+ *
+ * **It blocks layer 2 only**, and that asymmetry is the whole point. Layer 3 is
+ * a file the operator wrote on their own machine, so Lingtai managing itself can
+ * put `TEST_DATABASE_URL` in `~/.lingtai/env/lingtai.env` while
+ * `nextloom-ai-admin`'s recipe cannot reach for it by declaring the name.
+ *
+ * An entry ending in `*` is a prefix; everything else is an exact name.
+ */
+export const RESERVED = [
+  "DATABASE_URL",
+  "DIRECT_DATABASE_URL",
+  "TEST_*",
+  "GITHUB_APP_*",
+] as const;
+
+export function isReserved(name: string, reserved: readonly string[] = RESERVED): boolean {
+  return reserved.some((r) => (r.endsWith("*") ? name.startsWith(r.slice(0, -1)) : name === r));
+}
+
 export interface FilteredEnv {
   values: Record<string, string>;
-  /** Allowed names that were not set. Absent is legitimate; silent is not. */
+  /** Required names this layer did not supply. A later layer still may. */
   missing: string[];
+  /** Required names refused here because they are Lingtai's own. See `RESERVED`. */
+  reserved: string[];
 }
 
 /**
- * Reduces an environment to the names a recipe allows, and refuses one that
- * looks like production.
- */
-/**
- * The variables a process needs in order to be a process at all.
+ * The variables a process needs in order to be a process at all — **layer 1**.
  *
  * `filterEnv` is an allowlist of the *project's* variables — the secrets and
  * connection strings a recipe names. It is not, and should not become, a list of
@@ -154,7 +180,7 @@ export interface FilteredEnv {
  * once.
  *
  * Deliberately short. `NODE_OPTIONS` is excluded because it injects behaviour
- * into every child; anything a project genuinely needs belongs in `env.allow`,
+ * into every child; anything a project genuinely needs belongs in `env.required`,
  * where a person wrote it down.
  *
  * `HOME` is the operator's, which is what makes a warm package store possible
@@ -185,33 +211,53 @@ export function runnableEnv(
     const value = from[name];
     if (value) base[name] = value;
   }
-  // The project's own values win: a recipe that allows `PATH` meant it.
+  // The project's own values win: a recipe that requires `PATH` meant it.
   return { ...base, ...values };
 }
 
+/**
+ * **Layer 2**: the conductor's own `process.env`, reduced to the names the
+ * recipe declares, minus `RESERVED`, refusing a value that looks like
+ * production.
+ *
+ * Not the whole answer on its own. `resolveAgentEnv` layers the per-project file
+ * over this and is the thing that decides whether a run may proceed — a name
+ * this layer reports as missing may still be supplied by layer 3.
+ */
 export function filterEnv(
-  allow: readonly string[],
+  required: readonly string[],
   source: NodeJS.ProcessEnv = process.env,
   patterns: readonly string[] = DEFAULT_PRODUCTION_PATTERNS,
 ): FilteredEnv {
   const values: Record<string, string> = {};
   const missing: string[] = [];
+  const reserved: string[] = [];
 
-  for (const name of allow) {
+  for (const name of required) {
+    if (isReserved(name)) {
+      // Refused here however the recipe declares it, and *before* the value is
+      // read — so a recipe cannot learn whether one is set either.
+      reserved.push(name);
+      missing.push(name);
+      continue;
+    }
     const value = source[name];
     if (value === undefined || value === "") {
       missing.push(name);
       continue;
     }
-    const host = hostOf(value);
-    if (host) {
-      const hit = hostLooksProduction(host, patterns);
-      if (hit) throw new ProductionValueError(name, hit);
-    }
+    guardProduction(name, value, patterns);
     values[name] = value;
   }
 
-  return { values, missing };
+  return { values, missing, reserved };
+}
+
+function guardProduction(name: string, value: string, patterns: readonly string[]): void {
+  const host = hostOf(value);
+  if (!host) return;
+  const hit = hostLooksProduction(host, patterns);
+  if (hit) throw new ProductionValueError(name, hit);
 }
 
 /** The host of a URL-shaped value, or null when it is not one. */
@@ -224,11 +270,210 @@ function hostOf(value: string): string | null {
   }
 }
 
+// ------------------------------------------------------ the project's file ---
+
+/** **Layer 3**: `~/.lingtai/env/<project>.env`, and the only file layer there is. */
+export function projectEnvPath(project: string, home: string = stateDir()): string {
+  return join(home, "env", `${project}.env`);
+}
+
+export interface EnvFile {
+  values: Record<string, string>;
+  /**
+   * Names whose value asks for a **secret source** — layer 4, which is not
+   * built. Kept apart rather than taken literally: planting `!op read op://…`
+   * as a connection string is the silent half-move this file exists to refuse.
+   */
+  commands: Record<string, string>;
+}
+
+/**
+ * `.env`-file text → names and values, with room reserved for a secret source.
+ *
+ * The format is the ordinary one, with one rule added now so that layer 4 can
+ * be added later without changing any file anybody has written: **an unquoted
+ * value beginning with `!` is a command, not a value.** Quoting is therefore the
+ * escape hatch — `TOKEN="!literal"` is those eight characters, `TOKEN=!op read …`
+ * is a request Lingtai cannot yet satisfy and says so.
+ *
+ * A double-quoted value is JSON, which makes this the exact inverse of
+ * `renderEnvFile` and means an embedded newline survives a round trip.
+ */
+export function parseEnvFile(text: string): EnvFile {
+  const values: Record<string, string> = {};
+  const commands: Record<string, string> = {};
+
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const name = trimmed.slice(0, eq).trim().replace(/^export\s+/, "");
+    const raw = trimmed.slice(eq + 1).trim();
+    if (name === "") continue;
+
+    if (raw.startsWith("!")) {
+      commands[name] = raw.slice(1).trim();
+      continue;
+    }
+    if (raw.startsWith('"')) {
+      try {
+        values[name] = JSON.parse(raw) as string;
+        continue;
+      } catch {
+        // Not JSON after all. Fall through and take it literally rather than
+        // dropping the line — a value nobody can see is worse than a quoted one.
+      }
+    }
+    if (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2) {
+      values[name] = raw.slice(1, -1);
+      continue;
+    }
+    values[name] = raw;
+  }
+
+  return { values, commands };
+}
+
+// --------------------------------------------------- the merged environment ---
+
+/** Where a declared name's value came from. Names only — never values. */
+export type EnvLayer = "process env" | "project file" | "not set";
+
+export interface AgentEnvName {
+  name: string;
+  layer: EnvLayer;
+}
+
+export interface AgentEnv {
+  /** Layers 2 and 3, merged. Layer 1 is added by `runnableEnv` at each call site. */
+  values: Record<string, string>;
+  /** Every declared name and which layer answered for it, in the recipe's order. */
+  names: AgentEnvName[];
+  /** Declared names no layer supplied. */
+  missing: string[];
+  /** Declared names layer 2 refused as Lingtai's own. See `RESERVED`. */
+  reserved: string[];
+  /** Declared names whose file value asks for the unbuilt layer 4. */
+  deferred: string[];
+  /** The per-project file, whether or not it exists. */
+  file: string;
+  /**
+   * Why this project cannot run, or null.
+   *
+   * One string rather than three lists to inspect: every caller's correct
+   * response is the same — refuse the project before anything is claimed — and
+   * a caller that had to assemble the sentence itself would assemble a different
+   * one at each of the three places this is asked.
+   */
+  refusal: string | null;
+}
+
+/**
+ * The environment an agent may see, merged from the layers, and the refusal
+ * when it cannot be completed.
+ *
+ * Layer 3 wins over layer 2, so one project can differ from the machine. What
+ * this does *not* do is run anything or claim anything: it is a function of the
+ * recipe, the process environment and one file, which is what lets
+ * `lingtai doctor` ask the same question for free.
+ */
+export async function resolveAgentEnv(options: {
+  project: string;
+  /** `env.required` — what the run cannot proceed without. */
+  required: readonly string[];
+  source?: NodeJS.ProcessEnv;
+  home?: string;
+  patterns?: readonly string[];
+}): Promise<AgentEnv> {
+  const patterns = options.patterns ?? DEFAULT_PRODUCTION_PATTERNS;
+  const file = projectEnvPath(options.project, options.home ?? stateDir());
+  const fromProcess = filterEnv(options.required, options.source ?? process.env, patterns);
+
+  let parsed: EnvFile = { values: {}, commands: {} };
+  try {
+    parsed = parseEnvFile(await readFile(file, "utf8"));
+  } catch {
+    // No file is the ordinary case for a project whose values are all on the
+    // machine. An unreadable one is reported by the names it fails to supply.
+  }
+
+  const values = { ...fromProcess.values };
+  const fromFile = new Set<string>();
+  const deferred: string[] = [];
+  for (const name of options.required) {
+    if (parsed.commands[name] !== undefined) {
+      deferred.push(name);
+      continue;
+    }
+    const value = parsed.values[name];
+    if (value === undefined || value === "") continue;
+    guardProduction(name, value, patterns);
+    values[name] = value;
+    fromFile.add(name);
+  }
+
+  const names: AgentEnvName[] = options.required.map((name) => ({
+    name,
+    layer: fromFile.has(name) ? "project file" : name in values ? "process env" : "not set",
+  }));
+  const missing = options.required.filter((name) => !(name in values));
+
+  return {
+    values,
+    names,
+    missing,
+    reserved: fromProcess.reserved,
+    deferred,
+    file,
+    refusal: refusalFor(missing, fromProcess.reserved, deferred, file),
+  };
+}
+
+function refusalFor(
+  missing: readonly string[],
+  reserved: readonly string[],
+  deferred: readonly string[],
+  file: string,
+): string | null {
+  if (missing.length === 0) return null;
+  const isReservedName = new Set(reserved);
+  const isDeferredName = new Set(deferred);
+
+  const lines = [
+    `env: ${missing.join(", ")} declared in env.required and not set in any layer. ` +
+      `Nothing was claimed and no agent was started.`,
+  ];
+
+  const ordinary = missing.filter((n) => !isReservedName.has(n) && !isDeferredName.has(n));
+  if (ordinary.length > 0) {
+    lines.push(
+      `  ${ordinary.join(", ")}: set in this process's environment, or write ` +
+        `${file} — one NAME=value per line.`,
+    );
+  }
+  const blocked = missing.filter((n) => isReservedName.has(n));
+  if (blocked.length > 0) {
+    lines.push(
+      `  ${blocked.join(", ")}: reserved (${RESERVED.join(", ")}) — Lingtai's own credentials never ` +
+        `come from the process environment however a recipe declares them. Only ${file} can supply them.`,
+    );
+  }
+  const asked = missing.filter((n) => isDeferredName.has(n));
+  if (asked.length > 0) {
+    lines.push(
+      `  ${asked.join(", ")}: ${file} asks for a secret source (a "!" value), which is not built yet. ` +
+        `Write the value, or quote it to mean it literally.`,
+    );
+  }
+  return lines.join("\n");
+}
+
 /** `.env`-file text. Values are quoted so a `#` or a space cannot truncate one. */
 export function renderEnvFile(values: Record<string, string>): string {
   const lines = [
     "# Written by Lingtai for one run. Not committed, not inherited —",
-    "# only the names the recipe's env.allow lists.",
+    "# only the names the recipe's env.required lists.",
   ];
   for (const [name, value] of Object.entries(values).sort(([a], [b]) => (a < b ? -1 : 1))) {
     lines.push(`${name}=${JSON.stringify(value)}`);

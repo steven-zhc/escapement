@@ -14,7 +14,7 @@ source:
   kinds: [bug, feature]
   exclude: [blocked]
 env:
-  allow: [DATABASE_URL, CLERK_SECRET_KEY]
+  required: [DATABASE_URL, CLERK_SECRET_KEY]
   plantAt: apps/web/.env.local
 gates:
   proposed:
@@ -96,6 +96,25 @@ describe("resolveRecipe", () => {
     expect((err as RecipeInvalidError).problems.join("\n")).toMatch(/diff/);
   });
 
+  /**
+   * The same half-move one section over. `allow` meant "plant these if they
+   * exist"; `required` means "the run cannot proceed without them". A recipe
+   * still saying `allow:` under a non-strict schema would resolve to
+   * `required: []` — a project that declares nothing, refuses nothing, and runs
+   * an agent against a database it cannot reach. That is what cost $0.97 and ten
+   * turns (ADR 0020).
+   */
+  it("refuses a recipe still saying `allow`, and names the key", async () => {
+    const stale = VALID.replace("  required: [", "  allow: [");
+    const err = await resolveRecipe(
+      reader({ [`develop:${RECIPE_PATH}`]: stale }),
+      "develop",
+    ).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(RecipeInvalidError);
+    expect((err as RecipeInvalidError).problems.join("\n")).toMatch(/allow/);
+  });
+
   it("rejects YAML that is not a recipe at all", async () => {
     await expect(
       resolveRecipe(reader({ [`develop:${RECIPE_PATH}`]: "just: a map" }), "develop"),
@@ -125,7 +144,7 @@ gates:
       name: build
 env:
   plantAt: apps/web/.env.local
-  allow: [DATABASE_URL, CLERK_SECRET_KEY]
+  required: [DATABASE_URL, CLERK_SECRET_KEY]
 `;
     const a = await resolveRecipe(reader({ [`develop:${RECIPE_PATH}`]: VALID }), "develop");
     const b = await resolveRecipe(reader({ [`develop:${RECIPE_PATH}`]: reordered }), "develop");

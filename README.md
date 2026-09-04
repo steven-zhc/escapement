@@ -332,7 +332,9 @@ the daemon takes for you:
 2. **Claim the issue** — an event, so two schedulers cannot take the same one.
 3. **Cut a worktree** from Lingtai's own mirror. Never your checkout.
 4. **Plant a filtered environment file.** Only the variable names the recipe
-   allowed exist in it. Everything else is *absent*, not redacted.
+   *requires* exist in it, resolved from [three layers](#the-three-layers).
+   Everything else is *absent*, not redacted — and a required name with no value
+   refuses the project at step 1, before the claim.
 5. **Start the agent** with the hook wired in, at the tier the recipe asks for.
 6. **Run the gates** in recipe order, stopping at the first refusal.
 7. **Integrate** under a Postgres advisory lock: merge the base in, verify,
@@ -375,6 +377,7 @@ Everything lives under `LINGTAI_HOME`, which defaults to `~/.lingtai`:
 
 ```
 ~/.lingtai/
+├── env/<project>.env            your values, per project — persistent
 ├── repos/<project>.git          bare mirror — persistent
 ├── worktrees/<project>/<runId>  one per run — disposable
 └── runs/<runId>/settings.json   the hook wiring
@@ -382,6 +385,7 @@ Everything lives under `LINGTAI_HOME`, which defaults to `~/.lingtai`:
 
 | | Lifetime | Why there |
 |---|---|---|
+| `env/<project>.env` | Persistent | **Yours, and the only file layer.** One connection string per project, so two projects can want the same variable name and mean different things — see [The three layers](#the-three-layers). Not re-clonable; the one thing here worth backing up. |
 | `repos/<project>.git` | Persistent | Expensive. The first clone is a network round trip; after that every run is a `fetch`. This is why cutting a worktree took 1.7s in [experiment 005](doc/experiments/005-rung-1-reaches-a-real-repository.md). |
 | `worktrees/<project>/<runId>` | One run | Cheap. Cut from the mirror, removed when the run ends — and removed *before* the integrator runs, because a worktree holding `agent/<n>` checked out stops git updating that ref. |
 | `runs/<runId>/settings.json` | One run | **Outside the worktree, deliberately.** An agent that can edit its own hook configuration has no hook configuration. |
@@ -391,9 +395,12 @@ Two things in this repository are also not committed: `.env.local`, and
 `packages/hook/bin/lingtai-hook` — a 55 MB compiled binary that `pnpm --filter
 @lingtai/hook build` produces.
 
-**`rm -rf ~/.lingtai` is safe.** Everything in it is either re-clonable from
-GitHub or belongs to a run that is over. The part that matters — the event log —
-is in Postgres, and none of it is here.
+**`rm -rf ~/.lingtai/repos ~/.lingtai/worktrees ~/.lingtai/runs` is safe.**
+Everything in those is either re-clonable from GitHub or belongs to a run that is
+over. The part that matters — the event log — is in Postgres, and none of it is
+here. `~/.lingtai/env` is the exception: you wrote it, nothing else has a copy,
+and deleting it makes every project that requires a value refuse by name until
+you write it again.
 
 [#18]: https://github.com/steven-zhc/lingtai/issues/18
 [#19]: https://github.com/steven-zhc/lingtai/issues/19
@@ -433,6 +440,20 @@ append-only table.
 
 Give the test database its schema the same way the main one gets it, with
 `LINGTAI_TEST=1` in front — see [Bringing the database up](#bringing-the-database-up).
+
+**And a fifth place, if Lingtai is to work on Lingtai.** An agent working this
+repository has to run this suite, so its recipe requires the two `TEST_*` names
+— which are `RESERVED` and therefore never reach an agent from your shell,
+however a recipe declares them. Copy them into the project's own file:
+
+```bash
+mkdir -p ~/.lingtai/env
+grep '^TEST_' .env.local > ~/.lingtai/env/lingtai.env
+```
+
+Without it, every run against this repository refuses by name before it claims
+anything. `pnpm lingtai doctor` says which layer each name came from. See
+[The three layers](#the-three-layers).
 
 **Empty its log now and then.** The suite cleans up its own streams but the log
 only grows, and one test rebuilds a projection — which replays the whole log, so
@@ -620,11 +641,13 @@ source:
   exclude: [blocked, needs-design]
 
 env:
-  # Variable NAMES only, never values. Values resolve at runtime from the
-  # conductor's environment, which the agent cannot see — so this file is safe
-  # to commit.
-  allow:
-    - DATABASE_URL
+  # Variable NAMES only, never values — so this file is safe to commit.
+  #
+  # `required` means what it says: a name here with no value in any layer
+  # refuses this project for the whole pass, before an issue is claimed and
+  # before an agent is started.
+  required:
+    - LOCAL_DATABASE_URL
     - CLERK_SECRET_KEY
   # Rarely the repository root: Next, Prisma and vitest read it from the app
   # directory.
@@ -653,7 +676,7 @@ repo:
 source:
   kinds: [bug]
 env:
-  allow: [DATABASE_URL]
+  required: [LOCAL_DATABASE_URL]
   plantAt: apps/web/.env.local
 ```
 
@@ -669,6 +692,47 @@ is missing is **refused** by name rather than skipped — a pipeline that silent
 dropped a human approval would put a green board on a change nobody approved.
 (`close` and `labels` are the other two: effects, not verdicts, and only at
 `end`.)
+
+#### The three layers
+
+The recipe declares **names**. The values come from three layers with three
+different owners, merged in order — later wins:
+
+| | Source | Who owns it | Example |
+|---|---|---|---|
+| 1 | `process.env`, restricted to a fixed list | Lingtai | `PATH` `HOME` `USER` |
+| 2 | `process.env`, **only the names the recipe requires** | your machine, set once | `OPENAI_API_KEY` |
+| 3 | `~/.lingtai/env/<project>.env` | you, per project | `LOCAL_DATABASE_URL` |
+
+```bash
+mkdir -p ~/.lingtai/env
+cat > ~/.lingtai/env/nextloom-ai-admin.env <<'EOF'
+LOCAL_DATABASE_URL=postgresql://localhost:5432/admin_dev
+EOF
+```
+
+Layer 3 exists because layer 2 has one global home: two projects wanting
+`DATABASE_URL` to mean different things cannot both be expressed in your shell.
+A `!` prefix on a value is reserved for a secret source (`SECRET=!op read
+op://…`), which is not built — quote a value that really does begin with one.
+
+**A name Lingtai uses for itself never comes from layer 2.** `DATABASE_URL`,
+`DIRECT_DATABASE_URL`, `TEST_*` and `GITHUB_APP_*` are refused there however a
+recipe declares them, because a recipe is written by the repository an agent is
+editing. Layer 3 is a file you wrote, so it is not blocked — which is what lets
+Lingtai's own recipe require `TEST_DATABASE_URL` while nobody else's can reach
+for it.
+
+**A declared name with no value refuses the whole project for that pass**, before
+the issue is claimed: no worktree, no agent, no money. This used to be a log
+line, and one run spent $0.97 over ten turns against a database it could not
+reach. See [ADR 0020](doc/decisions/0020-the-agent-environment-in-layers.md).
+
+```bash
+pnpm lingtai doctor    # per project: every required name and which layer it came from
+```
+
+`doctor` prints names and layers, never values.
 
 ### 2. Register it
 
@@ -888,6 +952,8 @@ Every refusal names itself. The common ones:
 | `no lingtai-hook binary at …` | `pnpm --filter @lingtai/hook build`. A run without the guard must not start. |
 | `ENOENT … lingtai-app.pem` | The key path is wrong. `~` and relative paths both work; relative is from this repository's root. |
 | `stopped at recipe: …` | The recipe did not parse, or names an action this build does not have. The message is the validation failure. |
+| `stopped at env: … declared in env.required and not set in any layer` | The recipe requires a name nothing supplies. Nothing was claimed and nothing was spent. Set it on the machine, or write `~/.lingtai/env/<project>.env` — the message names the file. A name matching `RESERVED` can only come from that file. |
+| `env.allow: Unrecognized key` | The recipe predates [ADR 0020](doc/decisions/0020-the-agent-environment-in-layers.md). Rename `allow:` to `required:` — the schema is strict so that a stale key fails loudly instead of resolving to "requires nothing". |
 | `stopped at discover: excluded-label` | That issue carries a label the recipe's `source.exclude` names. Every reason an issue is passed over is the recipe's — there is no built-in list. |
 | `stopped at prepare: the install action refused` | An action at the `prepared` point refused — usually dependencies that did not install in a fresh worktree. Nothing expensive ran; that is the point of failing here. |
 | `did not merge (stale): the card showed …` | The branch moved between reading and deciding. Reload and read it again. |

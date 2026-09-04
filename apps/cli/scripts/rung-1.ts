@@ -26,7 +26,7 @@
  */
 import { resolveRecipe } from "@lingtai/config";
 import type { Envelope, ToAppend } from "@lingtai/core";
-import { prepareWorktree, provisionWorktree, removeWorktree, filterEnv, runnableEnv, DEFAULT_PRODUCTION_PATTERNS } from "@lingtai/conductor";
+import { prepareWorktree, provisionWorktree, removeWorktree, resolveAgentEnv, runnableEnv } from "@lingtai/conductor";
 import { githubApp, hasGitHubApp } from "@lingtai/env";
 import { createGitHubClient } from "@lingtai/github";
 import type { EventStore } from "@lingtai/store";
@@ -98,8 +98,11 @@ if (recipe.repo.base !== base) {
 
 // ---- seams 2 and 3: clone and submodules, over https, with the token -------
 done = step("worktree");
-const env = filterEnv(recipe.env.allow, process.env, DEFAULT_PRODUCTION_PATTERNS);
-if (env.missing.length > 0) console.log(`  --  env not set, so not planted: ${env.missing.join(", ")}`);
+const env = await resolveAgentEnv({ project: repo, required: recipe.env.required });
+if (env.refusal) {
+  console.log(env.refusal);
+  process.exit(1);
+}
 
 const runId = `run-rung1-${crypto.randomUUID().slice(0, 8)}`;
 const worktree = await provisionWorktree({

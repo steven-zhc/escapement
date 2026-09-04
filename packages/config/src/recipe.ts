@@ -167,10 +167,24 @@ export const Recipe = z.object({
     exclude: z.array(z.string()).default([]),
   }),
 
-  env: z.object({
+  /**
+   * What the run cannot proceed without.
+   *
+   * **Strict, for the reason `GateMap` is.** This was `allow` — an allowlist,
+   * meaning "plant these if they happen to exist" — and that meaning cost $0.97
+   * and ten turns against a database the agent could not reach, with one log
+   * line as the only sign. A repository naming a variable is a repository saying
+   * it needs one ([0020](../../../doc/decisions/0020-the-agent-environment-in-layers.md)).
+   * A recipe still saying `allow:` must therefore fail to resolve and name the
+   * key, rather than resolve to an empty list and refuse nothing — the same
+   * silent half-move [0018](../../../doc/decisions/0018-the-proposed-point.md)
+   * made zod's default drop.
+   */
+  env: z.strictObject({
     /** Variable NAMES only. Values resolve at runtime from somewhere the agent
-     *  cannot see, so this file is safe to commit. */
-    allow: z.array(z.string()).default([]),
+     *  cannot see, so this file is safe to commit. A name that is not here never
+     *  reaches the agent from the conductor's environment. */
+    required: z.array(z.string()).default([]),
     /** Where the filtered env file is planted inside the worktree. Rarely the
      *  repo root — Next/Prisma/vitest read it from the app directory. */
     plantAt: z.string(),

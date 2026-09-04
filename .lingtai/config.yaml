@@ -46,7 +46,17 @@ env:
   # real events — so an agent needs it. What an agent must never have is
   # DATABASE_URL: that is this system's own log, the thing it is keeping.
   # Naming only these two is what keeps them apart.
-  allow:
+  #
+  # `required`, not `allow`: a repository naming a variable is a repository
+  # saying it needs one, and a run that cannot supply it refuses this whole
+  # project before it claims anything ([0020](../doc/decisions/0020-the-agent-environment-in-layers.md)).
+  #
+  # Both names match `TEST_*`, which is RESERVED — so they can only come from
+  # `~/.lingtai/env/lingtai.env`, never from the conductor's own environment.
+  # That is exactly the asymmetry that lets Lingtai reach its test database
+  # while a managed repository's recipe cannot reach for one by writing the
+  # same two lines.
+  required:
     - TEST_DATABASE_URL
     - TEST_DIRECT_DATABASE_URL
   # `@lingtai/env` loads `.env.local` from the workspace root, so that is where

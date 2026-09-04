@@ -81,7 +81,17 @@ export type StoppedBecause =
    * matters: it means the passes after this one have work, and a caller that
    * treats it as "all done" would stop too early.
    */
-  | "exhausted";
+  | "exhausted"
+  /**
+   * A name the recipe requires has no value, so nothing in this project can
+   * run ([ADR 0020](../../../doc/decisions/0020-the-agent-environment-in-layers.md)).
+   *
+   * The whole pass rather than the item, because the environment is a fact
+   * about the *project*: the same refusal applies to every ticket in the queue,
+   * and going round the loop to say so once per ticket would print nine
+   * identical failures and resolve the recipe nine times to do it.
+   */
+  | "env";
 
 export interface ScheduleResult {
   ran: RunOnceResult[];
@@ -161,6 +171,11 @@ export async function runQueue(options: ScheduleOptions): Promise<ScheduleResult
     if (result.ok === true) log(`landed ${result.mergeCommit.slice(0, 7)}`);
     else if (result.ok === "held") log(`held at ${result.gate}`);
     else log(`stopped at ${result.stage}: ${result.detail}`);
+
+    // The environment is the project's, not the item's. `runOnce` refused
+    // before claiming anything, and the next ticket would be refused for the
+    // same reason — so the pass ends here rather than saying it nine times.
+    if (result.ok === false && result.stage === "env") return finish("env");
   }
 }
 

@@ -57,7 +57,7 @@ const RECIPE = `
 version: 1
 repo: { base: develop, submodules: false }
 source: { kinds: [bug], exclude: [blocked] }
-env: { allow: [ESC_TEST_VALUE], plantAt: .env.local }
+env: { required: [ESC_TEST_VALUE], plantAt: .env.local }
 gates:
   proposed:
     - { name: build, run: "test -f src/fix.ts", timeout: 2m }

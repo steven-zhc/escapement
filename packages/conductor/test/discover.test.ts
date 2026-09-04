@@ -17,7 +17,7 @@ const recipe = {
   version: 1,
   repo: { base: "develop", submodules: false },
   source: { kinds: ["bug", "feature"], exclude: ["blocked", "needs-design", "agent:wip", "agent:review"] },
-  env: { allow: [], plantAt: ".env.local" },
+  env: { required: [], plantAt: ".env.local" },
   gates: { admit: [], prepared: [], proposed: [{ name: "build", run: "pnpm verify", timeout: "15m" }], merge: [], end: [] },
   runtime: { agent: "claude-code", limits: { turns: 300, wall: "2h" } },
 } as unknown as Recipe;
