@@ -57,15 +57,45 @@ it says *this machine must be configured with it, and this run does not need to
 see it.* Those are different questions and there is no reason to make one of them
 answer for the other.
 
-## What makes this safe today, and what would change it
+## Whose risk this is
 
-Every repository Lingtai manages is one whose recipe the operator writes, or one
-whose recipe changes reach `main` only through an approval the operator gives.
-The recipe is therefore not an untrusted input. `RESERVED` defended against a
-case that does not exist.
+The operator's, deliberately — and this is not a concession made to get rid of a
+constant. It is the third time this system has answered the same question the
+same way:
 
-The case that would bring it back is a repository whose recipe the operator does
-not control. When that arrives the answer is still not a list in the core:
+- [0016 §6](0016-the-settled-model.md) — Lingtai restricts no tool call. Tool
+  limits are the runtime's own configuration.
+- [0016 §7](0016-the-settled-model.md) — nothing sits above a repository's
+  recipe. A recipe may be as permissive as its repository chooses.
+- **Here** — what an agent may see is the operator's to decide, with the recipe
+  as the instrument.
+
+`RESERVED` was the one place the system reached past that and decided for you.
+
+**The obligation this creates is the interesting half.** "The operator is
+responsible" is only true where the operator can see what is happening and the
+instruments do what they claim. Two things follow, and both are load-bearing
+rather than nice:
+
+- **`doctor` reports every declared name and which file answered for it, per
+  project, names only.** A responsibility nobody can inspect is not one they
+  hold.
+- **An instrument that is advertised and inert is worse than none.** The
+  production tripwire is currently that: it refuses a host with a `prod`
+  segment, and the databases this system actually connects to are named
+  `db.<random-ref>.supabase.co`, so it has never fired and would not. Under a
+  design where Lingtai catches things, that is a gap in a backstop. Under this
+  one it is a false assurance, and it is why that fix stops being cosmetic.
+
+## What would change it
+
+
+
+A repository whose recipe the operator does not control is the case `RESERVED`
+imagined. It does not exist today — every managed recipe is written by the
+operator or reaches `main` through their approval — but the principle above does
+not depend on that staying true, and the answer when it changes is still not a
+list in the core:
 
 - the operator's machine should not hold, in `process.env`, a credential that a
   managed repository could name and use, and
