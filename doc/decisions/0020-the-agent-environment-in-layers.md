@@ -1,6 +1,10 @@
 # 0020 — The agent's environment comes from three named layers
 
-**Status** accepted · 2026-09-03 · qualifies [0007](0007-dual-runtime.md) §the
+**Status** superseded by [0021](0021-the-recipe-decides-the-environment.md) · 2026-09-03
+
+> **The layering and `RESERVED` in this file were replaced the next day.** The
+> refusal before the claim, and the reasoning for it, stand. What did not is the
+> constant in the source that overrode a recipe — 0021 has the argument. · qualifies [0007](0007-dual-runtime.md) §the
 filtered environment · implemented by [#49](https://github.com/steven-zhc/lingtai/issues/49)
 
 The filtered environment is one of the three real boundaries. This changes its
