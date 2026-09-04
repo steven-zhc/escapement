@@ -1,5 +1,9 @@
 # Documentation
 
+**[architecture.html](architecture.html)** — one page, four diagrams: which
+processes exist, who appends to the log, who is told when it changes, and
+where every piece of state lives. Open it in a browser.
+
 Three kinds of thing live here, and the distinction matters.
 
 | | |

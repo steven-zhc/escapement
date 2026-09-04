@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  The Loop and the Log — how Lingtai's parts fit together.
+
+  Drawn 2026-09-03 from the code at aa3733f, after a day in which four of the
+  gaps marked here were found by running the system rather than by reading it.
+
+  Open it in a browser. It is one self-contained file: no build, no assets, no
+  script. The only thing it fetches is the typeface.
+-->
+<title>The Loop and the Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --paper:   #F5F4F0;
+    --raised:  #FBFAF7;
+    --ink:     #1B1F26;
+    --muted:   #676C77;
+    --faint:   #8A8F99;
+    --rule:    #DEDAD1;
+    --brass:   #96701F;
+    --flow:    #2C6B67;
+    --gap:     #9C3A31;
+    --gap-bg:  #F3E4E1;
+
+    --f-display: "IBM Plex Serif", Georgia, serif;
+    --f-body:    "IBM Plex Sans", system-ui, sans-serif;
+    --f-mono:    "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:  #14171C;
+      --raised: #1B1F26;
+      --ink:    #E7E4DC;
+      --muted:  #979CA8;
+      --faint:  #767B86;
+      --rule:   #2B303A;
+      --brass:  #D8AC55;
+      --flow:   #6BB3AD;
+      --gap:    #DE7167;
+      --gap-bg: #2E1E1C;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:  #14171C;
+    --raised: #1B1F26;
+    --ink:    #E7E4DC;
+    --muted:  #979CA8;
+    --faint:  #767B86;
+    --rule:   #2B303A;
+    --brass:  #D8AC55;
+    --flow:   #6BB3AD;
+    --gap:    #DE7167;
+    --gap-bg: #2E1E1C;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 56px 28px 120px;
+  }
+
+  /* ---------- masthead ---------- */
+  .mast { border-bottom: 2px solid var(--ink); padding-bottom: 20px; }
+  .mast .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--brass);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: clamp(34px, 5.2vw, 52px);
+    line-height: 1.08;
+    letter-spacing: -.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .mast .sub {
+    max-width: 62ch;
+    color: var(--muted);
+    margin: 16px 0 0;
+    font-size: 17px;
+  }
+
+  /* ---------- the thesis strip ---------- */
+  .thesis {
+    margin: 34px 0 8px;
+    padding: 22px 26px;
+    background: var(--raised);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--brass);
+  }
+  .thesis p { margin: 0; max-width: 68ch; }
+  .thesis p + p { margin-top: 12px; }
+
+  /* ---------- sections ---------- */
+  section { margin-top: 64px; }
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: 26px;
+    line-height: 1.2;
+    margin: 0 0 6px;
+    letter-spacing: -.01em;
+    text-wrap: balance;
+  }
+  .lede { color: var(--muted); max-width: 68ch; margin: 0 0 26px; }
+  p { max-width: 68ch; }
+
+  code, .m {
+    font-family: var(--f-mono);
+    font-size: .88em;
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  /* ---------- figures ---------- */
+  figure {
+    margin: 30px 0 0;
+    border: 1px solid var(--rule);
+    background: var(--raised);
+  }
+  .canvas { overflow-x: auto; padding: 24px 20px 8px; }
+  svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption {
+    border-top: 1px solid var(--rule);
+    padding: 13px 20px;
+    font-size: 14px;
+    color: var(--muted);
+    max-width: none;
+  }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- table ---------- */
+  .tablewrap { overflow-x: auto; margin-top: 28px; border: 1px solid var(--rule); }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    font-weight: 500;
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.k { font-family: var(--f-mono); font-size: 13px; white-space: nowrap; color: var(--ink); }
+  td.who { color: var(--muted); }
+
+  /* ---------- rules list ---------- */
+  .rules { list-style: none; padding: 0; margin: 26px 0 0; display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+  .rules li { background: var(--raised); padding: 16px 20px; }
+  .rules b { display: block; font-family: var(--f-display); font-size: 17px; margin-bottom: 3px; }
+  .rules span { color: var(--muted); font-size: 15px; }
+
+  .sub-h {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: 20px;
+    margin: 44px 0 6px;
+    letter-spacing: -.005em;
+  }
+  .defs li { display: grid; gap: 7px; padding: 18px 20px; }
+  .defs b { font-family: var(--f-mono); font-size: 14px; font-weight: 500; color: var(--brass); margin: 0; }
+  .defs span { max-width: 74ch; }
+  .defs .absent {
+    color: var(--ink);
+    font-size: 14.5px;
+    border-left: 2px solid var(--rule);
+    padding-left: 13px;
+  }
+  .defs .absent code { font-size: .84em; }
+
+  /* ---------- gap callout ---------- */
+  .gap {
+    margin-top: 26px;
+    background: var(--gap-bg);
+    border: 1px solid color-mix(in srgb, var(--gap) 35%, transparent);
+    border-left: 3px solid var(--gap);
+    padding: 18px 22px;
+  }
+  .gap h3 {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--gap);
+    margin: 0 0 8px;
+  }
+  .gap p { margin: 0; max-width: 68ch; }
+  .gap p + p { margin-top: 10px; }
+
+  footer {
+    margin-top: 80px;
+    border-top: 1px solid var(--rule);
+    padding-top: 20px;
+    font-size: 14px;
+    color: var(--faint);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a { transition: color .15s ease; }
+  }
+  a { color: var(--brass); }
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="mast">
+    <p class="eyebrow">Lingtai · 灵台 — how the parts fit</p>
+    <h1>The Loop and the Log</h1>
+    <p class="sub">Four names get used as if they were four programs. They are not. This page draws
+      what actually runs, what writes to the log, and who finds out when it changes.</p>
+  </header>
+
+  <div class="thesis">
+    <p><b>Conductor is not a process.</b> It is the code for one pass of the loop —
+      discover, claim, worktree, agent, gates, integrate. It runs inside whatever process
+      calls it.</p>
+    <p><b>Daemon and CLI are processes.</b> Both call the conductor. The daemon does four
+      more things around it, and every difference in behaviour anyone has been surprised by
+      today lives in that gap.</p>
+  </div>
+
+  <section>
+    <h2>One library, two hosts</h2>
+    <p class="lede">The daemon is not “the conductor running”. It is the conductor plus the four
+      standing jobs that keep the rest of the system current.</p>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 760 330" role="img" aria-label="The lingtai daemon process contains a conductor pass plus a projection follower, an outbox deliverer, a heartbeat and a reconcile step. The lingtai run process contains only a conductor pass. Both call the same conductor library.">
+          <defs>
+            <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <!-- daemon process -->
+          <rect x="20" y="20" width="340" height="200" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5 4" opacity=".55"/>
+          <text x="34" y="44" font-family="IBM Plex Mono, monospace" font-size="13" fill="currentColor">lingtai daemon</text>
+          <text x="34" y="61" font-size="11.5" fill="currentColor" opacity=".6">long-lived · holds one advisory lock</text>
+
+          <rect x="34" y="76" width="150" height="34" fill="none" stroke="#96701F" style="stroke:var(--brass)" stroke-width="2"/>
+          <text x="109" y="98" text-anchor="middle" font-size="12.5" fill="currentColor">conductor pass</text>
+
+          <rect x="196" y="76" width="150" height="34" fill="none" stroke="currentColor" opacity=".75"/>
+          <text x="271" y="98" text-anchor="middle" font-size="12.5" fill="currentColor">projection follower</text>
+          <rect x="34" y="120" width="150" height="34" fill="none" stroke="currentColor" opacity=".75"/>
+          <text x="109" y="142" text-anchor="middle" font-size="12.5" fill="currentColor">outbox deliverer</text>
+          <rect x="196" y="120" width="150" height="34" fill="none" stroke="currentColor" opacity=".75"/>
+          <text x="271" y="142" text-anchor="middle" font-size="12.5" fill="currentColor">heartbeat</text>
+          <rect x="34" y="164" width="150" height="34" fill="none" stroke="currentColor" opacity=".75"/>
+          <text x="109" y="186" text-anchor="middle" font-size="12.5" fill="currentColor">reconcile</text>
+          <text x="271" y="186" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".5">every 5 min sweep</text>
+
+          <!-- cli process -->
+          <rect x="400" y="20" width="340" height="200" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5 4" opacity=".55"/>
+          <text x="414" y="44" font-family="IBM Plex Mono, monospace" font-size="13" fill="currentColor">lingtai run</text>
+          <text x="414" y="61" font-size="11.5" fill="currentColor" opacity=".6">your terminal · one pass, then exits</text>
+
+          <rect x="414" y="76" width="150" height="34" fill="none" stroke="#96701F" style="stroke:var(--brass)" stroke-width="2"/>
+          <text x="489" y="98" text-anchor="middle" font-size="12.5" fill="currentColor">conductor pass</text>
+
+          <text x="590" y="99" font-size="12.5" fill="currentColor" opacity=".45">— and nothing else —</text>
+          <line x1="414" y1="128" x2="726" y2="128" stroke="currentColor" stroke-dasharray="3 5" opacity=".3"/>
+          <text x="414" y="152" font-size="12" fill="#9C3A31" style="fill:var(--gap)">no follower · no deliverer · no heartbeat</text>
+          <text x="414" y="172" font-size="12" fill="#9C3A31" style="fill:var(--gap)">so the board stays where it was</text>
+
+          <!-- shared library -->
+          <line x1="109" y1="110" x2="109" y2="266" stroke="#96701F" style="stroke:var(--brass)" stroke-width="1.5" marker-end="url(#a1)" color="#96701F"/>
+          <line x1="489" y1="110" x2="489" y2="266" stroke="#96701F" style="stroke:var(--brass)" stroke-width="1.5" marker-end="url(#a1)" color="#96701F"/>
+          <rect x="20" y="270" width="720" height="42" fill="none" stroke="#96701F" style="stroke:var(--brass)" stroke-width="2"/>
+          <text x="380" y="290" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" fill="currentColor">packages/conductor</text>
+          <text x="380" y="306" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".6">discover · claim · worktree · agent · gates · integrate</text>
+        </svg>
+      </div>
+      <figcaption><b>The conductor is the same code in both.</b> What differs is the four jobs
+        standing around it — which is why a run by hand can write a correct log and leave the
+        board showing nothing.</figcaption>
+    </figure>
+
+    <h3 class="sub-h">What each of those jobs is for</h3>
+    <p class="lede">The useful half of each definition is the second one: what you see when it
+      is not running. Most of them have been missing at some point today.</p>
+
+    <ul class="rules defs">
+      <li>
+        <b>conductor pass</b>
+        <span>Ask GitHub what is runnable for each registered project, take one item, and run
+          it to a verdict. One pass handles one item, or none.</span>
+        <span class="absent">Without it: nothing is worked. This is the only one of the five
+          that <code>lingtai run</code> also does.</span>
+      </li>
+      <li>
+        <b>projection follower</b>
+        <span>Reads events as they land and advances <code>task_view</code> and
+          <code>outbox</code> — the tables the board renders and the GitHub deliveries are
+          built from. It is a reader; it never writes to the log.</span>
+        <span class="absent">Without it: the log is perfectly correct and every screen is frozen
+          at whatever it last saw. This is what left the board blank through nine runs — the
+          fix at the time was starting a second process, <code>lingtai daemon --no-conduct</code>.</span>
+      </li>
+      <li>
+        <b>outbox deliverer</b>
+        <span>Takes the rows the outbox projection wrote and actually calls GitHub: set the
+          labels, post the comment, close the issue. Retries with backoff; after six attempts a
+          row is dead and <code>doctor</code> fails on it by name.</span>
+        <span class="absent">Without it: decisions never leave the machine. The merge happens,
+          the log is right, and on GitHub the issue sits open and unlabelled as though nothing
+          touched it.</span>
+      </li>
+      <li>
+        <b>heartbeat</b>
+        <span>Writes <code>daemon_status</code> every five seconds; anything older than fifteen
+          reads as stale. Deliberately <em>outside</em> the log.</span>
+        <span class="absent">Because the log cannot answer “is anything alive?”. A dead daemon
+          appends nothing — and so does an idle one. Absence of events is not absence of a
+          daemon, so liveness needs a store that gets written even when nothing happens.</span>
+      </li>
+      <li>
+        <b>reconcile</b>
+        <span>At startup, compares the machine against the log and <em>records</em> what
+          diverged. A daemon killed mid-run leaves a worktree behind holding a branch checked
+          out, which stops git updating that ref on the next attempt. The claim expires on its
+          own; the directory does not.</span>
+        <span class="absent">It appends the removal rather than quietly tidying, because a
+          system that silently cleans up after itself cannot tell you it has been crashing —
+          the disk gets cleaner, the symptom disappears, and something kills the daemon nightly
+          for six weeks before it surfaces as something else.</span>
+      </li>
+      <li>
+        <b>the lock</b>
+        <span>A session-level Postgres advisory lock, <code>lingtai:daemon</code>. A second
+          daemon does not start; it says who holds it.</span>
+        <span class="absent">Without it: two daemons take the same work. The claim would catch
+          most of it, but the merge lane and the worktree directory would not.</span>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Who changes state</h2>
+    <p class="lede">Four writers, one table, and one exception that explains a whole class of
+      surprises.</p>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 780 400" role="img" aria-label="Conductor, board, CLI and agent all append to the events table. Projections read the events table and write task_view and outbox. syncQueued writes task_view directly without appending an event.">
+          <defs>
+            <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <!-- writers -->
+          <text x="20" y="26" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="1.4" fill="currentColor" opacity=".55">WRITERS</text>
+
+          <rect x="20" y="44" width="176" height="40" fill="none" stroke="currentColor" opacity=".8"/>
+          <text x="108" y="61" text-anchor="middle" font-size="12.5" fill="currentColor">conductor</text>
+          <text x="108" y="76" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">claim · gates · merge · land</text>
+
+          <rect x="20" y="100" width="176" height="40" fill="none" stroke="currentColor" opacity=".8"/>
+          <text x="108" y="117" text-anchor="middle" font-size="12.5" fill="currentColor">board</text>
+          <text x="108" y="132" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">approve · reject · waive</text>
+
+          <rect x="20" y="156" width="176" height="40" fill="none" stroke="currentColor" opacity=".8"/>
+          <text x="108" y="173" text-anchor="middle" font-size="12.5" fill="currentColor">CLI</text>
+          <text x="108" y="188" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">add · pause · resume · now</text>
+
+          <rect x="20" y="212" width="176" height="40" fill="none" stroke="currentColor" opacity=".8" stroke-dasharray="4 3"/>
+          <text x="108" y="229" text-anchor="middle" font-size="12.5" fill="currentColor">agent</text>
+          <text x="108" y="244" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">via the hook socket</text>
+
+          <line x1="196" y1="64" x2="292" y2="140" stroke="currentColor" opacity=".7" marker-end="url(#a2)"/>
+          <line x1="196" y1="120" x2="292" y2="146" stroke="currentColor" opacity=".7" marker-end="url(#a2)"/>
+          <line x1="196" y1="176" x2="292" y2="154" stroke="currentColor" opacity=".7" marker-end="url(#a2)"/>
+          <line x1="196" y1="232" x2="292" y2="162" stroke="currentColor" opacity=".7" stroke-dasharray="4 3" marker-end="url(#a2)"/>
+          <text x="243" y="98" text-anchor="middle" font-size="11" fill="currentColor" opacity=".55">append</text>
+
+          <!-- the log -->
+          <rect x="300" y="112" width="170" height="86" fill="none" stroke="currentColor" stroke-width="2.5"/>
+          <text x="385" y="140" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="14" fill="currentColor">events</text>
+          <text x="385" y="158" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".6">append-only, by rule</text>
+          <text x="385" y="176" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".6">the only authority</text>
+
+          <!-- readers -->
+          <text x="560" y="26" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="1.4" fill="currentColor" opacity=".55">READERS</text>
+          <line x1="470" y1="146" x2="558" y2="120" stroke="#2C6B67" style="stroke:var(--flow)" color="#2C6B67" stroke-width="1.5" marker-end="url(#a2)"/>
+          <line x1="470" y1="164" x2="558" y2="192" stroke="#2C6B67" style="stroke:var(--flow)" color="#2C6B67" stroke-width="1.5" marker-end="url(#a2)"/>
+          <text x="514" y="112" text-anchor="middle" font-size="11" fill="#2C6B67" style="fill:var(--flow)">read</text>
+
+          <rect x="562" y="96" width="196" height="44" fill="none" stroke="#2C6B67" style="stroke:var(--flow)" stroke-width="1.5"/>
+          <text x="660" y="114" text-anchor="middle" font-size="12.5" fill="currentColor">task_view projection</text>
+          <text x="660" y="130" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">what the board renders</text>
+
+          <rect x="562" y="172" width="196" height="44" fill="none" stroke="#2C6B67" style="stroke:var(--flow)" stroke-width="1.5"/>
+          <text x="660" y="190" text-anchor="middle" font-size="12.5" fill="currentColor">outbox projection</text>
+          <text x="660" y="206" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">effects headed for GitHub</text>
+
+          <text x="660" y="240" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".55">projections never append</text>
+
+          <!-- the exception -->
+          <line x1="108" y1="84" x2="108" y2="316" stroke="#9C3A31" style="stroke:var(--gap)" color="#9C3A31" stroke-width="1.5" stroke-dasharray="6 4"/>
+          <line x1="108" y1="316" x2="656" y2="316" stroke="#9C3A31" style="stroke:var(--gap)" color="#9C3A31" stroke-width="1.5" stroke-dasharray="6 4"/>
+          <line x1="656" y1="316" x2="656" y2="146" stroke="#9C3A31" style="stroke:var(--gap)" color="#9C3A31" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#a2)"/>
+          <rect x="236" y="330" width="330" height="46" fill="none" stroke="#9C3A31" style="stroke:var(--gap)" stroke-width="1.5"/>
+          <text x="401" y="349" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="#9C3A31" style="fill:var(--gap)">syncQueued</text>
+          <text x="401" y="366" text-anchor="middle" font-size="11.5" fill="#9C3A31" style="fill:var(--gap)">writes the queue — appends nothing</text>
+        </svg>
+      </div>
+      <figcaption><b>The log records what Lingtai did.</b> Which issues GitHub currently offers is
+        not that — it is a cache, written straight into <code>task_view</code> with no event
+        behind it. Everything else on this page follows from that one dashed line.</figcaption>
+    </figure>
+
+    <ul class="rules">
+      <li><b>Only the conductor writes about work.</b> <span>Claims, gate verdicts, integrations, landings. Nothing else may.</span></li>
+      <li><b>The board writes too.</b> <span>Approve, reject and waive are appends. The board is not read-only — it is where a person's decision enters the log.</span></li>
+      <li><b>The agent writes through the hook.</b> <span>A thin binary on a unix socket; the conductor appends on its behalf, with the run id as the actor.</span></li>
+      <li><b>Projections never write to the log.</b> <span>They read it and maintain their own tables. A projection that appended would be a second author of history.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Who tells whom</h2>
+    <p class="lede">There is exactly one notification channel, and it is fired by the database,
+      not by any of the processes.</p>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 780 300" role="img" aria-label="A Postgres trigger on the events table fires NOTIFY on the lingtai channel. The store's subscribe bridges it to three consumers: the board's SSE route, the daemon's work loop, and the projection runners. A write to task_view fires nothing.">
+          <defs>
+            <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <rect x="20" y="72" width="128" height="52" fill="none" stroke="currentColor" stroke-width="2.5"/>
+          <text x="84" y="94" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" fill="currentColor">events</text>
+          <text x="84" y="111" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">an append</text>
+
+          <line x1="148" y1="98" x2="212" y2="98" stroke="currentColor" marker-end="url(#a3)"/>
+          <text x="180" y="88" text-anchor="middle" font-size="11" fill="currentColor" opacity=".55">trigger</text>
+
+          <rect x="216" y="72" width="150" height="52" fill="none" stroke="#96701F" style="stroke:var(--brass)" stroke-width="2"/>
+          <text x="291" y="94" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" fill="currentColor">NOTIFY lingtai</text>
+          <text x="291" y="111" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">one channel, carries the seq</text>
+
+          <line x1="366" y1="98" x2="424" y2="98" stroke="currentColor" marker-end="url(#a3)"/>
+          <rect x="428" y="72" width="112" height="52" fill="none" stroke="currentColor" opacity=".8"/>
+          <text x="484" y="102" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="currentColor">subscribe()</text>
+
+          <line x1="540" y1="88" x2="600" y2="42" stroke="#2C6B67" style="stroke:var(--flow)" color="#2C6B67" marker-end="url(#a3)"/>
+          <line x1="540" y1="98" x2="600" y2="98" stroke="#2C6B67" style="stroke:var(--flow)" color="#2C6B67" marker-end="url(#a3)"/>
+          <line x1="540" y1="108" x2="600" y2="154" stroke="#2C6B67" style="stroke:var(--flow)" color="#2C6B67" marker-end="url(#a3)"/>
+
+          <rect x="604" y="20" width="156" height="42" fill="none" stroke="#2C6B67" style="stroke:var(--flow)" stroke-width="1.5"/>
+          <text x="682" y="38" text-anchor="middle" font-size="12.5" fill="currentColor">board SSE</text>
+          <text x="682" y="53" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">resumes by seq</text>
+
+          <rect x="604" y="77" width="156" height="42" fill="none" stroke="#2C6B67" style="stroke:var(--flow)" stroke-width="1.5"/>
+          <text x="682" y="95" text-anchor="middle" font-size="12.5" fill="currentColor">daemon work loop</text>
+          <text x="682" y="110" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">wakes on completion</text>
+
+          <rect x="604" y="134" width="156" height="42" fill="none" stroke="#2C6B67" style="stroke:var(--flow)" stroke-width="1.5"/>
+          <text x="682" y="152" text-anchor="middle" font-size="12.5" fill="currentColor">projection runners</text>
+          <text x="682" y="167" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">advance the checkpoint</text>
+
+          <!-- the dead end -->
+          <rect x="20" y="212" width="128" height="52" fill="none" stroke="#9C3A31" style="stroke:var(--gap)" stroke-width="1.5"/>
+          <text x="84" y="234" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="#9C3A31" style="fill:var(--gap)">task_view</text>
+          <text x="84" y="251" text-anchor="middle" font-size="11" fill="#9C3A31" style="fill:var(--gap)">a queue write</text>
+          <line x1="148" y1="238" x2="272" y2="238" stroke="#9C3A31" style="stroke:var(--gap)" stroke-dasharray="6 4"/>
+          <line x1="278" y1="228" x2="292" y2="248" stroke="#9C3A31" style="stroke:var(--gap)" stroke-width="2"/>
+          <line x1="292" y1="228" x2="278" y2="248" stroke="#9C3A31" style="stroke:var(--gap)" stroke-width="2"/>
+          <text x="310" y="235" font-size="12.5" fill="#9C3A31" style="fill:var(--gap)">no trigger, no channel, nobody told</text>
+          <text x="310" y="253" font-size="11.5" fill="currentColor" opacity=".6">an open board keeps showing the old queue until it is reloaded</text>
+        </svg>
+      </div>
+      <figcaption><b>Everything downstream hangs off one append.</b> A change that appends nothing
+        reaches nobody — which is why removing a label from an issue does not move an open board,
+        even though <code>lingtai status</code> shows it immediately.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>One work item, end to end</h2>
+    <p class="lede">The five gate points are fixed and closed. What runs at each is the managed
+      repository's recipe; what gets appended is Lingtai's.</p>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 900 250" role="img" aria-label="A work item passes through admit, prepared, the agent, proposed, merge, integrate and end. Each step lists the events it appends. The merge point is marked as declared but never executed.">
+          <defs>
+            <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <line x1="20" y1="70" x2="878" y2="70" stroke="currentColor" opacity=".3"/>
+
+          <!-- steps: x centers -->
+          <g font-size="12.5" fill="currentColor">
+            <circle cx="60"  cy="70" r="5" fill="currentColor"/>
+            <text x="60"  y="52" text-anchor="middle">queue</text>
+            <text x="60"  y="96" text-anchor="middle" font-size="10.5" opacity=".55">from GitHub</text>
+            <text x="60"  y="112" text-anchor="middle" font-size="10.5" opacity=".55">no event</text>
+
+            <circle cx="185" cy="70" r="5" fill="currentColor"/>
+            <text x="185" y="52" text-anchor="middle">claim</text>
+            <text x="185" y="96" text-anchor="middle" font-size="10.5" opacity=".55">WorkItemClaimed</text>
+
+            <circle cx="310" cy="70" r="5" fill="#96701F" style="fill:var(--brass)"/>
+            <text x="310" y="52" text-anchor="middle">prepared</text>
+            <text x="310" y="96" text-anchor="middle" font-size="10.5" opacity=".55">Gate*  ×3</text>
+
+            <circle cx="435" cy="70" r="5" fill="currentColor"/>
+            <text x="435" y="52" text-anchor="middle">agent</text>
+            <text x="435" y="96" text-anchor="middle" font-size="10.5" opacity=".55">RunStarted · RunFinished</text>
+
+            <circle cx="560" cy="70" r="5" fill="#96701F" style="fill:var(--brass)"/>
+            <text x="560" y="52" text-anchor="middle">proposed</text>
+            <text x="560" y="96" text-anchor="middle" font-size="10.5" opacity=".55">Gate*  ×3</text>
+
+            <circle cx="685" cy="70" r="5" fill="#9C3A31" style="fill:var(--gap)"/>
+            <text x="685" y="52" text-anchor="middle" fill="#9C3A31" style="fill:var(--gap)">merge</text>
+
+            <circle cx="810" cy="70" r="5" fill="currentColor"/>
+            <text x="810" y="52" text-anchor="middle">integrate → end</text>
+            <text x="810" y="96" text-anchor="middle" font-size="10.5" opacity=".55">IntegrationSucceeded</text>
+            <text x="810" y="111" text-anchor="middle" font-size="10.5" opacity=".55">WorkItemLanded</text>
+          </g>
+
+          <line x1="66" y1="70" x2="178" y2="70" stroke="currentColor" opacity=".5" marker-end="url(#a4)"/>
+          <line x1="191" y1="70" x2="303" y2="70" stroke="currentColor" opacity=".5" marker-end="url(#a4)"/>
+          <line x1="316" y1="70" x2="428" y2="70" stroke="currentColor" opacity=".5" marker-end="url(#a4)"/>
+          <line x1="441" y1="70" x2="553" y2="70" stroke="currentColor" opacity=".5" marker-end="url(#a4)"/>
+          <line x1="566" y1="70" x2="678" y2="70" stroke="currentColor" opacity=".5" marker-end="url(#a4)"/>
+          <line x1="691" y1="70" x2="803" y2="70" stroke="#9C3A31" style="stroke:var(--gap)" color="#9C3A31" stroke-width="2" marker-end="url(#a4)"/>
+
+          <rect x="596" y="150" width="282" height="72" fill="none" stroke="#9C3A31" style="stroke:var(--gap)" stroke-width="1.5"/>
+          <line x1="685" y1="80" x2="685" y2="150" stroke="#9C3A31" style="stroke:var(--gap)" stroke-dasharray="5 4"/>
+          <text x="612" y="171" font-family="IBM Plex Mono, monospace" font-size="12" fill="#9C3A31" style="fill:var(--gap)">declared, never executed</text>
+          <text x="612" y="190" font-size="11.5" fill="currentColor" opacity=".75">the recipe's merge actions are read for their</text>
+          <text x="612" y="206" font-size="11.5" fill="currentColor" opacity=".75">names only — nothing runs them</text>
+
+          <text x="20" y="171" font-size="11.5" fill="currentColor" opacity=".6">A hold happens on exactly two paths today:</text>
+          <text x="20" y="190" font-size="11.5" fill="currentColor" opacity=".75">· an action at <tspan font-family="IBM Plex Mono, monospace">proposed</tspan> returning needs-approval</text>
+          <text x="20" y="206" font-size="11.5" fill="currentColor" opacity=".75">· the <tspan font-family="IBM Plex Mono, monospace">--no-merge</tspan> flag</text>
+        </svg>
+      </div>
+      <figcaption><b>Two of the five points run their actions; one does not.</b> <code>prepared</code>
+        and <code>proposed</code> build a real gate pipeline, <code>end</code> resolves into the
+        outbox, and <code>merge</code> is read only for the names it contributes to
+        <code>GatesResolved</code>.</figcaption>
+    </figure>
+
+    <div class="gap">
+      <h3>Found 2026-09-03 · not yet fixed</h3>
+      <p>Lingtai's own recipe puts a <code>human:</code> action at <code>merge</code> — every merge
+        was supposed to wait for a person. It never ran. Two changes to <code>main</code> merged
+        with no approval, five seconds after their build gate passed.</p>
+      <p>The point was declared, printed by <code>lingtai add</code>, recorded in
+        <code>GatesResolved</code> and rendered on the board. All of that reads as evidence that it
+        works. <b>Configured and did not run</b> is the failure this system names as its own bug,
+        and this is the most expensive instance of it so far.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Where state lives</h2>
+    <p class="lede">Eight places. Only one of them is authoritative; the rest can be rebuilt,
+      re-fetched, or thrown away.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Store</th><th>Holds</th><th>Written by</th><th>Rebuildable</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="k">events</td><td>every fact about what Lingtai did</td><td class="who">conductor, board, CLI, agent</td><td class="who">no — it is the source</td></tr>
+          <tr><td class="k">checkpoints</td><td>how far each projection has read</td><td class="who">projection runners</td><td class="who">yes</td></tr>
+          <tr><td class="k">task_view</td><td>the board's cards, and the queue cache</td><td class="who">projection runner + <code>syncQueued</code></td><td class="who">partly — the queue half needs GitHub</td></tr>
+          <tr><td class="k">outbox</td><td>effects owed to GitHub, with attempts</td><td class="who">projection runner, deliverer</td><td class="who">yes</td></tr>
+          <tr><td class="k">daemon_status</td><td>the heartbeat</td><td class="who">the daemon</td><td class="who">deliberately outside the log</td></tr>
+          <tr><td class="k">~/.lingtai/repos</td><td>a bare mirror per project</td><td class="who">worktree provisioning</td><td class="who">yes — re-clone</td></tr>
+          <tr><td class="k">~/.lingtai/worktrees</td><td>one checkout per run, the blast radius</td><td class="who">the agent</td><td class="who">deleted when the run ends</td></tr>
+          <tr><td class="k">GitHub</td><td>which issues exist and what they are labelled</td><td class="who">you, and the outbox</td><td class="who">not ours to rebuild</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>The rule that explains the rest</h2>
+    <p>Two questions look alike and are not: <em>what work exists</em> and <em>what Lingtai did
+      about it</em>. GitHub answers the first and is the authority on it — that is why the queue is
+      a cache and not a stream of events, and why a queued row that GitHub stops listing is simply
+      dropped. The log answers the second, and nothing else may.</p>
+    <p>Every confusion on this page is a place where that boundary is crossed without saying so:
+      a queue write that reaches no one, a command that skips the refresh its long-running twin
+      performs, a gate point that is declared in one repository and executed in neither.</p>
+  </section>
+
+  <footer>
+    Drawn from the code at <span class="m">aa3733f</span> · 2026-09-03. Component names,
+    event names and the gate points are as they appear in <span class="m">packages/</span>;
+    the gaps marked in red are findings from that day's runs, not design.
+  </footer>
+
+</div>
+</body>
+</html>
